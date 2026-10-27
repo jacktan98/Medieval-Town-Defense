@@ -321,6 +321,8 @@ const RES_KEYS = ['gold', 'wood', 'stone', 'food'];
 const costHTML = c => RES_KEYS.filter(k => c[k]).map(k => `<span class="cost"><span class="ico">${ICON[k]}</span>${c[k]}</span>`).join('') || 'free';
 
 // ---------- game definitions ----------
+// archer towers are drawn smaller than their original models; posts and shot heights scale with them
+const TOWER_K = [.8, .8, .72];
 const DEF = {
   house:  { size: 1, name: 'House', maxdh: 1.4, hp: [100, 150, 220], cost: { wood: 15 },
             up: [{ wood: 25, gold: 20 }, { wood: 30, stone: 20, gold: 40 }], gold: [2, 4, 6], residents: [2, 3, 4],
@@ -351,6 +353,7 @@ const DEF = {
 };
 const MEAL = 20, LUMBER_LOAD = 2;
 DEF.castle.food = [3, 4, 5];
+DEF.tower.shootY = DEF.tower.shootY.map((y, i) => y * TOWER_K[i]);
 const BUILD_T = { house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
 for (const t in BUILD_T) DEF[t].build = BUILD_T[t];
 DEF.well.charm = .25; DEF.torch.charm = .1; DEF.flowers.charm = .15; DEF.statue.charm = .35;
@@ -501,7 +504,8 @@ const M = { plaster: mat('#dccba2'), timber: mat('#6e4c30'), roof: mat('#8d4a2c'
   wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#3466b0'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
   log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#b39446'), thatchOld: mat('#9e8650'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
   iron: mat('#5d6064'), soil: mat('#5e4630'), crop1: mat('#6f8f3a'), crop2: mat('#93a246'), wheat: mat('#d1b45a'), hay: mat('#c9ab55'),
-  canvas: mat('#cfc2a0'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32') };
+  canvas: mat('#cfc2a0'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32'),
+  roofBlue: mat('#3f5f96') };   // tier 3 roofs: blue is the town's colour (red is the raiders')
 M.glow = new THREE.MeshStandardMaterial({ color: '#3a2a18', emissive: new THREE.Color('#ffb347'), emissiveIntensity: .1, roughness: .8 });
 M.flame = new THREE.MeshStandardMaterial({ color: '#ffd27a', emissive: new THREE.Color('#ff8a2a'), emissiveIntensity: 1, roughness: .5 });
 M.water = new THREE.MeshStandardMaterial({ color: '#2f5560', roughness: .2 });
@@ -543,6 +547,12 @@ function drapeBox(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxG
 function flagBox(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d, 10, 2, 1), m); o.position.set(x, y, z); o.castShadow = true; return o; }
 function cyl(rt, rb, h, seg, m, x, y, z) { const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return o; }
 function cone(r, h, seg, m, x, y, z) { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), m); o.position.set(x, y, z); o.castShadow = true; return o; }
+// a triangular prism lying along x (a gable end seen from the side): base d deep, h high
+function prism(w, d, h, m, x, y, z) {
+  const sh = new THREE.Shape(); sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(0, h); sh.lineTo(-d / 2, 0);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); geo.rotateY(Math.PI / 2); geo.translate(-w / 2, 0, 0);
+  const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; return o;
+}
 function pyramid(r, h, sz, m, y, x = 0, z = 0) { const g = new THREE.ConeGeometry(r, h, 4); g.rotateY(Math.PI / 4); g.scale(1, 1, sz); const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; return o; }
 
 // ---------- trees ----------
@@ -801,50 +811,65 @@ function makeHouse(tier, plinth) {
     g.add(box(.04, .26, .32, M.glow, .71, .95, 0));
     g.add(pyramid(1.18, 1.25, .92, M.thatch, 1.92));
     g.add(box(.22, .7, .22, M.stone, .42, 2.05, -.2));
-  } else {                     // townhouse: stone ground floor, jettied upper storey, tiled roof
-    g.add(box(1.5, .95, 1.3, M.stone2, 0, .48, 0));
-    g.add(box(1.66, .85, 1.46, M.plaster, 0, 1.38, 0));
-    for (const x of [-.8, -.4, 0, .4, .8]) g.add(box(.07, .85, .04, M.timber, x, 1.38, .74));
-    g.add(box(1.7, .08, 1.5, M.timber, 0, .98, 0)); g.add(box(1.7, .08, 1.5, M.timber, 0, 1.8, 0));
-    g.add(box(.24, .26, .04, M.glow, -.6, 1.42, .75)); g.add(box(.24, .26, .04, M.glow, .6, 1.42, .75));
-    g.add(box(.4, .7, .05, M.timber, -.25, .36, .66)); g.add(box(.26, .22, .05, M.glow, .4, .55, .66));
-    g.add(pyramid(1.3, 1.35, .9, M.tile, 2.5));
-    g.add(box(.26, 1.0, .26, M.stone2, -.5, 2.6, -.2));
+  } else {                     // burgher's house: rubble-stone ground floor, jettied timber-framed upper floor, steep gabled blue roof
+    g.add(box(1.46, .78, 1.26, M.stone2, 0, .39, 0));
+    g.add(box(.42, .66, .06, M.timber, -.3, .36, .64)); g.add(box(.52, .1, .08, M.stone, -.3, .72, .65));   // plank door under a stone lintel
+    g.add(box(.22, .2, .05, M.glow, .38, .48, .64)); g.add(box(.3, .05, .08, M.stone, .38, .36, .65));
+    g.add(box(1.66, .08, 1.46, M.timber, 0, .82, 0));                          // floor beam where the upper storey oversails
+    g.add(box(1.6, .78, 1.4, M.plaster, 0, 1.25, 0));
+    for (const x of [-.78, -.26, .26, .78]) g.add(box(.08, .78, .05, M.timber, x, 1.25, .71));      // posts
+    for (const z of [-.68, 0, .68]) for (const sx of [-1, 1]) g.add(box(.05, .78, .08, M.timber, sx * .81, 1.25, z));
+    g.add(box(1.6, .07, .05, M.timber, 0, 1.62, .71)); g.add(box(1.6, .06, .05, M.timber, 0, 1.12, .71));
+    for (const x of [-.52, .52]) { const br = box(.06, .62, .04, M.timber, x, 1.3, .72); br.rotation.z = x > 0 ? .62 : -.62; g.add(br); }   // braces in the outer bays
+    for (const x of [-.52, .52]) { g.add(box(.2, .22, .04, M.glow, x * .99, 1.38, .73)); }
+    g.add(box(.22, .24, .04, M.glow, 0, 1.38, .73));
+    // gable ends in plaster under the roof, which runs left to right with a ridge along x
+    g.add(prism(1.6, 1.4, .95, M.plaster, 0, 1.66, 0));
+    const slope = Math.atan2(.95, .7), len = Math.hypot(.95, .7) + .2;
+    for (const sz of [-1, 1]) { const r = box(1.84, .07, len, M.roofBlue, 0, 1.66 + .95 / 2 + .02, sz * .36); r.rotation.x = sz * slope; g.add(r); }
+    g.add(box(1.86, .08, .1, M.timber, 0, 2.63, 0));
+    g.add(box(.24, .9, .24, M.stone2, .55, 2.5, -.3));                         // chimney
   }
   return g;
 }
 function makeTower(tier, plinth) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(), k = TOWER_K[tier - 1];
   if (plinth) g.add(box(2.0, 1.8, 2.0, M.stone, 0, -.7, 0));
+  // the shaft is drawn at TOWER_K scale; the roof is set a person's height above the platform so archers stand under it
+  const t = new THREE.Group(); t.scale.setScalar(k); g.add(t);
+  const HEAD = 1.55, top = new THREE.Group(); g.add(top);
+  const posts = (r, y0, m, w = .08) => { for (const sx of [-1, 1]) for (const sz of [-1, 1]) top.add(box(w, HEAD, w, m, sx * r, y0 + HEAD / 2, sz * r)); };
   if (tier === 1) {            // lookout: lashed logs, ladder, thatched hood
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = box(.2, 3.1, .2, M.rough, sx * .62, 1.55, sz * .62); l.rotation.z = -sx * .05; l.rotation.x = sz * .05; g.add(l); }
-    const x1 = box(1.6, .09, .09, M.rough, 0, 1.4, .64); x1.rotation.z = .5; g.add(x1);
-    const x2 = box(.09, .09, 1.6, M.rough, .64, 1.4, 0); x2.rotation.x = .5; g.add(x2);
-    g.add(box(1.7, .18, 1.7, M.rough, 0, 3.1, 0));
-    for (let n = 0; n < 8; n++) { const a = n / 8 * Math.PI * 2; const p = box(.07, .5, .07, M.rough, Math.cos(a) * .8, 3.4, Math.sin(a) * .8); p.rotation.z = (hash(n, 4) - .5) * .3; g.add(p); }
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.08, 1.0, .08, M.rough, sx * .7, 3.65, sz * .7));
-    g.add(pyramid(1.35, .9, 1, M.thatchOld, 4.55));
-    for (const sx of [-1, 1]) g.add(box(.06, 3.1, .06, M.rough, sx * .22, 1.55, .95));
-    for (let y = .35; y < 3; y += .4) g.add(box(.5, .05, .05, M.rough, 0, y, .95));
-  } else if (tier === 2) {     // watchtower: squared timber, parapet, roof (scaled to fit one tile)
-    const k = new THREE.Group(); k.scale.setScalar(.74); g.add(k);
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.add(box(.24, 4.3, .24, M.wood, sx * .7, 2.3, sz * .7));
-    for (const y of [1.5, 3.0]) { k.add(box(1.6, .12, .12, M.timber, 0, y, .7)); k.add(box(1.6, .12, .12, M.timber, 0, y, -.7));
-      k.add(box(.12, .12, 1.6, M.timber, .7, y, 0)); k.add(box(.12, .12, 1.6, M.timber, -.7, y, 0)); }
-    k.add(box(2.2, .25, 2.2, M.timber, 0, 4.5, 0));
-    k.add(box(2.2, .6, .12, M.wood, 0, 4.9, 1.05)); k.add(box(2.2, .6, .12, M.wood, 0, 4.9, -1.05));
-    k.add(box(.12, .6, 2.2, M.wood, 1.05, 4.9, 0)); k.add(box(.12, .6, 2.2, M.wood, -1.05, 4.9, 0));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.add(box(.1, 1.1, .1, M.timber, sx * .95, 5.3, sz * .95));
-    k.add(pyramid(1.75, 1.3, 1, M.roof, 6.45));
-    k.add(box(.06, 1.2, .06, M.timber, 0, 7.5, 0)); k.add(flagBox(.6, .36, .04, M.flag, .32, 7.9, 0));
-  } else {                     // stone tower: round masonry, timber hoarding, tiled spire
-    g.add(cyl(.82, 1.0, 4.6, 8, M.stone2, 0, 2.3, 0));
-    g.add(cyl(1.05, 1.05, .2, 8, M.stone, 0, 4.6, 0));
-    for (const a of [0, 1.6, 3.2, 4.8]) { const s = box(.08, .4, .14, M.dark, Math.cos(a) * .9, 2.8, Math.sin(a) * .9); s.rotation.y = -a; g.add(s); }
-    g.add(box(1.9, .8, 1.9, M.wood, 0, 5.1, 0));
-    for (const s of [-.5, 0, .5]) { g.add(box(.14, .3, .04, M.dark, s, 5.1, .96)); g.add(box(.04, .3, .14, M.dark, .96, 5.1, s)); }
-    g.add(cone(1.45, 1.7, 8, M.tile, 0, 6.35, 0));
-    g.add(box(.06, 1.1, .06, M.timber, 0, 7.6, 0)); g.add(flagBox(.6, .36, .04, M.banner, .32, 7.9, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = box(.2, 3.1, .2, M.rough, sx * .62, 1.55, sz * .62); l.rotation.z = -sx * .05; l.rotation.x = sz * .05; t.add(l); }
+    const x1 = box(1.6, .09, .09, M.rough, 0, 1.4, .64); x1.rotation.z = .5; t.add(x1);
+    const x2 = box(.09, .09, 1.6, M.rough, .64, 1.4, 0); x2.rotation.x = .5; t.add(x2);
+    t.add(box(1.7, .18, 1.7, M.rough, 0, 3.1, 0));
+    for (let n = 0; n < 8; n++) { const a = n / 8 * Math.PI * 2; const p = box(.07, .5, .07, M.rough, Math.cos(a) * .8, 3.4, Math.sin(a) * .8); p.rotation.z = (hash(n, 4) - .5) * .3; t.add(p); }
+    for (const sx of [-1, 1]) t.add(box(.06, 3.1, .06, M.rough, sx * .22, 1.55, .95));
+    for (let y = .35; y < 3; y += .4) t.add(box(.5, .05, .05, M.rough, 0, y, .95));
+    const P = 3.19 * k; posts(.7 * k, P, M.rough);
+    top.add(pyramid(1.35 * k, .9 * k, 1, M.thatchOld, P + HEAD + .45 * k));
+  } else if (tier === 2) {     // watchtower: squared timber, parapet, roof
+    const kk = new THREE.Group(); kk.scale.setScalar(.74); t.add(kk);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) kk.add(box(.24, 4.3, .24, M.wood, sx * .7, 2.3, sz * .7));
+    for (const y of [1.5, 3.0]) { kk.add(box(1.6, .12, .12, M.timber, 0, y, .7)); kk.add(box(1.6, .12, .12, M.timber, 0, y, -.7));
+      kk.add(box(.12, .12, 1.6, M.timber, .7, y, 0)); kk.add(box(.12, .12, 1.6, M.timber, -.7, y, 0)); }
+    kk.add(box(2.2, .25, 2.2, M.timber, 0, 4.5, 0));
+    kk.add(box(2.2, .6, .12, M.wood, 0, 4.9, 1.05)); kk.add(box(2.2, .6, .12, M.wood, 0, 4.9, -1.05));
+    kk.add(box(.12, .6, 2.2, M.wood, 1.05, 4.9, 0)); kk.add(box(.12, .6, 2.2, M.wood, -1.05, 4.9, 0));
+    const s2 = .74 * k, P = 4.625 * s2; posts(.95 * s2, P, M.timber, .09);
+    const R = P + HEAD; top.add(pyramid(1.75 * s2, 1.3 * s2, 1, M.roof, R + .65 * s2));
+    top.add(box(.06, 1.0, .06, M.timber, 0, R + 1.3 * s2 + .4, 0)); top.add(flagBox(.6, .36, .04, M.flag, .32, R + 1.3 * s2 + .75, 0));
+  } else {                     // stone tower: round masonry, an open platform with a low parapet, blue roof on stone columns
+    t.add(cyl(.82, 1.0, 4.6, 8, M.stone2, 0, 2.3, 0));
+    t.add(cyl(1.05, 1.05, .2, 8, M.stone, 0, 4.6, 0));
+    for (const a of [0, 1.6, 3.2, 4.8]) { const sl = box(.08, .4, .14, M.dark, Math.cos(a) * .9, 2.8, Math.sin(a) * .9); sl.rotation.y = -a; t.add(sl); }
+    for (let n = 0; n < 8; n++) { const a = (n + .5) / 8 * Math.PI * 2, m = box(.3, .32, .16, M.stone2, Math.cos(a) * .96, 4.86, Math.sin(a) * .96); m.rotation.y = -a + Math.PI / 2; t.add(m); }
+    const P = 4.7 * k;
+    for (const a of [Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4]) top.add(cyl(.08, .1, HEAD, 6, M.stone2, Math.cos(a) * .92 * k, P + HEAD / 2, Math.sin(a) * .92 * k));
+    const R = P + HEAD; top.add(cyl(1.1 * k, 1.1 * k, .1, 8, M.stone, 0, R + .05, 0));
+    top.add(cone(1.4 * k, 1.5 * k, 8, M.roofBlue, 0, R + .1 + .75 * k, 0));
+    top.add(box(.06, 1.0, .06, M.timber, 0, R + 1.5 * k + .5, 0)); top.add(flagBox(.6, .36, .04, M.banner, .32, R + 1.5 * k + .85, 0));
   }
   return g;
 }
@@ -861,10 +886,10 @@ function makeCastle(tier, plinth) {
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(1.78, 1.4, .82, M.thatchOld, 3.4, 0, -.6));
     g.add(box(.5, .8, .06, M.timber, 0, .7, .42));
-    for (const sx of [-1, 1]) {      // two shuttered windows high on the hall front, above the stockade
-      g.add(box(.3, .3, .05, M.glow, sx * .7, 2.25, .42));
-      g.add(box(.42, .05, .1, M.timber, sx * .7, 2.07, .44));
-      g.add(box(.05, .36, .06, M.timber, sx * .7, 2.25, .44));
+    for (const sx of [-1, 1]) {      // two shuttered windows on the hall front, a little above the door, seen through the gateway
+      g.add(box(.26, .28, .05, M.glow, sx * .4, 1.75, .42));
+      g.add(box(.36, .05, .1, M.timber, sx * .4, 1.58, .44));
+      g.add(box(.05, .32, .06, M.timber, sx * .4, 1.75, .44));
     }
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
@@ -906,9 +931,13 @@ function makeCastle(tier, plinth) {
     g.add(drapeBox(.5, .9, .04, M.drape, -.75, 2.2, W + .47)); g.add(drapeBox(.5, .9, .04, M.drape, .75, 2.2, W + .47));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       g.add(cyl(.75, .85, 3.6, 8, M.stone2, sx * W, 2.0, sz * W)); g.add(cyl(.95, .95, .25, 8, M.stone, sx * W, 3.9, sz * W));
-      g.add(cone(1.0, 1.4, 8, M.tile, sx * W, 4.7, sz * W));
+      g.add(cone(1.0, 1.4, 8, M.roofBlue, sx * W, 4.7, sz * W));
     }
     g.add(box(2.4, 4.6, 2.4, M.stone2, 0, 2.5, -.4));
+    for (const [x, z, w, d] of [[0, -W + .5, 4.2, .55], [W - .5, 0, .55, 4.2], [-W + .5, 0, .55, 4.2], [-1.75, W - .5, 1.3, .55], [1.75, W - .5, 1.3, .55]]) {
+      g.add(box(w, .1, d, M.wood, x, 2.35, z));
+      for (const k of [-1, 1]) if (w > d) g.add(box(.1, 2.1, .1, M.timber, x + k * (w / 2 - .2), 1.3, z + .2)); else g.add(box(.1, 2.1, .1, M.timber, x + .2 * -Math.sign(x), 1.3, z + k * (d / 2 - .2)));
+    }
     for (const s of [-.9, 0, .9]) {
       g.add(box(.4, .45, .4, M.stone2, s, 5.0, -1.4)); g.add(box(.4, .45, .4, M.stone2, s, 5.0, .6));
       g.add(box(.4, .45, .4, M.stone2, -1.0, 5.0, s - .4)); g.add(box(.4, .45, .4, M.stone2, 1.0, 5.0, s - .4));
@@ -945,7 +974,7 @@ function makeLodge(tier, plinth) {
       const l4 = cyl(.17, .17, 2.0, 6, M.log, -1.3, y + .16, 0); l4.rotation.x = Math.PI / 2; g.add(l4);
     }
     g.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
-    g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.tile : M.thatch, 2.55));
+    g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
     g.add(box(.55, 1.0, .06, M.timber, -.6, .7, 1.08));
     g.add(box(.3, .24, .06, M.glow, .6, 1.2, 1.08));
     pile(.7, 1.55, 3);
@@ -977,7 +1006,7 @@ function makeQuarry(tier, plinth) {
     for (let s = -1.6; s <= 1.61; s += .45) g.add(box(.42, .3, .3, M.stone, s, .15, -1.65));
   } else {
     g.add(box(1.8, 1.4, 1.5, M.stone2, -.75, .9, -.8));
-    g.add(pyramid(1.45, .9, .9, M.roof, 2.05, -.75, -.8));
+    g.add(pyramid(1.45, .9, .9, tier === 3 ? M.roofBlue : M.roof, 2.05, -.75, -.8));
     g.add(box(.5, .9, .06, M.timber, -.75, .65, -.03)); g.add(box(.28, .24, .06, M.glow, -.2, 1.1, -.03));
     blocks([[.6, .35, .6], [1.15, .35, .6], [.6, .35, 1.15], [1.15, .35, 1.15], [.88, .8, .88]]);
     if (tier === 3) {
@@ -1025,7 +1054,7 @@ function makeFarm(tier) {
     const hd = new THREE.Mesh(new THREE.SphereGeometry(.12, 6, 5), M.hay); hd.position.set(1.1, 1.25, -.9); g.add(hd);
   }
   if (tier === 3) { // barn + hay
-    g.add(box(1.1, .9, .9, M.wood, -1.15, .5, -1.15)); g.add(pyramid(.85, .7, .85, M.tile, 1.3, -1.15, -1.15));
+    g.add(box(1.1, .9, .9, M.wood, -1.15, .5, -1.15)); g.add(pyramid(.85, .7, .85, M.roofBlue, 1.3, -1.15, -1.15));
     for (const [sx, sz] of [[1.35, 1.35], [.75, 1.42]]) {     // stooks: sheaves leaned together
       for (let n = 0; n < 4; n++) { const a = n / 4 * Math.PI * 2, sh = cyl(.06, .09, .55, 6, M.hay, sx + Math.cos(a) * .08, .32, sz + Math.sin(a) * .08); sh.rotation.z = Math.cos(a) * .25; sh.rotation.x = -Math.sin(a) * .25; g.add(sh); }
     }
@@ -1070,7 +1099,7 @@ function makeGate(tier, plinth, mask = 0, rot = 0, fixed = false) {
     for (const s of [-.7, 0, .7]) g.add(box(.3, .3, .7, M.stone, s, 3.0, 0));
     g.add(box(1.1, .35, .06, M.iron, 0, 2.1, 0));
   } else {
-    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(cone(.58, .9, 8, M.tile, sx * .8, 3.65, 0)); }
+    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(cone(.58, .9, 8, M.roofBlue, sx * .8, 3.65, 0)); }
     g.add(box(1.2, .7, .65, M.stone2, 0, 2.55, 0));
     g.add(drapeBox(.4, .7, .04, M.drape, 0, 1.95, .34)); g.add(box(1.0, .3, .06, M.iron, 0, 2.05, 0));
   }
@@ -2073,11 +2102,11 @@ function updateEnemies(dt) {
 // ---------- night watch: villagers walk to the castle and towers and shoot from the top ----------
 const guardTunic = mat('#3a62a0');
 const POSTS = {
-  tower: [[[.38, 3.19, 0], [-.38, 3.19, 0]], [[.31, 3.43, 0], [-.31, 3.43, 0]], [[.38, 4.7, 0], [-.38, 4.7, 0]]],
+  tower: [[.38, 3.19], [.31, 3.43], [.38, 4.7]].map(([x, y], i) => [[x, y * TOWER_K[i], 0], [-x, y * TOWER_K[i], 0]]),
   castle: [
     [[1.9, 2.55, 1.9], [-1.9, 2.55, 1.9], [1.9, 2.55, -1.9], [-1.9, 2.55, -1.9]],
     [[2.6, 3.55, 2.6], [-2.6, 3.55, 2.6], [2.6, 3.55, -2.6], [-2.6, 3.55, -2.6]],
-    [[0, 4.8, -.4], [0, 2.4, -2.6], [2.6, 2.4, 0], [-2.6, 2.4, 0], [-1.8, 2.4, 2.6], [1.8, 2.4, 2.6]],
+    [[0, 4.8, -.4], [0, 2.4, -2.1], [2.1, 2.4, 0], [-2.1, 2.4, 0], [-1.8, 2.4, 2.1], [1.8, 2.4, 2.1]],   // on the wall-walk, behind the battlements
   ],
 };
 function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1]; return L[a % L.length]; }
@@ -2568,7 +2597,7 @@ function startGame() {
 // ---------- loop ----------
 resize(); startGame();
 const easeOut = t => 1 - Math.pow(1 - t, 3);
-const BAR_TOP = { house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 8.3, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
+const BAR_TOP = { house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
 let last = performance.now(), hudT = 0, buildT = 0;
 var paused = false, gameSpeed = 1, instantBuild = false;
 function setPaused(on) {

@@ -35,7 +35,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 | farm | 2×2 | wood 15 | wood 20 gold 20 / wood 30 stone 15 gold 35 | food 4/6/9, workers 1/1/2 | Plot / Croft / Manor farm |
 | lodge ("Lumber camp") | 2×2 | gold 20 | gold 45 stone 10 / gold 75 stone 25 | reach 14, workers 2/3/4, `LUMBER_LOAD=2` wood/trip, chop 2.6 s | Lumber shack / Lumber camp / Lumber yard |
 | quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4 | Stone pit / Quarry / Masons' yard |
-| tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15, shootY 3.4/3.8/5.4; T2 model scaled 0.74 | Lookout / Watchtower / Stone tower |
+| tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15; shaft drawn at `TOWER_K` (.8/.8/.72, T2 also .74), roof held a fixed 1.55 m (`HEAD`) above the platform so archers fit; posts and shootY scale with `TOWER_K`; T3 is an open platform with a low parapet and a blue roof on stone columns | Lookout / Watchtower / Stone tower |
 | wall | 1×1 | wood 5 gold 2 | stone 6 gold 3 / stone 10 gold 10 | drag-paint, auto-tiles, no plinth | Palisade / Stone wall / Battlement |
 | gate | 1×1 | wood 15 gold 10 | stone 15 gold 20 / stone 25 gold 35 | auto-tiles with walls | Timber gate / Stone gate / Gatehouse |
 | well | 1×1 | stone 5 | — | charm 0.25 | — |
@@ -46,7 +46,9 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 
 Build times (`BUILD_T`, builder-seconds): house 10, farm 10, lodge 12, quarry 14, tower 14, wall 3, gate 8, castle 24, well 5, torch 3, flowers 3, statue 8. Upgrades ×1.3.
 
-Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden corner tower tops (y 3.55); T3 = keep + wall-walk.
+Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden corner tower tops (y 3.55); T3 = keep top + a timber wall-walk inside the curtain walls (archers stand behind the battlements).
+
+Roof colours: tier 3 roofs use `M.roofBlue` (blue is the town's colour, red the raiders'); tier 1–2 keep thatch / `M.roof`. The T3 house is a burgher's house: rubble-stone ground floor, jettied timber-framed upper floor, steep gabled blue roof (`prism` helper for the gable).
 
 ## Technical notes
 - **Colour**: `THREE.Color` setHex/setStyle/setHSL patched to convert sRGB→linear; renderer uses sRGBEncoding + ACES filmic, exposure 1.1. Overlays use `toneMapped:false`.
