@@ -558,11 +558,10 @@ const logRoof = gable => sh => {
   sh.fragmentShader = `varying vec3 vLO; varying vec3 vLW; varying vec3 vLN;
     float lh(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7); }
   ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    // pyramids: on a face that slopes towards ±z the logs are lines of constant x (and vice versa), so they run straight
-    // down the face, parallel, getting shorter towards the hips
-    float u = ${gable ? 'vLO.x * 11.0' : '(abs(vLN.z) > abs(vLN.x) ? vLW.x : vLW.z) * 11.0'}, f = fract(u), id = floor(u);
+    // pyramids: horizontal logs stacked in courses from the eaves up to the peak (rows of constant height)
+    float u = ${gable ? 'vLO.x * 11.0' : 'vLW.y * 12.0'}, f = fract(u), id = floor(u);
     float rnd = sqrt(max(0.0, sin(f * 3.14159)));
-    float along = ${gable ? 'vLO.z' : 'vLW.y'} * 7.0;
+    float along = ${gable ? 'vLO.z' : '(abs(vLN.z) > abs(vLN.x) ? vLW.x : vLW.z)'} * 7.0;
     diffuseColor.rgb *= (.82 + .3 * lh(vec2(id, 1.0))) * (.38 + .7 * rnd) * (.92 + .12 * lh(vec2(id, floor(along))));`);
 };
 M.thatch.onBeforeCompile = logRoof(false); M.thatch.customProgramCacheKey = () => 'logroof:peak';   // both variants share one function source
