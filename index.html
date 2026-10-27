@@ -697,11 +697,18 @@ function pathCol(x, z, col) {
   pathTmp.setRGB(.47, .38, .27).multiplyScalar(.88 + .16 * n + .06 * j);    // sRGB, converted below to match the patched colours
   col.push(pathTmp.r ** 2.2, pathTmp.g ** 2.2, pathTmp.b ** 2.2);
 }
+// the stone-based building whose footprint holds this point, if any; paths stop at its edge rather than painting over it
+function stoneAt(x, z) { const B = occB[cellAt(x, z)]; return B && B.plinth && PLINTH_TOP[B.type] != null ? B : null; }
+function clampOut(x, z) {
+  const B = stoneAt(x, z); if (!B) return [x, z];
+  const e = B.ev, d = [x - e.x0, e.x1 - x, z - e.z0, e.z1 - z], m = Math.min(...d), k = .005;
+  return m === d[0] ? [e.x0 - k, z] : m === d[1] ? [e.x1 + k, z] : m === d[2] ? [x, e.z0 - k] : [x, e.z1 + k];
+}
 function discInto(arr, cx, cz, r, lift, col, seg = 12) {
   const y = (x, z) => hAt(x, z) + lift;
   for (let k = 0; k < seg; k++) {
     const a0 = k / seg * 6.283, a1 = (k + 1) / seg * 6.283;
-    const x0 = cx + Math.cos(a0) * r, z0 = cz + Math.sin(a0) * r, x1 = cx + Math.cos(a1) * r, z1 = cz + Math.sin(a1) * r;
+    const [x0, z0] = clampOut(cx + Math.cos(a0) * r, cz + Math.sin(a0) * r), [x1, z1] = clampOut(cx + Math.cos(a1) * r, cz + Math.sin(a1) * r);
     arr.push(cx, y(cx, cz), cz, x1, y(x1, z1), z1, x0, y(x0, z0), z0);
     if (col) { pathCol(cx, cz, col); pathCol(x1, z1, col); pathCol(x0, z0, col); }
   }
@@ -712,7 +719,7 @@ function tileInto(arr, a, b, m, rad, wob, lift, col, stones) {
   const pts = [[cx, cz]];
   for (const [da, db, bit] of DIRS) if (m & bit) for (const t of [.34, .67, 1]) pts.push([cx + da * e * t, cz + db * e * t]);
   for (const [x, z] of pts) discInto(arr, x, z, rad + wob * (hash(x * 3.1, z * 2.3) - .5), lift, col);
-  if (stones) for (const [x, z] of pts) if (hash(x * 1.7, z * 5.3) < .5) stones.push([x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1, x * 7 + z * 3]);
+  if (stones) for (const [x, z] of pts) if (hash(x * 1.7, z * 5.3) < .5 && !stoneAt(x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1)) stones.push([x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1, x * 7 + z * 3]);
 }
 function setGeo(mesh, arr, col) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
@@ -722,6 +729,7 @@ function setGeo(mesh, arr, col) {
 function rebuildRoads() {
   const base = [], top = [], tc = [], stones = [];
   for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (road[b * N + a]) {
+    if (stoneAt((a + .5) * CELL, (b + .5) * CELL)) continue;    // a gate's own tile: its stone floor is the path
     const m = roadMask(a, b);
     tileInto(base, a, b, m, .47, .12, .05); tileInto(top, a, b, m, .4, .1, .08, tc, stones);
   }
