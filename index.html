@@ -2742,9 +2742,11 @@ var SND = {   // game event -> file in audio/sfx (or audio/music) and its trim a
 };
 // Long loops stream from <audio> rather than being decoded (a 3-minute track decoded is ~60 MB on a phone), so
 // they can't be measured at load. Their levels were measured once (loudest 0.3 s RMS: theme 0.254, birds 0.214)
-// and set to sit under the effects: the theme ~6 dB below them, birdsong ~10 dB below. Re-measure if replaced.
+// and set to sit under the effects: the themes ~6 dB below them (night measured 0.168, so it plays a little higher), birdsong ~10 dB below.
+// Re-measure if replaced.
 var LOOPS = {
   music: { file: 'music/Medieval_theme_music.mp3', vol: .18 },
+  night: { file: 'music/Night_theme_music.mp3', vol: .27 },
   birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
 };
 var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
@@ -2787,7 +2789,7 @@ for (const k in LOOPS) {
   let node = null;
   if (actx) try { node = actx.createGain(); node.gain.value = LOOPS[k].vol; actx.createMediaElementSource(el).connect(node); node.connect(master); } catch (e) { node = null; }
   if (!node) el.volume = LOOPS[k].vol;                     // no Web Audio: plain element volume (ignored on iOS, but that path has no Web Audio anyway)
-  el.addEventListener('error', () => { delete loopEl[k]; });
+  el.addEventListener('error', () => { delete loopEl[k]; syncMusic(); });
   loopEl[k] = el;
 }
 // at: a world point; world sounds fade with distance from what the camera looks at, and when zoomed far out
@@ -2810,7 +2812,8 @@ function setMusic(name) { musicWant = name; syncMusic(); }
 function syncMusic() {
   if (!loopEl) return;
   const on = !muted && audioUnlocked && !document.hidden, end = musicWant === 'victory' || musicWant === 'defeat';
-  const want = { music: on && !end, birds: on && musicWant === 'day' };
+  const nightOn = on && musicWant === 'night' && loopEl.night;   // falls back to the day theme if the night track is missing
+  const want = { music: on && !end && !nightOn, night: !!nightOn, birds: on && musicWant === 'day' };
   for (const k in loopEl) { const el = loopEl[k]; if (want[k] && el.paused) el.play().catch(() => {}); else if (!want[k] && !el.paused) el.pause(); }
   if (on && end && !stinger) stinger = sfx(musicWant) || 1;
   if (!end) stinger = null;

@@ -2,7 +2,8 @@
 
 | File | When it plays |
 |---|---|
-| `Medieval_theme_music.mp3` | Loops all game, day and night |
+| `Medieval_theme_music.mp3` | Loops during the day |
+| `Night_theme_music.mp3` | Loops at night, while raiders attack (the day theme plays if it's missing) |
 | `Victory_sound.mp3` | Once, when all three waves are defended (the theme stops) |
 | `Defeat_sound.mp3` | Once, when the castle falls (the theme stops) |
 
