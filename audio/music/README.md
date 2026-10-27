@@ -1,14 +1,11 @@
 # Music
 
-Drop background music here. The game finds files **by name**, so no code changes are needed.
-
-| File name | When it plays |
+| File | When it plays |
 |---|---|
-| `day` | During the day (loops) |
-| `night` | During a raid (loops; falls back to `day` if missing) |
-| `victory` | Once, when all three waves are defended |
-| `defeat` | Once, when the castle falls |
+| `Medieval_theme_music.mp3` | Loops all game, day and night |
+| `Victory_sound.mp3` | Once, when all three waves are defended (the theme stops) |
+| `Defeat_sound.mp3` | Once, when the castle falls (the theme stops) |
 
-Formats: `.mp3` (recommended), `.ogg` or `.wav`, e.g. `day.mp3`.
-Keep each file small (under ~3 MB) so the game loads quickly on phones.
-Missing files are simply silent.
+File names are set in the `SND` and `LOOPS` tables in `index.html` (search for `// ---------- audio`).
+Short clips are levelled automatically when they load. The theme streams, so its volume is a fixed
+number in `LOOPS` (measured once); if you replace it with a much louder or quieter track, ask to re-measure.

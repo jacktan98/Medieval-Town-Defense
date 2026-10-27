@@ -65,10 +65,12 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - **Ambient**: bird flocks every 45–95 s (scale 0.55, half circle), waving flags.
 
 ## Audio
-- Files in `audio/music` (day, night, victory, defeat) and `audio/sfx` (see its README) are found by name, trying .mp3, .ogg, .wav; missing ones are silent (a 404 per probe in the console is expected).
-- SFX via Web Audio buffers (`sfx(name, at, vol)`, distance falloff from the camera target, per-name throttle in `SFX_GAP`); music via looping `<audio>` (`setMusic`). Work strokes fire when the tool's swing sine passes +0.85.
-- Audio starts on the first tap/key (browser rule). Mute button (`#muteBtn`, key M) persists in localStorage; audio pauses when the tab is hidden.
-- Audio state uses `var` because `sfx()`/`setMusic()` run during the startup reset, before the audio block executes.
+- Event → file map in `SND` (effects, decoded) and `LOOPS` (theme music and birdsong, streamed through `<audio>` + MediaElementSource). File names are the owner's (e.g. `Woodcutter_axe.mp3`); see `audio/*/README.md`.
+- Levelling as in medieval-td: each decoded clip gets gain = `TARGET_LOUD` (0.09) × trim ÷ RMS of its loudest 0.3 s, clamped to [0.1, 6] and to a peak ceiling of 0.95 at the output (`MASTER` 0.9). Trims follow medieval-td where the sounds match (click/attack .445, arrow .889, sold .7, hammer .668, axe .736).
+- `strikes: true` clips (axe, pick, hammer, hoe) are long recordings; `strikes()` cuts single strikes at onsets (10 ms envelope > 25% of peak after 80 ms quiet), each levelled on its own; one random cut plays per tool impact (swing sine passing +0.85).
+- Loops can't be measured at load; their `vol` was measured offline (theme 0.254, birds 0.214 loudest-0.3 s RMS) to sit ~6 dB / ~10 dB under effects. Re-measure if the files change.
+- Theme loops day and night; birds by day only; `Victory_sound`/`Defeat_sound` stop the loops and play once. `attack` (two takes, never the same twice) on raider melee strikes. No file yet for nightfall, upgrade or raider-hit; those events are silent.
+- Audio starts on the first tap/key. Mute (`#muteBtn`, key M) persists in localStorage; audio pauses when the tab is hidden. Audio state uses `var` because `sfx()`/`setMusic()` run during the startup reset.
 
 ## UI
 - **Top panel**: sun/moon + phase, 20 s payout ring, "Skip day", resource chips (green idle badge on villagers), collapsible short "Town log".

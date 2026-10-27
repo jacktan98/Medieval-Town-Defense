@@ -1443,7 +1443,7 @@ function completeSite(B) {
   const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false;
   const c = center(B);
   if (S.kind === 'repair') {
-    B.hp = B.max; floatText('Repaired', '#8cc46e', c.x, B.group.position.y + 3, c.z); sfx('build', c, .7);
+    B.hp = B.max; floatText('Repaired', '#8cc46e', c.x, B.group.position.y + 3, c.z); sfx('build', c, .6);
     refreshCard(); return;
   }
   if (S.kind === 'new') {
@@ -1452,7 +1452,7 @@ function completeSite(B) {
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
-    floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('upgrade', c);
+    floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('build', c);
     log(`<b>${T.tiers[B.tier - 1]}</b> ready (tier ${B.tier}).`, 'good');
   }
   syncResidents(B); assignJobs(); if (WALLY[B.type]) refreshWalls(); refreshCard();
@@ -1480,6 +1480,7 @@ function removeBuilding(B, raid) {
   }
   hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
+  if (!raid) sfx('sold', c);
   if (raid) { stats.lost++; sfx('destroyed', c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> destroyed!`, 'warn'); }
   else {
     const back = {}; RES_KEYS.forEach(k => { if (DEF[B.type].cost[k]) back[k] = Math.floor(DEF[B.type].cost[k] / 2); res[k] += back[k] || 0; });
@@ -1489,7 +1490,7 @@ function removeBuilding(B, raid) {
   refreshWalls(); rebuildRoads();
   if (B.type === 'castle') endGame(false);
 }
-function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; sfx('hit', center(B), .55); if (B.hp <= 0) removeBuilding(B, true); }
+function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; if (B.hp <= 0) removeBuilding(B, true); }
 function paintRoad(a, b) {
   const ev = evaluateRoad(a, b);
   if (!ev.ok) { if (!ev.soft) setHint(`Can't lay path: ${ev.reason}`, 'bad'); return false; }
@@ -1503,7 +1504,7 @@ let lastPaint = '', wallStroke = 0;
 function paintWall(a, b) {
   const key = a + ',' + b; if (key === lastPaint) return; lastPaint = key;
   const B = place('wall', a, b, { quiet: true });
-  if (B) { wallStroke++; sfx('click', null, .5); setHint(`Wall joins ${BITNAME(B.mask)} → ${SHAPE(B.mask)}`, 'ok'); }
+  if (B) { wallStroke++; sfx('click'); setHint(`Wall joins ${BITNAME(B.mask)} → ${SHAPE(B.mask)}`, 'ok'); }
 }
 
 // ---------- villagers ----------
@@ -1884,7 +1885,7 @@ function updateVillagers(dt, now) {
       else if (kind === 'hoe') { w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
       else if (kind === 'hammer') { w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
     } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
-    if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v, .55); } } else if (w < 0) v.struck = false; }
+    if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = tilt; }
     v.arms[0].rotation.x = L; v.arms[1].rotation.x = Rt; v.body.rotation.x = lean;
     v.g.position.set(v.x, hAt(v.x, v.z), v.z);
@@ -1926,7 +1927,7 @@ const arrowGeo = new THREE.BoxGeometry(.04, .04, .7), arrowMat = mat('#3a2a1a');
 function fireArrow(from, to, onHit) {
   const m = new THREE.Mesh(arrowGeo, arrowMat); m.position.copy(from); scene.add(m);
   const d = from.distanceTo(to);
-  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit }); sfx('arrow', from, .6);
+  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit }); sfx('arrow', from);
 }
 const tv = new THREE.Vector3();
 function arrowPos(a, t, out) { out.lerpVectors(a.from, a.to, t); out.y += a.arc * 4 * t * (1 - t); return out; }
@@ -1937,7 +1938,7 @@ function updateArrows(dt) {
     if (a.t >= 1) { scene.remove(a.m); arrows.splice(n, 1); a.onHit(); }
   }
 }
-function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; sfx('hit', e, .7); if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
+function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
 function updateEnemies(dt) {
   for (let n = enemies.length - 1; n >= 0; n--) {
     const e = enemies[n];
@@ -1967,7 +1968,7 @@ function updateEnemies(dt) {
           if (e.kind === 'archer') {
             const tgt = B, dmg = e.dmg;
             fireArrow(new THREE.Vector3(e.x, hAt(e.x, e.z) + 1.0, e.z), new THREE.Vector3(c.x, B.group.position.y + 1.2, c.z), () => hurtBuilding(tgt, dmg));
-          } else hurtBuilding(B, e.dmg);
+          } else { sfx('attack', e); hurtBuilding(B, e.dmg); }
         }
       }
     }
@@ -2067,7 +2068,7 @@ function econTick() {
       if (g) { res.gold += g; stats.gold += g; floatRes('gold', g, c.x, y, c.z); }
     }
   }
-  sfx('coins', null, .5);
+  sfx('coins');
 }
 // villagers eat 1 wheat every MEAL seconds of daylight; with none in store they go home and sleep until there is
 let hungryLogT = 0, newlyHungry = 0;
@@ -2108,7 +2109,7 @@ function startNight() {
   if (w.captain) spawnQueue.push(['captain', pts[0]]);
   spawnT = 1;
   const ps = assignPosts();
-  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders approach`, true); setMusic('night'); sfx('horn-night');
+  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders approach`, true); setMusic('night');
   log(`<b>Night ${PH.wave}</b>: ${spawnQueue.length} raiders · ${ps.posted} archers on watch${ps.open ? ` · ${ps.open} post${ps.open > 1 ? 's' : ''} empty` : ''}.`, 'warn');
 }
 function startDay() {
@@ -2371,7 +2372,7 @@ function tap(e) {
   const pt = pick(e); if (!pt) return;
   const [ci, cj] = cellFor(pt, DEF[tool].size);
   if (e.pointerType !== 'mouse' && !(cur && cur.ci === ci && cur.cj === cj && cur.type === tool && ghosts[tool].visible)) { showGhostAt(pt); return; }
-  if (place(tool, ci, cj)) { sfx('click', null, .7); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
+  if (place(tool, ci, cj)) { sfx('click'); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
 }
 function setTool(t) {
   tool = t;
@@ -2485,50 +2486,100 @@ $('#adDay').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver
 setPaused(false);
 addEventListener('keydown', e => { if (e.key === 'p' || e.key === 'P') !gameOver && setPaused(!paused); });
 
-// ---------- audio: files dropped into audio/music and audio/sfx are found by name; missing ones are simply silent ----------
-var MUSIC_NAMES = ['day', 'night', 'victory', 'defeat'], LOOPED = { day: 1, night: 1 };
-var SFX_NAMES = ['build', 'upgrade', 'chop', 'pick', 'hoe', 'hammer', 'coins', 'arrow', 'hit', 'destroyed', 'horn-night', 'click'];
-var SFX_GAP = { chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, hit: .08, coins: .3, click: .05 };   // min seconds between repeats
+// ---------- audio ----------
+// Every effect is LEVELLED when it loads, the way medieval-td does it: measure the RMS of its loudest 0.3 s,
+// scale it to one common loudness, then apply a trim for how prominent that sound should be. Re-uploading a
+// file at a different recording level needs no change here.
+var SND = {   // game event -> file in audio/sfx (or audio/music) and its trim against the common loudness
+  click:     { file: 'sfx/Click_sound.mp3',          trim: .445 },
+  build:     { file: 'sfx/Building_built.mp3',       trim: .9 },
+  sold:      { file: 'sfx/Building_sold.mp3',        trim: .7 },
+  destroyed: { file: 'sfx/Building_destroyed.mp3',   trim: 1 },
+  coins:     { file: 'sfx/Coins_payout.mp3',         trim: .7 },
+  arrow:     { file: 'sfx/Arrow_shot.mp3',           trim: .889 },
+  attack:    { files: ['sfx/Attack_1.mp3', 'sfx/Attack_2.mp3'], trim: .445 },   // a raider's strike, one of the two at random
+  // long recordings of repeated work: single strikes are cut out of them (see strikes()) and one plays per swing
+  chop:      { file: 'sfx/Woodcutter_axe.mp3',       trim: .736, strikes: true },
+  pick:      { file: 'sfx/Mason_pick.mp3',           trim: .736, strikes: true },
+  hammer:    { file: 'sfx/Building_with_hammer.mp3', trim: .668, strikes: true },
+  hoe:       { file: 'sfx/Farmer_hoe.mp3',           trim: .6,   strikes: true },
+  victory:   { file: 'music/Victory_sound.mp3',      trim: 1 },
+  defeat:    { file: 'music/Defeat_sound.mp3',       trim: 1 },
+};
+// Long loops stream from <audio> rather than being decoded (a 3-minute track decoded is ~60 MB on a phone), so
+// they can't be measured at load. Their levels were measured once (loudest 0.3 s RMS: theme 0.254, birds 0.214)
+// and set to sit under the effects: the theme ~6 dB below them, birdsong ~10 dB below. Re-measure if replaced.
+var LOOPS = {
+  music: { file: 'music/Medieval_theme_music.mp3', vol: .18 },
+  birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
+};
+var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
+var SFX_GAP = { chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
-var MUSIC_VOL = .45;
 var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
-var actx = null, sfxGain = null, audioUnlocked = false, musicWant = 'day', musicNow = null;   // var: sfx()/setMusic() can run during the startup reset, before this line
-var sfxBuf = {}, sfxLast = {}, musicEl = {};
-try { actx = new (window.AudioContext || window.webkitAudioContext)(); sfxGain = actx.createGain(); sfxGain.connect(actx.destination); } catch (e) { actx = null; }
-async function findAudio(dir, name, exts, method) {
-  for (const ext of exts) {
-    try { const r = await fetch(`audio/${dir}/${name}.${ext}`, { method }); if (r.ok) return r; } catch (e) {}
-  }
-  return null;
+// var: sfx()/setMusic() can run during the startup reset, before this block executes
+var actx = null, master = null, audioUnlocked = false, musicWant = 'day', clips = {}, sfxLast = {}, lastPick = {}, loopEl = {}, stinger = null;
+try { actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = MASTER; master.connect(actx.destination); } catch (e) { actx = null; }
+// loudness = RMS of the loudest LOUD_WINDOW; the gain brings it to TARGET_LOUD x trim without the peak passing the ceiling
+function levelOf(b, from = 0, to = b.length) {
+  const d = b.getChannelData(0), win = Math.max(1, Math.min(to - from, Math.round(LOUD_WINDOW * b.sampleRate))), hop = Math.round(.05 * b.sampleRate);
+  let best = 0, peak = 0;
+  for (let i = from; i < to; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+  for (let i = from; i + win <= to; i += hop) { let sum = 0; for (let k = i; k < i + win; k++) sum += d[k] * d[k]; best = Math.max(best, Math.sqrt(sum / win)); }
+  return { loud: best, peak };
 }
-if (actx) for (const n of SFX_NAMES) findAudio('sfx', n, ['mp3', 'ogg', 'wav'], 'GET').then(r => r && r.arrayBuffer()).then(ab => {
-  if (ab) actx.decodeAudioData(ab, b => { sfxBuf[n] = b; }, () => {});
-});
-for (const n of MUSIC_NAMES) findAudio('music', n, ['mp3', 'ogg', 'wav'], 'HEAD').then(r => {
-  if (!r) return;
-  const el = new Audio(r.url); el.loop = !!LOOPED[n]; el.preload = n === 'day' ? 'auto' : 'none'; el.volume = MUSIC_VOL;
-  musicEl[n] = el; syncMusic();
-});
-// at: a world point; sounds fade with distance from what the camera looks at, and when zoomed far out
+function gainFor(m, trim) { return Math.min(clamp(TARGET_LOUD * trim / Math.max(m.loud, 1e-4), GAIN_MIN, GAIN_MAX), PEAK_CEILING / Math.max(m.peak, 1e-4)); }
+// onsets: the 10 ms envelope rising past 25% of the clip's peak after 80 ms below 10%; each strike runs to the next (max 0.6 s)
+function strikes(b) {
+  const d = b.getChannelData(0), hop = Math.round(.01 * b.sampleRate), env = [];
+  let peak = 0; for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  for (let i = 0; i + hop <= d.length; i += hop) { let m = 0; for (let k = i; k < i + hop; k++) m = Math.max(m, Math.abs(d[k])); env.push(m); }
+  const on = []; let quiet = 8;
+  env.forEach((e, i) => { if (e > peak * .25 && quiet >= 8) { on.push(i * .01); quiet = 0; } else if (e < peak * .1) quiet++; else if (e > peak * .25) quiet = 0; });
+  return on.map((t, i) => { const from = Math.max(0, t - .02), to = Math.min(i + 1 < on.length ? on[i + 1] - .03 : b.duration, t + .6); return [from, to - from]; }).filter(([, len]) => len > .08);
+}
+if (actx) for (const k in SND) {
+  const S = SND[k]; clips[k] = [];
+  for (const f of S.files || [S.file]) fetch('audio/' + f).then(r => r.ok ? r.arrayBuffer() : null).then(ab => ab && actx.decodeAudioData(ab, b => {
+    if (S.strikes) {
+      const cuts = strikes(b), sr = b.sampleRate;
+      for (const [from, len] of cuts) clips[k].push({ buf: b, from, len, gain: gainFor(levelOf(b, Math.floor(from * sr), Math.floor((from + len) * sr)), S.trim) });
+      if (!cuts.length) clips[k].push({ buf: b, from: 0, len: b.duration, gain: gainFor(levelOf(b), S.trim) });
+    } else clips[k].push({ buf: b, from: 0, len: b.duration, gain: gainFor(levelOf(b), S.trim) });
+  }, () => {})).catch(() => {});
+}
+for (const k in LOOPS) {
+  const el = new Audio('audio/' + LOOPS[k].file); el.loop = true; el.preload = k === 'music' ? 'auto' : 'metadata'; el.crossOrigin = 'anonymous';
+  let node = null;
+  if (actx) try { node = actx.createGain(); node.gain.value = LOOPS[k].vol; actx.createMediaElementSource(el).connect(node); node.connect(master); } catch (e) { node = null; }
+  if (!node) el.volume = LOOPS[k].vol;                     // no Web Audio: plain element volume (ignored on iOS, but that path has no Web Audio anyway)
+  el.addEventListener('error', () => { delete loopEl[k]; });
+  loopEl[k] = el;
+}
+// at: a world point; world sounds fade with distance from what the camera looks at, and when zoomed far out
 function sfx(name, at, vol = 1) {
-  if (muted || !actx || actx.state !== 'running' || !sfxBuf[name]) return;
+  if (muted || !actx || actx.state !== 'running' || !clips[name] || !clips[name].length) return;
   const now = actx.currentTime; if (now - (sfxLast[name] || -9) < (SFX_GAP[name] || .05)) return;
   let v = vol;
   if (at) { v *= clamp(1 - Math.hypot(at.x - target.x, at.z - target.z) / 28, 0, 1) * clamp(1.25 - dist / 80, .3, 1); if (v < .03) return; }
   sfxLast[name] = now;
-  const src = actx.createBufferSource(), g = actx.createGain();
-  src.buffer = sfxBuf[name]; src.playbackRate.value = .94 + Math.random() * .12; g.gain.value = v * .8;
-  src.connect(g); g.connect(sfxGain); src.start();
+  const list = clips[name];
+  let n = Math.floor(Math.random() * list.length); if (list.length > 1 && n === lastPick[name]) n = (n + 1) % list.length;   // never the same take twice running
+  lastPick[name] = n;
+  const c = list[n], src = actx.createBufferSource(), g = actx.createGain();
+  src.buffer = c.buf; src.playbackRate.value = .95 + Math.random() * .1; g.gain.value = c.gain * v;
+  src.connect(g); g.connect(master); src.start(0, c.from, c.len);
+  return src;
 }
+// the theme loops day and night with birdsong under it by day; victory and defeat stop it and play once
 function setMusic(name) { musicWant = name; syncMusic(); }
 function syncMusic() {
-  if (!musicEl) return;
-  let want = musicEl[musicWant] ? musicWant : musicWant === 'night' && musicEl.day ? 'day' : null;
-  if (muted || !audioUnlocked || document.hidden) want = null;
-  if (want === musicNow) return;
-  if (musicNow) musicEl[musicNow].pause();
-  musicNow = want;
-  if (want) { const el = musicEl[want]; if (!el.loop) el.currentTime = 0; el.play().catch(() => { musicNow = null; }); }
+  if (!loopEl) return;
+  const on = !muted && audioUnlocked && !document.hidden, end = musicWant === 'victory' || musicWant === 'defeat';
+  const want = { music: on && !end, birds: on && musicWant === 'day' };
+  for (const k in loopEl) { const el = loopEl[k]; if (want[k] && el.paused) el.play().catch(() => {}); else if (!want[k] && !el.paused) el.pause(); }
+  if (on && end && !stinger) stinger = sfx(musicWant) || 1;
+  if (!end) stinger = null;
 }
 // browsers only allow sound after the player touches the page
 function unlockAudio() {
@@ -2538,7 +2589,7 @@ function unlockAudio() {
 }
 addEventListener('pointerdown', unlockAudio, true); addEventListener('keydown', unlockAudio, true);
 document.addEventListener('visibilitychange', () => { if (actx) document.hidden ? actx.suspend() : audioUnlocked && actx.resume(); syncMusic(); });
-document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click', null, .5); }, true);
+document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click'); }, true);
 function setMuted(on) {
   muted = on; try { localStorage.setItem('mtd-muted', on ? '1' : '0'); } catch (e) {}
   const b = $('#muteBtn');
