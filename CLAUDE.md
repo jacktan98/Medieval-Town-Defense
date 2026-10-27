@@ -1,4 +1,4 @@
-# Village Ground Lab — project handoff
+# Medieval Town Defense — project handoff
 
 A medieval village-builder + tower-defence browser game prototype (inspired by Kingdom Rush and Age of Empires). Owner: Jack. He tests mostly on his phone (portrait and landscape) and also on desktop.
 
@@ -7,10 +7,12 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 ## How to run
 - Open `index.html` in a browser, or serve the folder: `npx serve .` / `python3 -m http.server`.
 - To test on a phone: serve on the LAN, or enable GitHub Pages on the repo.
-- **Nothing has ever been checked in real WebGL** (the previous workspace couldn't load three.js). The first job is to open it in a real browser, screenshot it, and check lighting, shadows, masonry shader, flag/banner motion and night lights.
+- Live build: https://jacktan98.github.io/Medieval-Town-Defense/ (GitHub Pages from `main` root; push to `main` to deploy).
+- First real-WebGL playtest done 2026-10-27 (desktop, phone portrait/landscape): all building tiers, villager tools/poses, night waves, end screen render correctly.
+- Debug: open `index.html?debug` and `window.G('code')` evaluates inside the game closure (e.g. `G('res.gold=9999')`, `G('PH.t=0')` to skip the day).
 
 ## Suggested next steps (not yet done)
-1. Verify rendering in a real browser and fix anything that looks off.
+1. ~~Verify rendering in a real browser~~ (done). Remaining polish ideas: palisade/timber reads very dark; trees occlude units when zoomed in; building card covers the town centre in phone landscape.
 2. Split `index.html` into modules (e.g. `render/`, `models/`, `people/`, `sim/`, `ui/`) with a simple bundler (Vite), keeping a single-file build for easy sharing.
 3. Replace the mock-based tests with real Playwright runs against the actual game.
 4. Later: real art (model packs) and audio (music + SFX) — discussed, deferred until the rendering pass is done.
@@ -72,6 +74,8 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - Restart confirm needs `resetArmed && ...` guard.
 - Flag waves must anchor on position, not uv (uv tore between box faces).
 - `randomNear` targets must not land inside a building footprint (villagers stalled at the castle gate).
+- `evaluate` rejects solid buildings on another building's door cell (villagers exiting got snapped back into a blocked door forever). Flowers/torch/gate are still allowed.
+- The file must keep `<!doctype html>`, `<meta charset>` and the viewport meta (the claude.ai artifact wrapper used to add them; without them phones render zoomed-out and arrows show as mojibake).
 
 ## Tools in `tools/` (from the old workspace)
 - `tools/mock/mock.js`: Proxy-based THREE mock used for headless Playwright logic tests (`window.T` hook). Scripts in `tools/mock/*.js` are examples; they were run against a generated `test.html`.
