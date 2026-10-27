@@ -975,9 +975,12 @@ function makeTower(tier, plinth) {
   }
   return g;
 }
+// stone castles are drawn narrower (x/z only) so their corner towers stay inside the 3×3 footprint
+const CASTLE_K = [1, .9, .82];
 function makeCastle(tier, plinth) {
-  const g = new THREE.Group(), W = 2.6;
-  if (plinth) g.add(box(6.0, 2.0, 6.0, M.stone, 0, -.8, 0));
+  const root = new THREE.Group(), g = new THREE.Group(), W = 2.6, k = CASTLE_K[tier - 1];
+  if (plinth) root.add(box(6.0, 2.0, 6.0, M.stone, 0, -.8, 0));
+  g.scale.set(k, 1, k); root.add(g);
   g.add(box(4.8, .12, 4.8, M.court, 0, .26, 0));
   if (tier === 1) {            // palisade fort: sharpened logs and a timber hall
     for (let s = -W; s <= W + .01; s += .45) {
@@ -1048,7 +1051,7 @@ function makeCastle(tier, plinth) {
     g.add(box(.5, .7, .06, M.glow, 0, 3.4, .82)); g.add(box(.5, .7, .06, M.glow, 0, 2.0, .82));
     g.add(box(.07, 1.8, .07, M.timber, 0, 5.9, -.4)); g.add(flagBox(.9, .5, .04, M.flag, .48, 6.5, -.4));
   }
-  return g;
+  return root;
 }
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
@@ -1189,7 +1192,6 @@ function makeWall(tier, plinth, mask = 0, rot = 0) {
 }
 function makeGate(tier, plinth, mask = 0, rot = 0, fixed = false) {
   const outer = new THREE.Group(), g = new THREE.Group(); outer.add(g);
-  if (plinth) outer.add(box(2.0, 1.4, 2.0, M.stone, 0, -.6, 0));
   // the opening follows walls on one axis, otherwise the player's rotation; a gate rotated by hand keeps it
   const ns = (mask & 5) && !(mask & 10), ew = (mask & 10) && !(mask & 5);
   if (fixed ? rot : ns ? 1 : ew ? 0 : rot) g.rotation.y = Math.PI / 2;
@@ -1273,7 +1275,7 @@ const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
 };
 
 // stone bases fill their tiles exactly; this is how far each one's top sits above the building's ground level
-const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, gate: .1 };
+const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2 };
 // a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
 // so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
 function snapToNeighbours(type, ev) {
@@ -2295,7 +2297,7 @@ const POSTS = {
     [[1.9, 2.55, 1.9], [-1.9, 2.55, 1.9], [1.9, 2.55, -1.9], [-1.9, 2.55, -1.9]],
     [[2.6, 3.55, 2.6], [-2.6, 3.55, 2.6], [2.6, 3.55, -2.6], [-2.6, 3.55, -2.6]],
     [[-.45, 4.8, -.4], [.45, 4.8, -.4], [0, 2.4, -2.1], [2.1, 2.4, 0], [-2.1, 2.4, 0], [-1.8, 2.4, 2.1]],   // two on the keep, one on each wall-walk
-  ],
+  ].map((L, i) => L.map(([x, y, z]) => [x * CASTLE_K[i], y, z * CASTLE_K[i]])),
 };
 function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1]; return L[a % L.length]; }
 function showDefender(B, a) {

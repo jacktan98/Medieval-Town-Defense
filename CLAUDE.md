@@ -16,7 +16,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 2. Split `index.html` into modules (e.g. `render/`, `models/`, `people/`, `sim/`, `ui/`) with a simple bundler (Vite), keeping a single-file build for easy sharing.
 3. Replace the mock-based tests with real Playwright runs against the actual game.
 4. Later: real art (model packs). Audio is wired up (see Audio below); it needs real files in `audio/music` and `audio/sfx`.
-5. Open questions Jack hasn't answered: remove the gate plinth? should paths also speed up raiders (currently yes)? should farm output depend on number of farmers?
+5. Open questions Jack hasn't answered: should paths also speed up raiders (currently yes)? should farm output depend on number of farmers?
 
 ## Style rules (from Jack)
 - UI text is minimal: a few words, no explanations (hints like "Pick a spot", "Occupied", "Need [wood]5"; banners "Night 2 · 8 raiders"; log lines "<b>Cottage</b> ready"). Keep new text in this style.
@@ -35,6 +35,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Arrows leave from the bow (`bowPoint`: raises the bow arm, reads the bow's world position) for tower/castle archers and raider archers.
 - Construction: `addScaffold` builds poles every ~1 m, plank decks per lift, braces, a ladder and material stacks; walls/torches/flowers get a light version (`LIGHT_SCAFFOLD`). Builders kick up dust (`dustAt`, shares the smoke `puffs`).
 - Walls are not flattened and have no AO plane; their posts/blocks run 0.3–0.6 m below ground so runs follow slopes cleanly.
+- Castle T2/T3 are drawn narrower in x/z (`CASTLE_K` .9/.82, posts scaled too) so corner towers stay inside the 3×3 plinth.
 - Castle T2 is all warm stone (`M.stone2`, like T3): plain curtain walls, square corner towers open on top, keep with a straw roof. Castle T3 holds 6 archers (2 on the keep, 1 per wall-walk).
 - Houses stay plain and ordinary so they never outshine the castle: T2 daub cottage with corner posts and a straw gable roof; T3 stone ground floor + plaster upper floor with a blue gable roof. One door, few windows, small chimney.
 
@@ -56,7 +57,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 | quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4 | Stone pit / Quarry / Masons' yard |
 | tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15; shaft drawn at `TOWER_K` (.8/.8/.72, T2 also .74), roof held a fixed 1.55 m (`HEAD`) above the platform so archers fit; posts and shootY scale with `TOWER_K`; T3 is an open platform with a low parapet and a blue roof on stone columns | Lookout / Watchtower / Stone tower |
 | wall | 1×1 | wood 5 gold 2 | stone 6 gold 3 / stone 10 gold 10 | drag-paint, auto-tiles, no plinth | Palisade / Stone wall / Battlement |
-| gate | 1×1 | wood 15 gold 10 | stone 15 gold 20 / stone 25 gold 35 | auto-tiles with walls | Timber gate / Stone gate / Gatehouse |
+| gate | 1×1 | wood 15 gold 10 | stone 15 gold 20 / stone 25 gold 35 | auto-tiles with walls, no plinth | Timber gate / Stone gate / Gatehouse |
 | well | 1×1 | stone 5 | — | charm 0.25 | — |
 | torch | ⅓ tile | wood 2 | — | charm 0.1, walkable, night light | — |
 | flowers | 1×1 | gold 3 | — | charm 0.15, walkable | — |
