@@ -244,6 +244,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       <div class="adminRow"><button id="adPop">+5 villagers</button><button id="adDay">Skip to night</button></div>
     </div>
     <div class="cornerBtns">
+      <button class="iconBtn" id="muteBtn" aria-pressed="false" aria-label="Mute sound" title="Sound on (M to mute)"></button>
       <button class="iconBtn" id="speedBtn" aria-pressed="false" aria-label="Game speed 1×" title="Game speed"><span class="spd">1×</span></button>
       <button class="iconBtn" id="adminBtn" aria-pressed="false" aria-label="Admin" title="Admin tools"><svg viewBox="0 0 24 24"><path d="M14.5 5.5 a4 4 0 0 0 4.9 5 l-8.6 8.6 a2.1 2.1 0 0 1-3-3 l8.6-8.6 a4 4 0 0 0-1.9-2z"/><path d="M5 5 L9 9"/></svg></button>
     </div>
@@ -1429,12 +1430,12 @@ function completeSite(B) {
   const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false;
   const c = center(B);
   if (S.kind === 'new') {
-    B.built = true; B.group.scale.y = 1; stats.built++; paversDirty = true;
+    B.built = true; B.group.scale.y = 1; stats.built++; paversDirty = true; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]} villagers` : ''}${T.charm ? ` · +${Math.round(T.charm * 100)}% gold nearby` : ''}.`, 'good');
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
-    floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z);
+    floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('upgrade', c);
     log(`<b>${T.tiers[B.tier - 1]}</b> ready (tier ${B.tier}).`, 'good');
   }
   syncResidents(B); assignJobs(); if (WALLY[B.type]) refreshWalls(); refreshCard();
@@ -1462,7 +1463,7 @@ function removeBuilding(B, raid) {
   }
   hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
-  if (raid) { stats.lost++; floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> destroyed!`, 'warn'); }
+  if (raid) { stats.lost++; sfx('destroyed', c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> destroyed!`, 'warn'); }
   else {
     const back = {}; RES_KEYS.forEach(k => { if (DEF[B.type].cost[k]) back[k] = Math.floor(DEF[B.type].cost[k] / 2); res[k] += back[k] || 0; });
     log(`Demolished <b>${DEF[B.type].tiers[B.tier - 1]}</b> · refund ${costHTML(back)}`);
@@ -1471,7 +1472,7 @@ function removeBuilding(B, raid) {
   refreshWalls(); rebuildRoads();
   if (B.type === 'castle') endGame(false);
 }
-function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; if (B.hp <= 0) removeBuilding(B, true); }
+function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; sfx('hit', center(B), .55); if (B.hp <= 0) removeBuilding(B, true); }
 function paintRoad(a, b) {
   const ev = evaluateRoad(a, b);
   if (!ev.ok) { if (!ev.soft) setHint(`Can't lay path: ${ev.reason}`, 'bad'); return false; }
@@ -1485,7 +1486,7 @@ let lastPaint = '', wallStroke = 0;
 function paintWall(a, b) {
   const key = a + ',' + b; if (key === lastPaint) return; lastPaint = key;
   const B = place('wall', a, b, { quiet: true });
-  if (B) { wallStroke++; setHint(`Wall joins ${BITNAME(B.mask)} → ${SHAPE(B.mask)}`, 'ok'); }
+  if (B) { wallStroke++; sfx('click', null, .5); setHint(`Wall joins ${BITNAME(B.mask)} → ${SHAPE(B.mask)}`, 'ok'); }
 }
 
 // ---------- villagers ----------
@@ -1855,16 +1856,17 @@ function updateVillagers(dt, now) {
     const carrying = v.carryLog.visible || v.carryStone.visible;
     // arm angle: 0 hangs down, -1.57 points straight ahead, -3 is overhead; tools follow the right hand
     const kind = v.pivot ? v.toolKind : null, logC = v.carryLog.visible, stoneC = v.carryStone.visible;
-    let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0;
+    let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0, w = null;
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
     else if (v.working && kind) {
       const t = now / 1000 + v.phase;
-      if (kind === 'axe') { const w = Math.sin(t * 5.8); Rt = -1.75 + w * .95; L = -.35 - w * .15; tilt = -.6; lean = .08 + w * -.06; }   // one-handed chop, free arm steadies
-      else if (kind === 'pick') { const w = Math.sin(t * 5.2); Rt = -1.5 + w * 1.0; L = -.35 - w * .15; tilt = -.75; lean = .14 - w * .08; }   // one-handed: the rig's hands can't meet on one handle
-      else if (kind === 'hoe') { const w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
-      else if (kind === 'hammer') { const w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
+      if (kind === 'axe') { w = Math.sin(t * 5.8); Rt = -1.75 + w * .95; L = -.35 - w * .15; tilt = -.6; lean = .08 + w * -.06; }   // one-handed chop, free arm steadies
+      else if (kind === 'pick') { w = Math.sin(t * 5.2); Rt = -1.5 + w * 1.0; L = -.35 - w * .15; tilt = -.75; lean = .14 - w * .08; }   // one-handed: the rig's hands can't meet on one handle
+      else if (kind === 'hoe') { w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
+      else if (kind === 'hammer') { w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
     } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
+    if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v, .55); } } else if (w < 0) v.struck = false; }
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = tilt; }
     v.arms[0].rotation.x = L; v.arms[1].rotation.x = Rt; v.body.rotation.x = lean;
     v.g.position.set(v.x, hAt(v.x, v.z), v.z);
@@ -1906,7 +1908,7 @@ const arrowGeo = new THREE.BoxGeometry(.04, .04, .7), arrowMat = mat('#3a2a1a');
 function fireArrow(from, to, onHit) {
   const m = new THREE.Mesh(arrowGeo, arrowMat); m.position.copy(from); scene.add(m);
   const d = from.distanceTo(to);
-  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit });
+  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit }); sfx('arrow', from, .6);
 }
 const tv = new THREE.Vector3();
 function arrowPos(a, t, out) { out.lerpVectors(a.from, a.to, t); out.y += a.arc * 4 * t * (1 - t); return out; }
@@ -1917,7 +1919,7 @@ function updateArrows(dt) {
     if (a.t >= 1) { scene.remove(a.m); arrows.splice(n, 1); a.onHit(); }
   }
 }
-function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
+function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; sfx('hit', e, .7); if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
 function updateEnemies(dt) {
   for (let n = enemies.length - 1; n >= 0; n--) {
     const e = enemies[n];
@@ -2046,6 +2048,7 @@ function econTick() {
       if (g) { res.gold += g; stats.gold += g; floatRes('gold', g, c.x, y, c.z); }
     }
   }
+  sfx('coins', null, .5);
 }
 // villagers eat 1 wheat every MEAL seconds of daylight; with none in store they go home and sleep until there is
 let hungryLogT = 0, newlyHungry = 0;
@@ -2086,7 +2089,7 @@ function startNight() {
   if (w.captain) spawnQueue.push(['captain', pts[0]]);
   spawnT = 1;
   const ps = assignPosts();
-  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders approach`, true);
+  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders approach`, true); setMusic('night'); sfx('horn-night');
   log(`<b>Night ${PH.wave}</b>: ${spawnQueue.length} raiders · ${ps.posted} archers on watch${ps.open ? ` · ${ps.open} post${ps.open > 1 ? 's' : ''} empty` : ''}.`, 'warn');
 }
 function startDay() {
@@ -2094,11 +2097,11 @@ function startDay() {
   for (const v of villagers) if (v.post) { if (v.posted) { v.posted = false; v.inside = true; } v.post = null; }
   for (const B of buildings) { B.manned = []; hideDefenders(B); }
   for (const B of buildings) B.hp = B.max;
-  banner(`Dawn · Day ${PH.wave}`, `Wave ${PH.wave - 1} defended. Buildings repaired.`);
+  banner(`Dawn · Day ${PH.wave}`, `Wave ${PH.wave - 1} defended. Buildings repaired.`); setMusic('day');
   log(`<b>Wave ${PH.wave - 1} held.</b> Repairs done · ${Math.round(PH.t / 60)} min to night.`, 'good');
 }
 function endGame(won) {
-  if (gameOver) return; gameOver = true;
+  if (gameOver) return; gameOver = true; setMusic(won ? 'victory' : 'defeat');
   const el = (performance.now() - stats.t0) / 1000;
   $('#sumTitle').textContent = won ? 'The town holds' : 'The castle has fallen';
   $('#sumTitle').className = won ? '' : 'lost';
@@ -2349,7 +2352,7 @@ function tap(e) {
   const pt = pick(e); if (!pt) return;
   const [ci, cj] = cellFor(pt, DEF[tool].size);
   if (e.pointerType !== 'mouse' && !(cur && cur.ci === ci && cur.cj === cj && cur.type === tool && ghosts[tool].visible)) { showGhostAt(pt); return; }
-  if (place(tool, ci, cj)) { if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
+  if (place(tool, ci, cj)) { sfx('click', null, .7); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
 }
 function setTool(t) {
   tool = t;
@@ -2416,7 +2419,7 @@ function startGame() {
   for (const a of arrows) scene.remove(a.m); arrows.length = 0;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
-  PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false);
+  PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
   genTerrain(); genTrees(); genRocks(); genClutter(); syncTerrain(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
   stats = { slain: 0, lost: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
@@ -2462,6 +2465,72 @@ $('#adPop').addEventListener('click', () => { const k = castleB(); if (k) { for 
 $('#adDay').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
 setPaused(false);
 addEventListener('keydown', e => { if (e.key === 'p' || e.key === 'P') !gameOver && setPaused(!paused); });
+
+// ---------- audio: files dropped into audio/music and audio/sfx are found by name; missing ones are simply silent ----------
+var MUSIC_NAMES = ['day', 'night', 'victory', 'defeat'], LOOPED = { day: 1, night: 1 };
+var SFX_NAMES = ['build', 'upgrade', 'chop', 'pick', 'hoe', 'hammer', 'coins', 'arrow', 'hit', 'destroyed', 'horn-night', 'click'];
+var SFX_GAP = { chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, hit: .08, coins: .3, click: .05 };   // min seconds between repeats
+var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
+var MUSIC_VOL = .45;
+var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
+var actx = null, sfxGain = null, audioUnlocked = false, musicWant = 'day', musicNow = null;   // var: sfx()/setMusic() can run during the startup reset, before this line
+var sfxBuf = {}, sfxLast = {}, musicEl = {};
+try { actx = new (window.AudioContext || window.webkitAudioContext)(); sfxGain = actx.createGain(); sfxGain.connect(actx.destination); } catch (e) { actx = null; }
+async function findAudio(dir, name, exts, method) {
+  for (const ext of exts) {
+    try { const r = await fetch(`audio/${dir}/${name}.${ext}`, { method }); if (r.ok) return r; } catch (e) {}
+  }
+  return null;
+}
+if (actx) for (const n of SFX_NAMES) findAudio('sfx', n, ['mp3', 'ogg', 'wav'], 'GET').then(r => r && r.arrayBuffer()).then(ab => {
+  if (ab) actx.decodeAudioData(ab, b => { sfxBuf[n] = b; }, () => {});
+});
+for (const n of MUSIC_NAMES) findAudio('music', n, ['mp3', 'ogg', 'wav'], 'HEAD').then(r => {
+  if (!r) return;
+  const el = new Audio(r.url); el.loop = !!LOOPED[n]; el.preload = n === 'day' ? 'auto' : 'none'; el.volume = MUSIC_VOL;
+  musicEl[n] = el; syncMusic();
+});
+// at: a world point; sounds fade with distance from what the camera looks at, and when zoomed far out
+function sfx(name, at, vol = 1) {
+  if (muted || !actx || actx.state !== 'running' || !sfxBuf[name]) return;
+  const now = actx.currentTime; if (now - (sfxLast[name] || -9) < (SFX_GAP[name] || .05)) return;
+  let v = vol;
+  if (at) { v *= clamp(1 - Math.hypot(at.x - target.x, at.z - target.z) / 28, 0, 1) * clamp(1.25 - dist / 80, .3, 1); if (v < .03) return; }
+  sfxLast[name] = now;
+  const src = actx.createBufferSource(), g = actx.createGain();
+  src.buffer = sfxBuf[name]; src.playbackRate.value = .94 + Math.random() * .12; g.gain.value = v * .8;
+  src.connect(g); g.connect(sfxGain); src.start();
+}
+function setMusic(name) { musicWant = name; syncMusic(); }
+function syncMusic() {
+  if (!musicEl) return;
+  let want = musicEl[musicWant] ? musicWant : musicWant === 'night' && musicEl.day ? 'day' : null;
+  if (muted || !audioUnlocked || document.hidden) want = null;
+  if (want === musicNow) return;
+  if (musicNow) musicEl[musicNow].pause();
+  musicNow = want;
+  if (want) { const el = musicEl[want]; if (!el.loop) el.currentTime = 0; el.play().catch(() => { musicNow = null; }); }
+}
+// browsers only allow sound after the player touches the page
+function unlockAudio() {
+  if (audioUnlocked) return; audioUnlocked = true;
+  if (actx && actx.state === 'suspended') actx.resume();
+  syncMusic();
+}
+addEventListener('pointerdown', unlockAudio, true); addEventListener('keydown', unlockAudio, true);
+document.addEventListener('visibilitychange', () => { if (actx) document.hidden ? actx.suspend() : audioUnlocked && actx.resume(); syncMusic(); });
+document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click', null, .5); }, true);
+function setMuted(on) {
+  muted = on; try { localStorage.setItem('mtd-muted', on ? '1' : '0'); } catch (e) {}
+  const b = $('#muteBtn');
+  b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 9.5 H7.5 L12 5.5 V18.5 L7.5 14.5 H4 Z"/>' + (on ? '<path d="M16 9.5 L21 14.5 M21 9.5 L16 14.5"/>' : '<path d="M15.5 9 a4 4 0 0 1 0 6 M18 6.5 a7.5 7.5 0 0 1 0 11"/>') + '</svg>';
+  b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Unmute sound' : 'Mute sound'); b.title = on ? 'Sound off (M to unmute)' : 'Sound on (M to mute)';
+  syncMusic();
+}
+$('#muteBtn').addEventListener('click', () => setMuted(!muted));
+addEventListener('keydown', e => { if ((e.key === 'm' || e.key === 'M') && !e.target.closest('input')) setMuted(!muted); });
+setMuted(muted);
+
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   keyCamera(dt); updateLamps(dt, now); updateLight(dt, now);

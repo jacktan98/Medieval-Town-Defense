@@ -15,7 +15,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 1. ~~Verify rendering in a real browser~~ (done).
 2. Split `index.html` into modules (e.g. `render/`, `models/`, `people/`, `sim/`, `ui/`) with a simple bundler (Vite), keeping a single-file build for easy sharing.
 3. Replace the mock-based tests with real Playwright runs against the actual game.
-4. Later: real art (model packs) and audio (music + SFX) — discussed, deferred until the rendering pass is done.
+4. Later: real art (model packs). Audio is wired up (see Audio below); it needs real files in `audio/music` and `audio/sfx`.
 5. Open questions Jack hasn't answered: remove the gate plinth? should paths also speed up raiders (currently yes)? should farm output depend on number of farmers?
 
 ## Gameplay summary
@@ -62,6 +62,12 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - **Sprites**: HP/progress bars (`fg.center.x=.5/f` trick); floating SVG icon pop-ups for income (`floatRes`).
 - **People**: `makePerson` → arms on pivots (angle 0 = hanging, −1.57 = forward, −3 = overhead). Tools come from `makeTool(kind)` and are parented to the hand (`arms[1]`; bow on `arms[0]`); `giveTool(v,kind)`. Task poses are all one-handed (the single-segment arms can't both reach one handle; the free arm steadies): axe overhead chop, pick overhead strike, hoe bent low, hammer; log on right shoulder with the hand resting on it, stone held at chest in both hands. Axe and hoe heads sit on the local −z side so they lead the swing / face the soil. Bow is a gentle C (arc segments). Outfits via `OUTFIT`/`dress()`: lumberjack green wool hood + shoulder cape, mason linen coif + leather apron, farmer straw hat, builder blue smock + red felt hat + tool belt.
 - **Ambient**: bird flocks every 45–95 s (scale 0.55, half circle), waving flags.
+
+## Audio
+- Files in `audio/music` (day, night, victory, defeat) and `audio/sfx` (see its README) are found by name, trying .mp3, .ogg, .wav; missing ones are silent (a 404 per probe in the console is expected).
+- SFX via Web Audio buffers (`sfx(name, at, vol)`, distance falloff from the camera target, per-name throttle in `SFX_GAP`); music via looping `<audio>` (`setMusic`). Work strokes fire when the tool's swing sine passes +0.85.
+- Audio starts on the first tap/key (browser rule). Mute button (`#muteBtn`, key M) persists in localStorage; audio pauses when the tab is hidden.
+- Audio state uses `var` because `sfx()`/`setMusic()` run during the startup reset, before the audio block executes.
 
 ## UI
 - **Top panel**: sun/moon + phase, 20 s payout ring, "Skip day", resource chips (green idle badge on villagers), collapsible short "Town log".

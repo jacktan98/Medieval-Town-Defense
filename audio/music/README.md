@@ -1,6 +1,14 @@
 # Music
 
-Drop background music tracks here (`.mp3` or `.ogg`, ideally both for browser support).
+Drop background music here. The game finds files **by name**, so no code changes are needed.
 
-Suggested names: `day.mp3`, `night.mp3`, `victory.mp3`, `defeat.mp3`.
+| File name | When it plays |
+|---|---|
+| `day` | During the day (loops) |
+| `night` | During a raid (loops; falls back to `day` if missing) |
+| `victory` | Once, when all three waves are defended |
+| `defeat` | Once, when the castle falls |
+
+Formats: `.mp3` (recommended), `.ogg` or `.wav`, e.g. `day.mp3`.
 Keep each file small (under ~3 MB) so the game loads quickly on phones.
+Missing files are simply silent.
