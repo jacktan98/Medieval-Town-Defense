@@ -618,6 +618,14 @@ function box(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxGeomet
 function drapeBox(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d, 2, 10, 1), m); o.position.set(x, y, z); o.castShadow = true; return o; }
 function flagBox(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d, 10, 2, 1), m); o.position.set(x, y, z); o.castShadow = true; return o; }
 function cyl(rt, rb, h, seg, m, x, y, z) { const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return o; }
+// a round roof (tower cones) with the same thick eave band as pyramid roofs
+function coneRoof(r, h, seg, m, x, y, z) {
+  const o = new THREE.Group(); o.position.set(x, y, z);
+  const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), m); c.castShadow = c.receiveShadow = true; o.add(c);
+  const t = Math.min(.14, Math.max(.06, r * .07)), e = new THREE.Mesh(new THREE.CylinderGeometry(r, r * .97, t, seg), m);
+  e.position.y = -h / 2 - t / 2 + .005; e.castShadow = e.receiveShadow = true; o.add(e);
+  return o;
+}
 function cone(r, h, seg, m, x, y, z) { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), m); o.position.set(x, y, z); o.castShadow = true; return o; }
 // a triangular prism lying along x (a gable end seen from the side): base d deep, h high
 function prism(w, d, h, m, x, y, z) {
@@ -625,7 +633,15 @@ function prism(w, d, h, m, x, y, z) {
   const geo = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); geo.rotateY(Math.PI / 2); geo.translate(-w / 2, 0, 0);
   const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; return o;
 }
-function pyramid(r, h, sz, m, y, x = 0, z = 0) { const g = new THREE.ConeGeometry(r, h, 4); g.rotateY(Math.PI / 4); g.scale(1, 1, sz); const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; return o; }
+// a four-sided roof; a band under its edge gives the eaves real thickness instead of a paper-thin rim
+function pyramid(r, h, sz, m, y, x = 0, z = 0) {
+  const o = new THREE.Group(); o.position.set(x, y, z);
+  const geo = new THREE.ConeGeometry(r, h, 4); geo.rotateY(Math.PI / 4); geo.scale(1, 1, sz);
+  const roof = new THREE.Mesh(geo, m); roof.castShadow = roof.receiveShadow = true; o.add(roof);
+  const t = Math.min(.14, Math.max(.06, r * .07)), eg = new THREE.CylinderGeometry(r, r * .97, t, 4, 1); eg.rotateY(Math.PI / 4); eg.scale(1, 1, sz);
+  const eave = new THREE.Mesh(eg, m); eave.position.y = -h / 2 - t / 2 + .005; eave.castShadow = eave.receiveShadow = true; o.add(eave);
+  return o;
+}
 
 // ---------- trees ----------
 const MAXT = N * N * 3;
@@ -893,7 +909,7 @@ function makeHouse(tier, plinth) {
     for (const sx of [-1, 1]) g.add(box(.2, .22, .04, M.glow, sx * .38, 1.2, .61));
     g.add(prism(1.4, 1.2, .8, M.plaster, 0, 1.51, 0));
     const sl = Math.atan2(.8, .6), len = Math.hypot(.8, .6) + .2;
-    for (const sz of [-1, 1]) { const r = box(1.6, .07, len, M.roofBlue, 0, 1.51 + .4 + .02, sz * .32); r.rotation.x = sz * sl; g.add(r); }
+    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.roofBlue, 0, 1.51 + .4 + .03, sz * .32); r.rotation.x = sz * sl; g.add(r); }
     g.add(box(.2, .6, .2, M.stone2, .45, 2.1, -.3));
   }
   return g;
@@ -934,7 +950,7 @@ function makeTower(tier, plinth) {
     const P = 4.7 * k;
     for (const a of [Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4]) top.add(cyl(.08, .1, HEAD, 6, M.stone2, Math.cos(a) * .92 * k, P + HEAD / 2, Math.sin(a) * .92 * k));
     const R = P + HEAD; top.add(cyl(1.1 * k, 1.1 * k, .1, 8, M.stone, 0, R + .05, 0));
-    top.add(cone(1.4 * k, 1.5 * k, 8, M.roofBlue, 0, R + .1 + .75 * k, 0));
+    top.add(coneRoof(1.4 * k, 1.5 * k, 8, M.roofBlue, 0, R + .1 + .75 * k, 0));
     top.add(box(.06, 1.0, .06, M.timber, 0, R + 1.5 * k + .5, 0)); top.add(flagBox(.6, .36, .04, M.banner, .32, R + 1.5 * k + .85, 0));
   }
   return g;
@@ -998,7 +1014,7 @@ function makeCastle(tier, plinth) {
     g.add(drapeBox(.5, .9, .04, M.drape, -.75, 2.2, W + .47)); g.add(drapeBox(.5, .9, .04, M.drape, .75, 2.2, W + .47));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       g.add(cyl(.75, .85, 3.6, 8, M.stone2, sx * W, 2.0, sz * W)); g.add(cyl(.95, .95, .25, 8, M.stone, sx * W, 3.9, sz * W));
-      g.add(cone(1.0, 1.4, 8, M.roofBlue, sx * W, 4.7, sz * W));
+      g.add(coneRoof(1.0, 1.4, 8, M.roofBlue, sx * W, 4.7, sz * W));
     }
     g.add(box(2.4, 4.6, 2.4, M.stone2, 0, 2.5, -.4));
     for (const [x, z, w, d] of [[0, -W + .5, 4.2, .55], [W - .5, 0, .55, 4.2], [-W + .5, 0, .55, 4.2], [-1.75, W - .5, 1.3, .55], [1.75, W - .5, 1.3, .55]]) {
@@ -1166,7 +1182,7 @@ function makeGate(tier, plinth, mask = 0, rot = 0, fixed = false) {
     for (const s of [-.7, 0, .7]) g.add(box(.3, .3, .7, M.stone, s, 3.0, 0));
     g.add(box(1.1, .35, .06, M.iron, 0, 2.1, 0));
   } else {
-    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(cone(.58, .9, 8, M.roofBlue, sx * .8, 3.65, 0)); }
+    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(coneRoof(.58, .9, 8, M.roofBlue, sx * .8, 3.65, 0)); }
     g.add(box(1.2, .7, .65, M.stone2, 0, 2.55, 0));
     g.add(drapeBox(.4, .7, .04, M.drape, 0, 1.95, .34)); g.add(box(1.0, .3, .06, M.iron, 0, 2.05, 0));
   }
