@@ -502,7 +502,7 @@ grid.visible = false; scene.add(grid);
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .9, flatShading: true });
 const M = { plaster: mat('#dccba2'), timber: mat('#6e4c30'), roof: mat('#8d4a2c'), stone: mat('#8a857a'),
   wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#3466b0'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
-  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#c2a04a'), thatchOld: mat('#9a8150'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
+  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#7d5a38'), thatchOld: mat('#a88d55'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
   iron: mat('#5d6064'), soil: mat('#5e4630'), crop1: mat('#6f8f3a'), crop2: mat('#93a246'), wheat: mat('#d1b45a'), hay: mat('#c9ab55'),
   canvas: mat('#cfc2a0'), daub: mat('#c8b48c'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32'),
   roofBlue: mat('#3f5f96') };   // tier 3 roofs: blue is the town's colour (red is the raiders')
@@ -537,7 +537,31 @@ const roofGrit = sh => {
     float var = .8 + .3 * rh(cell) + .08 * rh(floor(vRP.xz * 23.0));
     diffuseColor.rgb *= var * mix(.7, 1.0, smoothstep(.0, .22, cf));`);
 };
-for (const m of [M.thatchOld, M.thatch, M.roofBlue]) m.onBeforeCompile = roofGrit;
+M.roofBlue.onBeforeCompile = roofGrit;
+// tier 1: straw thatch - fine strands running down the slope in ragged bundles, with darker gaps between courses
+M.thatchOld.onBeforeCompile = sh => {
+  sh.vertexShader = 'varying vec3 vSP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    vSP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+  sh.fragmentShader = `varying vec3 vSP;
+    float sh1(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    float u = (vSP.x + vSP.z) * 38.0, row = vSP.y * 4.5, cf = fract(row);
+    float strand = sh1(vec2(floor(u), floor(row)));
+    float ragged = sh1(vec2(floor(u * .25), floor(row) + 3.0)) * .25;
+    diffuseColor.rgb *= (.78 + .32 * strand) * mix(.62, 1.0, smoothstep(ragged, ragged + .25, cf));`);
+};
+// tier 2: roofs of split logs laid in rounded courses, with grain along each log
+M.thatch.onBeforeCompile = sh => {
+  sh.vertexShader = 'varying vec3 vLP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    vLP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+  sh.fragmentShader = `varying vec3 vLP;
+    float lh(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7); }
+  ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    float row = vLP.y * 6.0, cf = fract(row), along = (vLP.x + vLP.z) * 2.0;
+    float rnd = sin(cf * 3.14159), grain = lh(vec2(floor(along * 8.0), floor(row)));
+    float log_ = .85 + .25 * lh(vec2(floor(row), floor(along * .6)));
+    diffuseColor.rgb *= log_ * (.45 + .6 * rnd) * (.9 + .15 * grain);`);
+};
 // grit for wood (grain streaks, knots of darker colour) and rock (mottling and specks); composes with any shader the material already has
 const GRIT_NOISE = `
   float gh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -753,7 +777,7 @@ function pathCol(x, z, col) {
   col.push(pathTmp.r ** 2.2, pathTmp.g ** 2.2, pathTmp.b ** 2.2);
 }
 // the stone-based building whose footprint holds this point, if any; paths stop at its edge rather than painting over it
-function stoneAt(x, z) { const B = occB[cellAt(x, z)]; return B && B.plinth && PLINTH_TOP[B.type] != null ? B : null; }
+function stoneAt(x, z) { const B = occB[cellAt(x, z)]; return B && B.plinth && B.tier >= 2 && PLINTH_TOP[B.type] != null ? B : null; }
 function clampOut(x, z) {
   const B = stoneAt(x, z); if (!B) return [x, z];
   const e = B.ev, d = [x - e.x0, e.x1 - x, z - e.z0, e.z1 - z], m = Math.min(...d), k = .005;
@@ -922,7 +946,7 @@ function makeCastle(tier, plinth) {
       if (Math.abs(s) > .7) g.add(cyl(.14, .16, hh(4), 5, M.rough, s, 1.1, W));
     }
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
-    g.add(pyramid(1.78, 1.4, .82, M.thatchOld, 3.4, 0, -.6));
+    g.add(pyramid(2.1, 1.45, .86, M.thatchOld, 3.42, 0, -.6));   // eaves stick out past the hall walls
     g.add(box(.5, .8, .06, M.timber, 0, .7, .42));
     for (const sx of [-1, 1]) {      // two small framed windows with a cross bar and one shutter swung open, either side above the door
       const x = sx * .52, y = 1.72;
@@ -1201,7 +1225,7 @@ function tinted(m, tier, n) {
   return t;
 }
 const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
-  const g = MODELS[type](tier, plinth && type !== 'farm' && !DEF[type].decor, mask, rot, fixed), tt = DEF[type].decor ? 2 : tier;
+  const g = MODELS[type](tier, plinth && tier >= 2 && type !== 'farm' && !DEF[type].decor, mask, rot, fixed), tt = DEF[type].decor ? 2 : tier;
   if (!NO_AO[type]) { const w = DEF[type].size * CELL + 1.3, ao = new THREE.Mesh(new THREE.PlaneGeometry(w, w).rotateX(-Math.PI / 2), aoMat); ao.position.y = .04; ao.userData.ao = true; g.add(ao); }
   let n = 0;
   g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = true; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
@@ -1450,7 +1474,7 @@ function planFlatten(ev, FO) {
       const dx = Math.max(ev.x0 - i, 0, i - ev.x1), dz = Math.max(ev.z0 - j, 0, j - ev.z1), dist = Math.hypot(dx, dz);
       if (dist > FO) continue;
       verts.push({ k, inside: dist === 0, h0: H[k], h1: lerp(ev.target, H[k], sstep(0, FO, dist)), d0: dirt[k],
-        d1: Math.max(dirt[k], (1 - sstep(0, FO, dist)) * (.6 + .4 * hash(i * .7, j * 1.3))) });
+        d1: dirt[k] });   // no dirt splat: buildings stand on grass
     }
   const pad = .8, inPad = (x, z) => x > ev.x0 - pad && x < ev.x1 + pad && z > ev.z0 - pad && z < ev.z1 + pad;
   const cleared = trees.filter(t => !t.dead && inPad(t.x, t.z)); cleared.forEach(t => { t.dead = true; t.claim = null; });
@@ -1583,6 +1607,7 @@ function completeSite(B) {
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]}` : ''}`, 'good');
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
+    if (B.tier === 2) rebuildRoads();   // the new stone base: paths now stop at its edge
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
     floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('build', c);
     log(`<b>${T.tiers[B.tier - 1]}</b> ready`, 'good');

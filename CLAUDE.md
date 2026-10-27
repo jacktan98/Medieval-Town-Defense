@@ -20,7 +20,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 
 ## Style rules (from Jack)
 - UI text is minimal: a few words, no explanations (hints like "Pick a spot", "Occupied", "Need [wood]5"; banners "Night 2 · 8 raiders"; log lines "<b>Cottage</b> ready"). Keep new text in this style.
-- Colour code: town = blue (flags, soldiers, tier-3 roofs), raiders = red, villagers = yellows. Roofs by tier: tier 1 brown (`M.thatchOld`), tier 2 straw (`M.thatch`), tier 3 blue (`M.roofBlue`); all three get the `roofGrit` shader (courses + uneven colour).
+- Colour code: town = blue (flags, soldiers, tier-3 roofs), raiders = red, villagers = yellows. Roofs by tier: tier 1 straw thatch (`M.thatchOld`, strand shader), tier 2 brown split logs (`M.thatch`, rounded log-course shader), tier 3 blue tiles (`M.roofBlue`, `roofGrit`). Tier 1 buildings have no stone base and no dirt splat (they stand on grass); the stone base (`plinth`) appears from tier 2.
 - Medieval look over clean/modern: crooked timbers, daub, thatch, small shuttered windows.
 
 ## Recent model notes
