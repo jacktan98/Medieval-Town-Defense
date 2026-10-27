@@ -36,7 +36,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Construction: `addScaffold` builds poles every ~1 m, plank decks per lift, braces, a ladder and material stacks; walls/torches/flowers get a light version (`LIGHT_SCAFFOLD`). Builders kick up dust (`dustAt`, shares the smoke `puffs`).
 - Walls are not flattened and have no AO plane; their posts/blocks run 0.3–0.6 m below ground so runs follow slopes cleanly.
 - Castle T2/T3 are drawn narrower in x/z (`CASTLE_K` .9/.82, posts scaled too) so corner towers stay inside the 3×3 plinth.
-- Castle T2 is all warm stone (`M.stone2`, like T3): plain curtain walls, square corner towers open on top, keep with a straw roof. Castle T3 holds 6 archers (2 on the keep, 1 per wall-walk).
+- Castle T2 is all warm stone (`M.stone2`, like T3): plain curtain walls, square corner towers open on top, keep with a straw roof. Castle T3 holds 5 archers (2 on the keep, 1 on each wall-walk except the gate side).
 - Houses stay plain and ordinary so they never outshine the castle: T2 daub cottage with corner posts and a straw gable roof; T3 stone ground floor + plaster upper floor with a blue gable roof. One door, few windows, small chimney.
 
 ## Gameplay summary
