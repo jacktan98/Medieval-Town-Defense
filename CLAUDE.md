@@ -12,7 +12,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Debug: open `index.html?debug` and `window.G('code')` evaluates inside the game closure (e.g. `G('res.gold=9999')`, `G('PH.t=0')` to skip the day).
 
 ## Suggested next steps (not yet done)
-1. ~~Verify rendering in a real browser~~ (done). Remaining polish ideas: palisade/timber reads very dark; trees occlude units when zoomed in; building card covers the town centre in phone landscape.
+1. ~~Verify rendering in a real browser~~ (done).
 2. Split `index.html` into modules (e.g. `render/`, `models/`, `people/`, `sim/`, `ui/`) with a simple bundler (Vite), keeping a single-file build for easy sharing.
 3. Replace the mock-based tests with real Playwright runs against the actual game.
 4. Later: real art (model packs) and audio (music + SFX) — discussed, deferred until the rendering pass is done.
@@ -54,6 +54,7 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - **Pathfinding**: A* on cells (`findPath`, `cellPass`, `walkTo`), `clearLine` line-of-sight shortcuts, `unstick` after 3.5 s without progress, cache invalidated on any build/path change. `steer`/`turnTo` commit to one side round obstacles. Villagers enter/exit buildings via their door.
 - **Villager states**: wander, visit, commute, find, go, work, home, drop, building, hungry/sleeping, night posts.
 - **Shaders (`onBeforeCompile`)**: tree wind sway, procedural ground detail, masonry (running-bond + mortar) on `M.stone`/`M.stone2`, flag wave anchored on position x, hanging banners (`M.drape`) anchored at the top. `tinted()` copies `onBeforeCompile` onto clones.
+- **Tree cutaway**: `cutaway(sh)` on trunk/crown materials dither-discards trees near the camera→`target` sightline (shadows unaffected).
 - **Instancing**: trees (instanceColor), clutter (320 tufts, pebbles, bushes) hidden on occupied/path cells. Lone trees within 12 m of the castle, forest 12–18 m.
 - **Lights**: pool of 4 PointLights shared by night lamps; gradient sky dome.
 - **Sprites**: HP/progress bars (`fg.center.x=.5/f` trick); floating SVG icon pop-ups for income (`floatRes`).
