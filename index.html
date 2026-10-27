@@ -261,7 +261,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       </div>
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
-      <div class="row"><button class="primary" id="upBtn"></button><button class="danger" id="demBtn"></button></div>
+      <div class="row"><button class="primary" id="upBtn"></button><button id="cardRotBtn" hidden title="Rotate"><svg style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round" viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg>Rotate</button><button class="danger" id="demBtn"></button></div>
     </div>
     <div class="pill" id="hint">Pick a building</div>
     <div class="bar">
@@ -273,6 +273,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
         </div>
         <div class="util">
           <button class="tool iconBtn" data-tool="select" aria-pressed="false" aria-label="Select a building" title="Select a building to upgrade or demolish"><svg viewBox="0 0 24 24"><path d="M6 4 L6 18 L10 14.5 L12.8 20 L15 19 L12.3 13.5 L17.5 13.5 Z"/></svg></button>
+          <button class="iconBtn" id="rotBtn" hidden aria-label="Rotate" title="Rotate (R)"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button>
           <button class="iconBtn" id="gridBtn" aria-pressed="false" aria-label="Show grid" title="Show the tile grid"><svg viewBox="0 0 24 24"><path d="M4 4 H20 V20 H4 Z M4 9.3 H20 M4 14.6 H20 M9.3 4 V20 M14.6 4 V20"/></svg></button>
         </div>
       </div>
@@ -1024,8 +1025,9 @@ function makeFarm(tier) {
   return g;
 }
 // walls pick their arms from the neighbour bitmask, like roads
-function makeWall(tier, plinth, mask = 0) {
+function makeWall(tier, plinth, mask = 0, rot = 0) {
   const g = new THREE.Group();
+  if (!mask) mask = rot ? 5 : 10;      // a lone piece is a straight run along its rotation (E–W or N–S)
   const arms = DIRS.filter(d => mask & d[2]);
   if (tier === 1) {
     g.add(cyl(.17, .19, 2.0, 6, M.rough, 0, 1.0, 0));
@@ -1045,10 +1047,12 @@ function makeWall(tier, plinth, mask = 0) {
   }
   return g;
 }
-function makeGate(tier, plinth, mask = 0) {
+function makeGate(tier, plinth, mask = 0, rot = 0, fixed = false) {
   const outer = new THREE.Group(), g = new THREE.Group(); outer.add(g);
   if (plinth) outer.add(box(2.0, 1.4, 2.0, M.stone, 0, -.6, 0));
-  if ((mask & 5) && !(mask & 10)) g.rotation.y = Math.PI / 2;   // walls run N–S, so turn the opening
+  // the opening follows walls on one axis, otherwise the player's rotation; a gate rotated by hand keeps it
+  const ns = (mask & 5) && !(mask & 10), ew = (mask & 10) && !(mask & 5);
+  if (fixed ? rot : ns ? 1 : ew ? 0 : rot) g.rotation.y = Math.PI / 2;
   if (tier === 1) {
     for (const sx of [-1, 1]) { g.add(cyl(.2, .22, 2.5, 6, M.rough, sx * .8, 1.25, 0)); const leaf = box(.07, 1.6, .62, M.wood, sx * .66, .85, .36); g.add(leaf); }
     const lt = cyl(.12, .12, 2.0, 6, M.rough, 0, 2.35, 0); lt.rotation.z = Math.PI / 2; g.add(lt);
@@ -1119,8 +1123,8 @@ function tinted(m, tier, n) {
   }
   return t;
 }
-const makeModel = (type, tier, plinth, mask) => {
-  const g = MODELS[type](tier, plinth && type !== 'farm' && !DEF[type].decor, mask), tt = DEF[type].decor ? 2 : tier;
+const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
+  const g = MODELS[type](tier, plinth && type !== 'farm' && !DEF[type].decor, mask, rot, fixed), tt = DEF[type].decor ? 2 : tier;
   if (!NO_AO[type]) { const w = DEF[type].size * CELL + 1.3, ao = new THREE.Mesh(new THREE.PlaneGeometry(w, w).rotateX(-Math.PI / 2), aoMat); ao.position.y = .04; ao.userData.ao = true; g.add(ao); }
   let n = 0;
   g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = true; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
@@ -1149,11 +1153,13 @@ function snapToNeighbours(type, ev) {
 // ---------- ghosts + outlines ----------
 const ghostMat = new THREE.MeshBasicMaterial({ color: '#8cc46e', transparent: true, opacity: .45, depthWrite: false, toneMapped: false });
 const ghosts = {};
-for (const t in DEF) {
-  if (t === 'castle') continue;
-  const g = MODELS[t](1, false, 0); g.traverse(o => { if (o.isMesh) { o.material = ghostMat; o.castShadow = false; } });
+let placeRot = 0;                         // rotation for the next wall or gate: 0 = E–W, 1 = N–S
+function makeGhost(t) {
+  if (ghosts[t]) scene.remove(ghosts[t]);
+  const g = MODELS[t](1, false, 0, placeRot); g.traverse(o => { if (o.isMesh) { o.material = ghostMat; o.castShadow = false; } });
   g.visible = false; scene.add(g); ghosts[t] = g;
 }
+for (const t in DEF) if (t !== 'castle') makeGhost(t);
 function makeLine(color, opacity) {
   const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, toneMapped: false }));
   l.renderOrder = 10; l.visible = false; scene.add(l); return l;
@@ -1394,7 +1400,7 @@ function wallMask(B) {
   return m;
 }
 function swapModel(B) {
-  const old = B.group, g = makeModel(B.type, B.tier, B.plinth, B.mask);
+  const old = B.group, g = makeModel(B.type, B.tier, B.plinth, B.mask, B.rot, B.rotFixed);
   g.position.copy(old.position); g.scale.copy(old.scale); g.userData.B = B; scene.remove(old); scene.add(g); B.group = g;
 }
 function refreshWalls() { for (const B of buildings) if (B.type === 'wall' || B.type === 'gate') { const m = wallMask(B); if (m !== B.mask) { B.mask = m; swapModel(B); } } }
@@ -1405,10 +1411,10 @@ function place(type, ci, cj, opts = {}) {
   if (!ev.ok) { if (!opts.silent) setHint(`Can't build: ${ev.reason}`, 'bad'); return null; }
   const T = DEF[type];
   if (!opts.free) pay(T.cost);
-  const B = { id: nextId++, type, tier: 1, ev, plinth: adapt, max: T.hp[0], hp: T.hp[0], cool: [], fed: true, mask: 0 };
+  const B = { id: nextId++, type, tier: 1, ev, plinth: adapt, max: T.hp[0], hp: T.hp[0], cool: [], fed: true, mask: 0, rot: ROTATES[type] ? placeRot : 0, rotFixed: false };
   for (let b = cj; b < cj + ev.s; b++) for (let a = ci; a < ci + ev.s; a++) { occB[b * N + a] = B; if (type !== 'gate') road[b * N + a] = 0; }
   const c = center(B), now = performance.now();
-  const g = makeModel(type, 1, adapt, 0); g.userData.B = B; B.group = g;
+  const g = makeModel(type, 1, adapt, 0, B.rot); g.userData.B = B; B.group = g;
   if (adapt) {
     const plan = planFlatten(ev, T.falloff || F);
     plan.verts.forEach(v => { if (v.inside) lock[v.k] = 1; });
@@ -2273,6 +2279,7 @@ function refreshCard() {
   if (!T.up) up.hidden = true;
   else if (B.tier >= 3) { up.hidden = false; up.innerHTML = 'Fully upgraded'; up.disabled = true; }
   else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? (B.site.kind === 'repair' ? 'Repairing…' : 'Building…') : `Upgrade ${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
+  $('#cardRotBtn').hidden = !canRotate(B);
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
   if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); dem.innerHTML = `Demolish ${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
@@ -2280,6 +2287,9 @@ function refreshCard() {
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to build or upgrade', 'bad'); selected && upgrade(selected); });
+$('#rotBtn').addEventListener('click', rotatePlacement);
+$('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to rotate', 'bad'); rotateBuilding(selected); });
+addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.target.closest('input')) { if (ROTATES[tool]) rotatePlacement(); else if (selected) rotateBuilding(selected); } });
 $('#demBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to demolish', 'bad'); selected && removeBuilding(selected, false); });
 $('#closeCard').addEventListener('click', deselect);
 $('#nightBtn').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
@@ -2316,6 +2326,7 @@ function showGhostAt(point) {
   if (T.workers) { const need = T.workers[0], idle = popStats().idle; parts.push(`<span class="cost${idle < need ? ' short' : ''}" title="Workers needed"><span class="ico">${ICON.pop}</span>${need}${idle < need ? ' · no one idle' : ''}</span>`); }
   if (isTouch) parts.push(T.paint ? 'tap or drag' : 'tap again');
   else if (T.paint) parts.push('drag to paint');
+  if (ROTATES[tool]) parts.push(placeRot ? 'N–S' : 'E–W');
   setHint(parts.join('<i class="sep">·</i>'), 'ok');
 }
 function regho() { if (cur) showGhostAt(new THREE.Vector3((cur.x0 + cur.x1) / 2, 0, (cur.z0 + cur.z1) / 2)); }
@@ -2401,8 +2412,20 @@ function tap(e) {
   if (e.pointerType !== 'mouse' && !(cur && cur.ci === ci && cur.cj === cj && cur.type === tool && ghosts[tool].visible)) { showGhostAt(pt); return; }
   if (place(tool, ci, cj)) { sfx('click'); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
 }
+const ROTATES = { wall: 1, gate: 1 };
+function rotatePlacement() {
+  if (!ROTATES[tool]) return;
+  placeRot ^= 1; for (const t in ROTATES) makeGhost(t); regho();
+}
+// on the card: gates always; walls only while they stand alone (connected walls follow their neighbours)
+const canRotate = B => B && ROTATES[B.type] && (B.type === 'gate' || !B.mask);
+function rotateBuilding(B) {
+  if (!canRotate(B)) return;
+  B.rot ^= 1; B.rotFixed = true; swapModel(B); select(B);
+}
 function setTool(t) {
   tool = t;
+  $('#rotBtn').hidden = !ROTATES[t];
   for (const c in CATS) if (CATS[c].includes(t) && c !== cat) { cat = c; renderTools(); }
   markTools();
   if (tool === 'select') { hideGhost(); setHint(isTouch ? 'Tap a building to see, upgrade or demolish it' : 'Click a building to see, upgrade or demolish it'); }
