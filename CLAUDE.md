@@ -18,6 +18,19 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 4. Later: real art (model packs). Audio is wired up (see Audio below); it needs real files in `audio/music` and `audio/sfx`.
 5. Open questions Jack hasn't answered: remove the gate plinth? should paths also speed up raiders (currently yes)? should farm output depend on number of farmers?
 
+## Style rules (from Jack)
+- UI text is minimal: a few words, no explanations (hints like "Pick a spot", "Occupied", "Need [wood]5"; banners "Night 2 · 8 raiders"; log lines "<b>Cottage</b> ready"). Keep new text in this style.
+- Colour code: town = blue (flags, soldiers, tier-3 roofs), raiders = red, villagers = yellows. Roofs by tier: tier 1 brown (`M.thatchOld`), tier 2 straw (`M.thatch`), tier 3 blue (`M.roofBlue`); all three get the `roofGrit` shader (courses + uneven colour).
+- Medieval look over clean/modern: crooked timbers, daub, thatch, small shuttered windows.
+
+## Recent model notes
+- Units are drawn at `UNIT_K` (.78) so they fit doors; enemy HP bar height uses it too. `unstick` kicks in after 2 s stuck.
+- Arrows leave from the bow (`bowPoint`: raises the bow arm, reads the bow's world position) for tower/castle archers and raider archers.
+- Construction: `addScaffold` builds poles every ~1 m, plank decks per lift, braces, a ladder and material stacks; walls/torches/flowers get a light version (`LIGHT_SCAFFOLD`). Builders kick up dust (`dustAt`, shares the smoke `puffs`).
+- Walls are not flattened and have no AO plane; their posts/blocks run 0.3–0.6 m below ground so runs follow slopes cleanly.
+- Castle T2 is all stone: plain curtain walls, square corner towers open on top under straw roofs on posts, keep with a straw roof. Castle T3 holds 6 archers (2 on the keep, 1 per wall-walk).
+- Houses: T2 cottage (daub in a heavy timber frame, deep gabled thatch, woodpile); T3 burgher's house (rubble ground floor with arched door, jettied close-studded upper floor, tall blue roof with a dormer).
+
 ## Gameplay summary
 - 28×28 grid of 2 m cells. Start: castle prebuilt in the middle, 3 villagers, gold 40, wood 45, stone 0, food 20.
 - **Day/night**: 3 waves. Day 1 lasts 300 s, days 2–3 last 120 s (`DAYLEN=[300,120,120]`). Night ends when all enemies are dead. Summary screen at the end.

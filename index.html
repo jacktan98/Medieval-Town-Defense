@@ -251,7 +251,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       <button class="iconBtn" id="adminBtn" aria-pressed="false" aria-label="Admin" title="Admin tools"><svg viewBox="0 0 24 24"><path d="M14.5 5.5 a4 4 0 0 0 4.9 5 l-8.6 8.6 a2.1 2.1 0 0 1-3-3 l8.6-8.6 a4 4 0 0 0-1.9-2z"/><path d="M5 5 L9 9"/></svg></button>
     </div>
   </div>
-  <div class="pausedTag" id="pausedTag" hidden><div class="pauseCard"><div class="pauseT">Paused</div><div class="pauseS">The camera still moves</div><div class="pauseBtns"><button class="primary" id="resumeBtn">Resume</button><button id="fsBtn">Full screen</button><button class="danger" id="reset">Restart</button></div></div></div>
+  <div class="pausedTag" id="pausedTag" hidden><div class="pauseCard"><div class="pauseT">Paused</div><div class="pauseBtns"><button class="primary" id="resumeBtn">Resume</button><button id="fsBtn">Full screen</button><button class="danger" id="reset">Restart</button></div></div></div>
   <div class="dock">
     <div class="card" id="card" hidden>
       <div class="cardHead">
@@ -345,7 +345,7 @@ const DEF = {
             up: [{ stone: 15, gold: 20 }, { stone: 25, gold: 35 }], tiers: ['Timber gate', 'Stone gate', 'Gatehouse'], key: '7' },
   castle: { size: 3, name: 'Castle', maxdh: 2.6, hp: [900, 1200, 1600], cost: {}, gold: [3, 5, 7],
             up: [{ stone: 60, wood: 40, gold: 70 }, { stone: 100, gold: 100 }], range: [13, 15, 17], dmg: [11, 15, 20], rate: [1.3, 1.15, 1.0],
-            archers: [4, 4, 4], shootY: [3.2, 4.6, 5.2], residents: [3, 3, 3], tiers: ['Palisade fort', 'Stone keep', 'Castle'] },
+            archers: [4, 4, 6], shootY: [3.2, 4.6, 5.2], residents: [3, 3, 3], tiers: ['Palisade fort', 'Stone keep', 'Castle'] },
   well:    { size: 1, name: 'Well', decor: true, maxdh: 1.3, falloff: 1.2, hp: [80], cost: { stone: 5 }, tiers: ['Well'], noRoad: true },
   torch:   { size: 1, name: 'Torch', decor: true, maxdh: 1.6, falloff: 1, hp: [40], cost: { wood: 2 }, tiers: ['Torch post'], noRoad: true },
   flowers: { size: 1, name: 'Flower bed', decor: true, maxdh: 1.2, falloff: 1, hp: [40], cost: { gold: 3 }, tiers: ['Flower bed'], noRoad: true },
@@ -502,9 +502,9 @@ grid.visible = false; scene.add(grid);
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .9, flatShading: true });
 const M = { plaster: mat('#dccba2'), timber: mat('#6e4c30'), roof: mat('#8d4a2c'), stone: mat('#8a857a'),
   wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#3466b0'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
-  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#b39446'), thatchOld: mat('#9e8650'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
+  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#c2a04a'), thatchOld: mat('#6e5135'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
   iron: mat('#5d6064'), soil: mat('#5e4630'), crop1: mat('#6f8f3a'), crop2: mat('#93a246'), wheat: mat('#d1b45a'), hay: mat('#c9ab55'),
-  canvas: mat('#cfc2a0'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32'),
+  canvas: mat('#cfc2a0'), daub: mat('#c8b48c'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32'),
   roofBlue: mat('#3f5f96') };   // tier 3 roofs: blue is the town's colour (red is the raiders')
 M.glow = new THREE.MeshStandardMaterial({ color: '#3a2a18', emissive: new THREE.Color('#ffb347'), emissiveIntensity: .1, roughness: .8 });
 M.flame = new THREE.MeshStandardMaterial({ color: '#ffd27a', emissive: new THREE.Color('#ff8a2a'), emissiveIntensity: 1, roughness: .5 });
@@ -525,6 +525,19 @@ const masonry = sh => {
     diffuseColor.rgb *= mix(blk, .5, j);`);
 };
 M.stone.onBeforeCompile = masonry; M.stone2.onBeforeCompile = masonry;
+// roofs (tier 1 brown, tier 2 straw, tier 3 blue) get courses of thatch bundles or tiles with uneven, weathered colour
+const roofGrit = sh => {
+  sh.vertexShader = 'varying vec3 vRP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    vRP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+  sh.fragmentShader = `varying vec3 vRP;
+    float rh(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    float row = vRP.y * 7.0, cf = fract(row);
+    vec2 cell = vec2(floor((vRP.x + vRP.z) * 5.0 + floor(row) * .5), floor(row));
+    float var = .8 + .3 * rh(cell) + .08 * rh(floor(vRP.xz * 23.0));
+    diffuseColor.rgb *= var * mix(.7, 1.0, smoothstep(.0, .22, cf));`);
+};
+for (const m of [M.thatchOld, M.thatch, M.roofBlue]) m.onBeforeCompile = roofGrit;
 M.drape = mat('#2f4f8a');
 M.drape.onBeforeCompile = sh => {
   sh.uniforms.uTime = windU;
@@ -642,7 +655,7 @@ const CL = [
   { geo: new THREE.DodecahedronGeometry(.13, 0), mat: new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), n: 160, kind: 'pebble' },
   { geo: new THREE.IcosahedronGeometry(.42, 0).translate(0, .25, 0), mat: new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), n: 90, kind: 'bush' },
 ];
-CL.forEach(c => { c.mesh = new THREE.InstancedMesh(c.geo, c.mat, c.n); c.mesh.receiveShadow = true; c.mesh.castShadow = c.kind === 'bush'; scene.add(c.mesh); });
+CL.forEach(c => { c.mesh = new THREE.InstancedMesh(c.geo, c.mat, c.n); c.mesh.receiveShadow = true; c.mesh.castShadow = true; scene.add(c.mesh); });
 let clutter = [];
 function genClutter() {
   clutter = [];
@@ -687,7 +700,7 @@ const roadBase = new THREE.Mesh(new THREE.BufferGeometry(), roadMatBase), roadTo
 roadBase.receiveShadow = roadTop.receiveShadow = true; scene.add(roadBase, roadTop);
 const MAX_PSTONES = N * N * 10;
 const pathStones = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1.1, 1, 6), mat('#ffffff'), MAX_PSTONES);
-pathStones.receiveShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
+pathStones.receiveShadow = pathStones.castShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
 // sized up front: r128 sizes instanceColor from .count on the first setColorAt, and count starts at 0 here
 pathStones.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PSTONES * 3), 3); pathStones.count = 0;
 const DIRS = [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]];
@@ -801,34 +814,40 @@ function makeHouse(tier, plinth) {
     g.add(box(.34, .58, .05, M.timber, -.22, .38, .54));
     g.add(box(.18, .14, .04, M.glow, .3, .62, .54));
     for (let n = 0; n < 4; n++) { const p = box(.05, .35 + hash(n, 3) * .15, .05, M.rough, .9, .2, -.45 + n * .3); p.rotation.x = (hash(n, 9) - .5) * .4; g.add(p); }
-  } else if (tier === 2) {     // cottage: timber frame, plaster, neat thatch
-    g.add(box(1.5, .3, 1.3, M.stone, 0, .15, 0));
-    g.add(box(1.4, 1.0, 1.2, M.plaster, 0, .8, 0));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.02, .1, M.timber, sx * .68, .8, sz * .58));
-    g.add(box(1.44, .08, 1.24, M.timber, 0, .9, 0));
-    for (const sx of [-1, 1]) { const br = box(.07, .9, .07, M.timber, sx * .45, .8, .61); br.rotation.z = sx * .5; g.add(br); }
-    g.add(box(.36, .66, .05, M.timber, 0, .63, .61));
-    g.add(box(.04, .26, .32, M.glow, .71, .95, 0));
-    g.add(pyramid(1.18, 1.25, .92, M.thatch, 1.92));
-    g.add(box(.22, .7, .22, M.stone, .42, 2.05, -.2));
-  } else {                     // burgher's house: rubble-stone ground floor, jettied timber-framed upper floor, steep gabled blue roof
-    g.add(box(1.46, .78, 1.26, M.stone2, 0, .39, 0));
-    g.add(box(.42, .66, .06, M.timber, -.3, .36, .64)); g.add(box(.52, .1, .08, M.stone, -.3, .72, .65));   // plank door under a stone lintel
-    g.add(box(.22, .2, .05, M.glow, .38, .48, .64)); g.add(box(.3, .05, .08, M.stone, .38, .36, .65));
-    g.add(box(1.66, .08, 1.46, M.timber, 0, .82, 0));                          // floor beam where the upper storey oversails
-    g.add(box(1.6, .78, 1.4, M.plaster, 0, 1.25, 0));
-    for (const x of [-.78, -.26, .26, .78]) g.add(box(.08, .78, .05, M.timber, x, 1.25, .71));      // posts
-    for (const z of [-.68, 0, .68]) for (const sx of [-1, 1]) g.add(box(.05, .78, .08, M.timber, sx * .81, 1.25, z));
-    g.add(box(1.6, .07, .05, M.timber, 0, 1.62, .71)); g.add(box(1.6, .06, .05, M.timber, 0, 1.12, .71));
-    for (const x of [-.52, .52]) { const br = box(.06, .62, .04, M.timber, x, 1.3, .72); br.rotation.z = x > 0 ? .62 : -.62; g.add(br); }   // braces in the outer bays
-    for (const x of [-.52, .52]) { g.add(box(.2, .22, .04, M.glow, x * .99, 1.38, .73)); }
-    g.add(box(.22, .24, .04, M.glow, 0, 1.38, .73));
-    // gable ends in plaster under the roof, which runs left to right with a ridge along x
-    g.add(prism(1.6, 1.4, .95, M.plaster, 0, 1.66, 0));
-    const slope = Math.atan2(.95, .7), len = Math.hypot(.95, .7) + .2;
-    for (const sz of [-1, 1]) { const r = box(1.84, .07, len, M.roofBlue, 0, 1.66 + .95 / 2 + .02, sz * .36); r.rotation.x = sz * slope; g.add(r); }
-    g.add(box(1.86, .08, .1, M.timber, 0, 2.63, 0));
-    g.add(box(.24, .9, .24, M.stone2, .55, 2.5, -.3));                         // chimney
+  } else if (tier === 2) {     // cottage: daub walls in a heavy timber frame on a stone footing, deep straw thatch down to low eaves
+    g.add(box(1.5, .18, 1.22, M.stone, 0, .09, 0));
+    g.add(box(1.4, .72, 1.1, M.daub, 0, .54, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const p = box(.11, .76, .11, M.timber, sx * .68, .54, sz * .53); p.rotation.z = sx * .025; g.add(p); }
+    for (const y of [.22, .88]) for (const sz of [-1, 1]) g.add(box(1.46, .08, .08, M.timber, 0, y, sz * .56));
+    const br = box(.06, .74, .05, M.timber, .2, .55, .57); br.rotation.z = .55; g.add(br);
+    g.add(box(.36, .58, .05, M.wood, -.32, .5, .57)); g.add(box(.44, .06, .07, M.timber, -.32, .81, .58));
+    g.add(box(.2, .18, .04, M.glow, .42, .58, .57)); const shut = box(.11, .2, .03, M.wood, .58, .58, .6); shut.rotation.y = .9; g.add(shut);
+    g.add(prism(1.4, 1.1, .82, M.daub, 0, .9, 0));
+    const sl = Math.atan2(.82, .55), len = Math.hypot(.82, .55) + .32;
+    for (const sz of [-1, 1]) { const r = box(1.74, .16, len, M.thatch, 0, .9 + .41 - .02, sz * .41); r.rotation.x = sz * sl; g.add(r); }
+    const ridge = cyl(.1, .1, 1.78, 8, M.thatch, 0, 1.74, 0); ridge.rotation.z = Math.PI / 2; g.add(ridge);
+    g.add(box(.2, .55, .2, M.stone, .48, 1.75, -.28));
+    for (let n = 0; n < 3; n++) { const lg = cyl(.07, .07, .5, 6, M.log, .86, .1 + (n === 2 ? .12 : 0), -.2 + (n === 2 ? .07 : n * .14)); lg.rotation.x = Math.PI / 2; g.add(lg); }
+  } else {                     // burgher's house: rubble ground floor with an arched door, jettied close-studded upper floor, tall blue roof with a dormer
+    g.add(box(1.4, .8, 1.2, M.stone2, 0, .4, 0));
+    const arch = cyl(.21, .21, .08, 10, M.stone, -.3, .66, .6); arch.rotation.x = Math.PI / 2; g.add(arch);
+    g.add(box(.36, .62, .05, M.wood, -.3, .33, .63));
+    g.add(box(.18, .15, .04, M.glow, .38, .5, .61)); for (const dx of [-.04, .04]) g.add(box(.015, .17, .05, M.iron, .38 + dx, .5, .63));
+    g.add(box(1.62, .08, 1.42, M.timber, 0, .84, 0));
+    for (let x = -.7; x <= .71; x += .28) g.add(box(.07, .06, .1, M.timber, x, .78, .66));   // joist ends under the jetty
+    const up = new THREE.Group(); up.rotation.z = .012; g.add(up);
+    up.add(box(1.56, .8, 1.36, M.plaster, 0, 1.28, 0));
+    for (let x = -.72; x <= .73; x += .18) if (Math.abs(x + .42) > .12 && Math.abs(x - .42) > .12) up.add(box(.06, .8, .04, M.timber, x, 1.28, .69));   // close studding
+    for (const y of [.9, 1.66]) up.add(box(1.58, .07, .05, M.timber, 0, y, .69));
+    for (const sx of [-1, 1]) { up.add(box(.2, .26, .04, M.glow, sx * .42, 1.32, .69)); const sh = box(.1, .26, .03, M.wood, sx * .42 + sx * .16, 1.32, .73); sh.rotation.y = sx * .9; up.add(sh); }
+    for (const sx of [-1, 1]) for (const sz of [-.4, .4]) up.add(box(.04, .8, .06, M.timber, sx * .79, 1.28, sz));
+    up.add(prism(1.56, 1.36, 1.15, M.plaster, 0, 1.68, 0));
+    const sl = Math.atan2(1.15, .68), len = Math.hypot(1.15, .68) + .22;
+    for (const sz of [-1, 1]) { const r = box(1.82, .07, len, M.roofBlue, 0, 1.68 + .575 + .02, sz * .35); r.rotation.x = sz * sl; up.add(r); }
+    up.add(box(1.84, .08, .1, M.timber, 0, 2.85, 0));
+    up.add(box(.34, .3, .3, M.plaster, .1, 2.15, .42)); up.add(box(.16, .16, .03, M.glow, .1, 2.15, .58));   // dormer
+    const dr = prism(.42, .4, .24, M.roofBlue, .1, 2.3, .4); dr.rotation.y = Math.PI / 2; up.add(dr);
+    g.add(box(.24, 1.1, .24, M.stone2, .5, 2.55, -.35));
   }
   return g;
 }
@@ -858,7 +877,7 @@ function makeTower(tier, plinth) {
     kk.add(box(2.2, .6, .12, M.wood, 0, 4.9, 1.05)); kk.add(box(2.2, .6, .12, M.wood, 0, 4.9, -1.05));
     kk.add(box(.12, .6, 2.2, M.wood, 1.05, 4.9, 0)); kk.add(box(.12, .6, 2.2, M.wood, -1.05, 4.9, 0));
     const s2 = .74 * k, P = 4.625 * s2; posts(.95 * s2, P, M.timber, .09);
-    const R = P + HEAD; top.add(pyramid(1.75 * s2, 1.3 * s2, 1, M.roof, R + .65 * s2));
+    const R = P + HEAD; top.add(pyramid(1.75 * s2, 1.3 * s2, 1, M.thatch, R + .65 * s2));
     top.add(box(.06, 1.0, .06, M.timber, 0, R + 1.3 * s2 + .4, 0)); top.add(flagBox(.6, .36, .04, M.flag, .32, R + 1.3 * s2 + .75, 0));
   } else {                     // stone tower: round masonry, an open platform with a low parapet, blue roof on stone columns
     t.add(cyl(.82, 1.0, 4.6, 8, M.stone2, 0, 2.3, 0));
@@ -886,10 +905,12 @@ function makeCastle(tier, plinth) {
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(1.78, 1.4, .82, M.thatchOld, 3.4, 0, -.6));
     g.add(box(.5, .8, .06, M.timber, 0, .7, .42));
-    for (const sx of [-1, 1]) {      // two shuttered windows on the hall front, a little above the door, seen through the gateway
-      g.add(box(.26, .28, .05, M.glow, sx * .4, 1.75, .42));
-      g.add(box(.36, .05, .1, M.timber, sx * .4, 1.58, .44));
-      g.add(box(.05, .32, .06, M.timber, sx * .4, 1.75, .44));
+    for (const sx of [-1, 1]) {      // two small framed windows with a cross bar and one shutter swung open, either side above the door
+      const x = sx * .52, y = 1.72;
+      g.add(box(.34, .36, .05, M.timber, x, y, .42)); g.add(box(.24, .26, .05, M.glow, x, y, .43));
+      g.add(box(.025, .26, .06, M.timber, x, y, .45)); g.add(box(.24, .025, .06, M.timber, x, y, .45));
+      const sh = box(.13, .28, .03, M.wood, x + sx * .23, y, .5); sh.rotation.y = sx * .9; g.add(sh);
+      g.add(box(.4, .05, .1, M.timber, x, y - .2, .46));
     }
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
@@ -897,28 +918,28 @@ function makeCastle(tier, plinth) {
       for (const sx of [-1, 1]) g.add(box(.05, .3, .8, M.rough, px + sx * .38, 2.7, pz));
     }
     g.add(box(.06, 1.4, .06, M.timber, 0, 4.4, -.6)); g.add(flagBox(.7, .4, .04, M.flag, .38, 4.8, -.6));
-  } else if (tier === 2) {     // timber and stone: plank curtain wall, wooden corner towers, stone gatehouse and keep
-    g.add(box(5.2, 2.0, .3, M.wood, 0, 1.2, -W)); g.add(box(.3, 2.0, 5.2, M.wood, W, 1.2, 0)); g.add(box(.3, 2.0, 5.2, M.wood, -W, 1.2, 0));
-    g.add(box(1.6, 2.0, .3, M.wood, -1.8, 1.2, W)); g.add(box(1.6, 2.0, .3, M.wood, 1.8, 1.2, W));
-    for (let s = -2.1; s <= 2.11; s += .6) {               // posts between the planks
-      g.add(box(.1, 2.1, .36, M.timber, s, 1.25, -W)); g.add(box(.36, 2.1, .1, M.timber, W, 1.25, s)); g.add(box(.36, 2.1, .1, M.timber, -W, 1.25, s));
-      if (Math.abs(s) > 1) g.add(box(.1, 2.1, .36, M.timber, s, 1.25, W));
+  } else if (tier === 2) {     // stone keep: plain stone curtain walls, square corner towers open on top under straw roofs, gatehouse, keep with a straw roof
+    const wall = (w, d, x, z) => { g.add(box(w, 1.9, d, M.stone, x, 1.2, z)); };
+    wall(5.2, .45, 0, -W); wall(.45, 5.2, W, 0); wall(.45, 5.2, -W, 0); wall(1.6, .45, -1.8, W); wall(1.6, .45, 1.8, W);
+    for (let s2 = -1.9; s2 <= 1.91; s2 += .76) {             // merlons along the outer edge of each wall
+      g.add(box(.32, .32, .2, M.stone, s2, 2.3, -W - .12)); g.add(box(.2, .32, .32, M.stone, W + .12, 2.3, s2)); g.add(box(.2, .32, .32, M.stone, -W - .12, 2.3, s2));
+      if (Math.abs(s2) > 1) g.add(box(.32, .32, .2, M.stone, s2, 2.3, W + .12));
     }
-    g.add(box(5.3, .12, .42, M.timber, 0, 2.25, -W)); g.add(box(.42, .12, 5.3, M.timber, W, 2.25, 0)); g.add(box(.42, .12, 5.3, M.timber, -W, 2.25, 0));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {     // wooden towers with an open fighting platform and a thatched hood
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {   // square towers; archers stand on top under a straw roof on four posts
       const x = sx * W, z = sz * W;
-      g.add(box(1.0, 3.2, 1.0, M.wood, x, 1.8, z)); g.add(box(1.3, .14, 1.3, M.timber, x, 3.48, z));
-      for (const px of [-1, 1]) for (const pz of [-1, 1]) g.add(box(.08, 1.15, .08, M.timber, x + px * .56, 4.1, z + pz * .56));
-      g.add(pyramid(1.0, .8, 1, M.thatch, 5.05, x, z));
+      g.add(box(1.15, 3.45, 1.15, M.stone, x, 1.8, z)); g.add(box(1.3, .12, 1.3, M.stone, x, 3.5, z));
+      for (const px of [-1, 1]) for (const pz of [-1, 1]) { g.add(box(.22, .28, .22, M.stone, x + px * .54, 3.7, z + pz * .54)); g.add(box(.07, 1.55, .07, M.timber, x + px * .54, 4.33, z + pz * .54)); }
+      g.add(pyramid(1.05, .8, 1, M.thatch, 5.5, x, z));
     }
     for (const sx of [-1, 1]) g.add(box(.62, 2.9, .9, M.stone, sx * .75, 1.65, W));
     g.add(box(2.1, .6, .9, M.stone, 0, 3.0, W));
-    for (const s of [-.75, 0, .75]) g.add(box(.3, .3, .9, M.stone, s, 3.45, W));
+    for (const s2 of [-.75, 0, .75]) g.add(box(.3, .3, .9, M.stone, s2, 3.45, W));
     g.add(box(.85, 1.7, .08, M.timber, 0, 1.15, W + .42));
-    g.add(box(2.4, 4.0, 2.4, M.stone2, 0, 2.2, -.4));
-    for (const s of [-.9, 0, .9]) { g.add(box(.4, .4, .4, M.stone2, s, 4.4, -1.4)); g.add(box(.4, .4, .4, M.stone2, s, 4.4, .6)); }
-    g.add(box(.4, .5, .06, M.glow, 0, 3.0, .82));
-    g.add(box(.07, 1.6, .07, M.timber, 0, 5.0, -.4)); g.add(flagBox(.8, .45, .04, M.flag, .43, 5.5, -.4));
+    g.add(box(2.4, 3.6, 2.4, M.stone, 0, 2.0, -.4));
+    g.add(box(.3, .42, .06, M.glow, -.45, 2.6, .82)); g.add(box(.3, .42, .06, M.glow, .45, 2.6, .82));
+    g.add(box(.5, .9, .06, M.timber, 0, .95, .82));
+    g.add(pyramid(1.95, 1.5, 1, M.thatch, 4.55, 0, -.4));
+    g.add(box(.07, 1.3, .07, M.timber, 0, 5.8, -.4)); g.add(flagBox(.8, .45, .04, M.flag, .43, 6.2, -.4));
   } else {                     // castle: round towers, gatehouse, tall keep, banners
     g.add(box(5.2, 2.2, .5, M.stone2, 0, 1.3, -W)); g.add(box(.5, 2.2, 5.2, M.stone2, W, 1.3, 0)); g.add(box(.5, 2.2, 5.2, M.stone2, -W, 1.3, 0));
     g.add(box(1.6, 2.2, .5, M.stone2, -1.8, 1.3, W)); g.add(box(1.6, 2.2, .5, M.stone2, 1.8, 1.3, W));
@@ -1006,7 +1027,7 @@ function makeQuarry(tier, plinth) {
     for (let s = -1.6; s <= 1.61; s += .45) g.add(box(.42, .3, .3, M.stone, s, .15, -1.65));
   } else {
     g.add(box(1.8, 1.4, 1.5, M.stone2, -.75, .9, -.8));
-    g.add(pyramid(1.45, .9, .9, tier === 3 ? M.roofBlue : M.roof, 2.05, -.75, -.8));
+    g.add(pyramid(1.45, .9, .9, tier === 3 ? M.roofBlue : M.thatch, 2.05, -.75, -.8));
     g.add(box(.5, .9, .06, M.timber, -.75, .65, -.03)); g.add(box(.28, .24, .06, M.glow, -.2, 1.1, -.03));
     blocks([[.6, .35, .6], [1.15, .35, .6], [.6, .35, 1.15], [1.15, .35, 1.15], [.88, .8, .88]]);
     if (tier === 3) {
@@ -1067,17 +1088,17 @@ function makeWall(tier, plinth, mask = 0, rot = 0) {
   if (!mask) mask = rot ? 5 : 10;      // a lone piece is a straight run along its rotation (E–W or N–S)
   const arms = DIRS.filter(d => mask & d[2]);
   if (tier === 1) {
-    g.add(cyl(.17, .19, 2.0, 6, M.rough, 0, 1.0, 0));
+    g.add(cyl(.17, .19, 2.6, 6, M.rough, 0, .7, 0));
     for (const [dx, dz] of arms) {
-      for (const t of [.36, .7, 1.0]) g.add(cyl(.15, .17, 1.7 + hash(t * 7, dx + dz * 3) * .4, 6, M.rough, dx * t, .9, dz * t));
+      for (const t of [.36, .7, 1.0]) { const h = 1.7 + hash(t * 7, dx + dz * 3) * .4; g.add(cyl(.15, .17, h + .6, 6, M.rough, dx * t, .9 - .3, dz * t)); }
       g.add(box(dx ? 1 : .06, .07, dz ? 1 : .06, M.timber, dx * .5, 1.2, dz * .5));
     }
     if (!arms.length) for (const a of [0, 2.1, 4.2]) g.add(cyl(.13, .15, 1.6, 6, M.rough, Math.cos(a) * .35, .8, Math.sin(a) * .35));
   } else {
     const m = tier === 2 ? M.stone : M.stone2, ht = tier === 2 ? 1.7 : 2.2;
-    g.add(box(.62, ht + .2, .62, m, 0, (ht + .2) / 2, 0));
+    g.add(box(.62, ht + .8, .62, m, 0, (ht + .2) / 2 - .3, 0));
     for (const [dx, dz] of arms) {
-      g.add(box(dx ? 1.0 : .42, ht, dz ? 1.0 : .42, m, dx * .5, ht / 2, dz * .5));
+      g.add(box(dx ? 1.0 : .42, ht + .6, dz ? 1.0 : .42, m, dx * .5, ht / 2 - .3, dz * .5));
       if (tier === 3) for (const t of [.42, .85]) g.add(box(.26, .3, .26, m, dx * t, ht + .15, dz * t));
     }
     if (tier === 3) g.add(box(.74, .22, .74, M.stone, 0, ht + .31, 0));
@@ -1147,7 +1168,7 @@ const aoTex = (() => { const c = document.createElement('canvas'); c.width = c.h
   const g = x.createRadialGradient(64, 64, 20, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.55, 'rgba(0,0,0,.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
 const aoMat = new THREE.MeshBasicMaterial({ color: '#000000', map: aoTex, transparent: true, opacity: .42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-const NO_AO = { farm: 1, flowers: 1, torch: 1 };
+const NO_AO = { farm: 1, flowers: 1, torch: 1, wall: 1 };
 const tintCache = new Map(), NO_TINT = new Set([M.glow, M.flame, M.water, aoMat, M.flag, M.banner, M.drape]);
 function tinted(m, tier, n) {
   const key = m.uuid + ':' + tier + ':' + n; let t = tintCache.get(key);
@@ -1329,7 +1350,7 @@ function updateBirds(dt) {
 // ---------- chimney smoke ----------
 const smokeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 2, 32, 32, 30); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
 const puffs = [];
-const CHIMNEY = { house: [null, [.42, 2.45, -.2], [-.5, 3.15, -.2]], lodge: [null, null, [1.05, 3.05, -.45]] };
+const CHIMNEY = { house: [null, [.48, 2.1, -.28], [.5, 3.15, -.35]], lodge: [null, null, [1.05, 3.05, -.45]] };
 function emitSmoke(dt) {
   for (const B of buildings) {
     const ch = CHIMNEY[B.type] && CHIMNEY[B.type][B.tier - 1]; if (!ch || B.rise) continue;
@@ -1342,8 +1363,8 @@ function emitSmoke(dt) {
   }
   for (let n = puffs.length - 1; n >= 0; n--) {
     const p = puffs[n]; p.t += dt; const f = p.t / p.life;
-    p.sp.position.y += dt * .55; p.sp.position.x += p.dx * dt; p.sp.scale.setScalar(.3 + f * 1.3);
-    p.sp.material.opacity = Math.min(1, f * 6) * (1 - f) * .45;
+    p.sp.position.y += dt * (p.dust ? .3 : .55); p.sp.position.x += p.dx * dt; p.sp.scale.setScalar(p.dust ? .25 + f * .8 : .3 + f * 1.3);
+    p.sp.material.opacity = Math.min(1, f * 6) * (1 - f) * (p.dust ? .55 : .45);
     if (f >= 1) { scene.remove(p.sp); p.sp.material.dispose(); puffs.splice(n, 1); }
   }
 }
@@ -1373,19 +1394,19 @@ function evaluate(type, ci, cj, free) {
   const T = DEF[type], s = T.size, x0 = ci * CELL, z0 = cj * CELL, x1 = x0 + s * CELL, z1 = z0 + s * CELL;
   const r = { type, ci, cj, s, x0, z0, x1, z1, ok: true, reason: '' };
   if (ci < 0 || cj < 0 || ci + s > N || cj + s > N) return { ...r, ok: false, reason: 'Off the map' };
-  for (let b = cj; b < cj + s; b++) for (let a = ci; a < ci + s; a++) if (occB[b * N + a]) return { ...r, ok: false, reason: 'Cell already taken' };
+  for (let b = cj; b < cj + s; b++) for (let a = ci; a < ci + s; a++) if (occB[b * N + a]) return { ...r, ok: false, reason: 'Occupied' };
   // solid buildings can't sit on another building's door cell, or villagers coming out get trapped there
   if (!WALK[type] && type !== 'gate' && buildings.some(B => !B.dead && B.door && B.door.a >= ci && B.door.a < ci + s && B.door.b >= cj && B.door.b < cj + s))
-    return { ...r, ok: false, reason: type === 'wall' ? 'Blocks a doorway (use a gate)' : 'Blocks a doorway' };
+    return { ...r, ok: false, reason: type === 'wall' ? 'Blocks a door · use a gate' : 'Blocks a door' };
   let mn = 1e9, mx = -1e9, sum = 0, n = 0;
   for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) { const h = H[idx(i, j)]; mn = Math.min(mn, h); mx = Math.max(mx, h); sum += h; n++; }
   r.dh = mx - mn; r.target = sum / n; r.center = hAt((x0 + x1) / 2, (z0 + z1) / 2);
-  if (mn < .5) return { ...r, ok: false, reason: 'Too close to water' };
-  if (adapt && r.dh > T.maxdh) return { ...r, ok: false, reason: `Too steep (${r.dh.toFixed(1)} m of ${T.maxdh} m)` };
+  if (mn < .5) return { ...r, ok: false, reason: 'Too wet' };
+  if (adapt && r.dh > T.maxdh) return { ...r, ok: false, reason: 'Too steep' };
   if (T.reach) {
     r.resCount = countRes(type, (x0 + x1) / 2, (z0 + z1) / 2);
-    if (type === 'lodge' && r.resCount < 3) return { ...r, ok: false, reason: `No forest within ${T.reach} m` };
-    if (type === 'quarry' && r.resCount < 1) return { ...r, ok: false, reason: `No rock within ${T.reach} m` };
+    if (type === 'lodge' && r.resCount < 3) return { ...r, ok: false, reason: 'No forest nearby' };
+    if (type === 'quarry' && r.resCount < 1) return { ...r, ok: false, reason: 'No rock nearby' };
   }
   if (!free && !canAfford(T.cost)) return { ...r, ok: false, reason: `Need ${shortfall(T.cost)}` };
   if (adapt) snapToNeighbours(type, r);
@@ -1395,11 +1416,11 @@ function evaluateRoad(a, b) {
   const r = { type: 'road', ci: a, cj: b, s: 1, x0: a * CELL, z0: b * CELL, x1: (a + 1) * CELL, z1: (b + 1) * CELL, ok: true, reason: '' };
   if (a < 0 || b < 0 || a >= N || b >= N) return { ...r, ok: false, reason: 'Off the map' };
   const o = occB[b * N + a];
-  if (o && o.type !== 'gate') return { ...r, ok: false, reason: 'Building in the way' };
-  if (road[b * N + a]) return { ...r, ok: false, reason: 'Already a road', soft: true };
+  if (o && o.type !== 'gate') return { ...r, ok: false, reason: 'Occupied' };
+  if (road[b * N + a]) return { ...r, ok: false, reason: 'Already a path', soft: true };
   const st = cellStats(a, b);
   if (st.mn < .4) return { ...r, ok: false, reason: 'Water' };
-  if (st.spread >= 1.9) return { ...r, ok: false, reason: 'Too steep for a road' };
+  if (st.spread >= 1.9) return { ...r, ok: false, reason: 'Too steep' };
   return r;
 }
 function planFlatten(ev, FO) {
@@ -1445,14 +1466,14 @@ function refreshWalls() { for (const B of buildings) if (B.type === 'wall' || B.
 function place(type, ci, cj, opts = {}) {
   finishAnims();
   const ev = evaluate(type, ci, cj, opts.free);
-  if (!ev.ok) { if (!opts.silent) setHint(`Can't build: ${ev.reason}`, 'bad'); return null; }
+  if (!ev.ok) { if (!opts.silent) setHint(ev.reason, 'bad'); return null; }
   const T = DEF[type];
   if (!opts.free) pay(T.cost);
   const B = { id: nextId++, type, tier: 1, ev, plinth: adapt, max: T.hp[0], hp: T.hp[0], cool: [], fed: true, mask: 0, rot: ROTATES[type] ? placeRot : 0, rotFixed: false };
   for (let b = cj; b < cj + ev.s; b++) for (let a = ci; a < ci + ev.s; a++) { occB[b * N + a] = B; if (type !== 'gate') road[b * N + a] = 0; }
   const c = center(B), now = performance.now();
   const g = makeModel(type, 1, adapt, 0, B.rot); g.userData.B = B; B.group = g;
-  if (adapt) {
+  if (adapt && type !== 'wall') {
     const plan = planFlatten(ev, T.falloff || F);
     plan.verts.forEach(v => { if (v.inside) lock[v.k] = 1; });
     if (opts.instant) applyPlan(plan, 1); else anims.push({ plan, t0: now, dur: 450 });
@@ -1476,18 +1497,46 @@ function place(type, ci, cj, opts = {}) {
   if (WALLY[type]) refreshWalls();
   if (opts.instant) syncTerrain(); else rebuildRoads();
   villagers.forEach(v => v.path = null);
-  if (!opts.quiet) log(`Site marked: <b>${T.tiers[0]}</b>.`);
+  if (!opts.quiet) log(`<b>${T.tiers[0]}</b> placed`);
   return B;
 }
 // ---------- construction ----------
+const LIGHT_SCAFFOLD = { wall: 1, torch: 1, flowers: 1 };
 function addScaffold(B) {
   removeScaffold(B);
-  const g = new THREE.Group(), e = B.ev, hgt = { tower: 5, castle: 5, wall: 2.4, gate: 3, house: 2.8, statue: 2.4, torch: 2.2 }[B.type] || 2.6, c = center(B);
-  const hx = (e.x1 - e.x0) / 2 - .1, hz = (e.z1 - e.z0) / 2 - .1;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.08, hgt, .08, M.rough, sx * hx, hgt / 2, sz * hz));
-  for (const y of [hgt * .45, hgt * .95]) { g.add(box(hx * 2, .06, .06, M.rough, 0, y, hz)); g.add(box(hx * 2, .06, .06, M.rough, 0, y, -hz)); g.add(box(.06, .06, hz * 2, M.rough, hx, y, 0)); g.add(box(.06, .06, hz * 2, M.rough, -hx, y, 0)); }
-  const br = box(.05, Math.hypot(hx * 2, hgt * .45), .05, M.rough, 0, hgt * .25, hz); br.rotation.z = Math.atan2(hx * 2, hgt * .45); g.add(br);
+  // timber scaffolding round the site: poles every metre or so, a plank deck at each lift, cross braces, a ladder, and stacks of materials
+  const g = new THREE.Group(), e = B.ev, hgt = { tower: 4, castle: 5, wall: 2.4, gate: 3, house: 2.8, statue: 2.4, torch: 2.2 }[B.type] || 2.6, c = center(B);
+  const hx = (e.x1 - e.x0) / 2 + .05, hz = (e.z1 - e.z0) / 2 + .05, lift = .95;
+  const nx = Math.max(2, Math.round(hx * 2 / 1.1) + 1), nz = Math.max(2, Math.round(hz * 2 / 1.1) + 1);
+  if (LIGHT_SCAFFOLD[B.type]) {             // small pieces built in runs: just corner poles and a rail, or a wall line becomes a tangle
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.06, hgt * .8, .06, M.rough, sx * hx * .8, hgt * .4, sz * hz * .8));
+    g.add(box(hx * 1.6, .05, .05, M.rough, 0, hgt * .7, hz * .8));
+    g.position.set(c.x, B.group.position.y, c.z); scene.add(g); B.scaffold = g; return;
+  }
+  const along = (n, h) => Array.from({ length: n }, (_, i) => -h + 2 * h * i / (n - 1));
+  for (const x of along(nx, hx)) for (const sz of [-1, 1]) g.add(box(.07, hgt, .07, M.rough, x, hgt / 2, sz * hz));
+  for (const z of along(nz, hz)) for (const sx of [-1, 1]) g.add(box(.07, hgt, .07, M.rough, sx * hx, hgt / 2, z));
+  for (let y = lift; y < hgt; y += lift) {
+    for (const sz of [-1, 1]) { g.add(box(hx * 2, .05, .05, M.rough, 0, y + .32, sz * hz)); g.add(box(hx * 2 + .1, .04, .28, M.wood, 0, y, sz * (hz + .1))); }
+    for (const sx of [-1, 1]) { g.add(box(.05, .05, hz * 2, M.rough, sx * hx, y + .32, 0)); g.add(box(.28, .04, hz * 2 + .1, M.wood, sx * (hx + .1), y, 0)); }
+  }
+  const xs = along(nx, hx), zs = along(nz, hz);
+  for (let i = 0; i + 1 < xs.length; i++) for (const sz of [-1, 1]) { const w = xs[i + 1] - xs[i], br = box(.04, Math.hypot(w, lift), .04, M.rough, (xs[i] + xs[i + 1]) / 2, lift / 2 + (i % 2) * lift, sz * hz); br.rotation.z = (i % 2 ? 1 : -1) * Math.atan2(w, lift); g.add(br); }
+  for (let i = 0; i + 1 < zs.length; i++) for (const sx of [-1, 1]) { const d = zs[i + 1] - zs[i], br = box(.04, Math.hypot(d, lift), .04, M.rough, sx * hx, lift / 2 + (i % 2) * lift, (zs[i] + zs[i + 1]) / 2); br.rotation.x = (i % 2 ? -1 : 1) * Math.atan2(d, lift); g.add(br); }
+  const lx = hx + .22;                      // ladder up the east side
+  for (const dz of [-.16, .16]) g.add(box(.05, hgt * .95, .05, M.rough, lx, hgt * .47, dz));
+  for (let y = .25; y < hgt * .9; y += .28) g.add(box(.04, .04, .34, M.rough, lx, y, 0));
+  // materials stacked by the front corner: planks and cut stone
+  for (let n = 0; n < 3; n++) g.add(box(.9, .07, .12, M.wood, -hx + .5, .04 + n * .07, hz + .35 + (n % 2) * .02));
+  for (const [dx, dy, dz] of [[0, 0, 0], [.26, 0, .02], [.12, .2, .01]]) g.add(box(.24, .2, .22, M.stone2, hx - .45 + dx, .1 + dy, hz + .35 + dz));
   g.position.set(c.x, B.group.position.y, c.z); scene.add(g); B.scaffold = g;
+}
+// a puff of dust where builders are working
+function dustAt(x, y, z) {
+  if (puffs.length > 160) return;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: '#b9a582', transparent: true, depthWrite: false, opacity: 0 }));
+  sp.position.set(x + (Math.random() - .5) * .4, y + .1, z + (Math.random() - .5) * .4); sp.scale.setScalar(.25);
+  scene.add(sp); puffs.push({ sp, t: 0, life: 1.1 + Math.random() * .6, dx: (Math.random() - .5) * .4, dust: true });
 }
 function removeScaffold(B) { if (B.scaffold) { scene.remove(B.scaffold); B.scaffold = null; } }
 // repairs are free but take builder-time; a building's own workers mend it themselves, pausing their gathering
@@ -1512,12 +1561,12 @@ function completeSite(B) {
   }
   if (S.kind === 'new') {
     B.built = true; B.group.scale.y = 1; stats.built++; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
-    if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]} villagers` : ''}${T.charm ? ` · +${Math.round(T.charm * 100)}% gold nearby` : ''}.`, 'good');
+    if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]}` : ''}`, 'good');
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
     floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('build', c);
-    log(`<b>${T.tiers[B.tier - 1]}</b> ready (tier ${B.tier}).`, 'good');
+    log(`<b>${T.tiers[B.tier - 1]}</b> ready`, 'good');
   }
   syncResidents(B); assignJobs(); if (WALLY[B.type]) refreshWalls(); refreshCard();
 }
@@ -1525,10 +1574,10 @@ function upgrade(B) {
   const T = DEF[B.type];
   if (!T.up || B.tier >= 3 || B.dead || B.site) return;
   const cost = T.up[B.tier - 1];
-  if (!canAfford(cost)) { setHint(`Upgrade needs ${shortfall(cost)}`, 'bad'); return; }
+  if (!canAfford(cost)) { setHint(`Need ${shortfall(cost)}`, 'bad'); return; }
   pay(cost);
   B.site = { kind: 'up', progress: instantBuild ? 1 : 0, time: Math.round(T.build * 1.3) }; addScaffold(B);
-  log(`Upgrading to <b>${T.tiers[B.tier]}</b>.`);
+  log(`Upgrading · <b>${T.tiers[B.tier]}</b>`);
   refreshCard();
 }
 function removeBuilding(B, raid) {
@@ -1545,10 +1594,10 @@ function removeBuilding(B, raid) {
   hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
   if (!raid) sfx('sold', c);
-  if (raid) { stats.lost++; sfx('destroyed', c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> destroyed!`, 'warn'); }
+  if (raid) { stats.lost++; sfx('destroyed', c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> lost`, 'warn'); }
   else {
     const back = {}; RES_KEYS.forEach(k => { if (DEF[B.type].cost[k]) back[k] = Math.floor(DEF[B.type].cost[k] / 2); res[k] += back[k] || 0; });
-    log(`Demolished <b>${DEF[B.type].tiers[B.tier - 1]}</b> · refund ${costHTML(back)}`);
+    log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> demolished · +${costHTML(back)}`);
   }
   if (selected === B) deselect();
   refreshWalls(); rebuildRoads();
@@ -1557,18 +1606,18 @@ function removeBuilding(B, raid) {
 function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; if (B.hp <= 0) removeBuilding(B, true); }
 function paintRoad(a, b) {
   const ev = evaluateRoad(a, b);
-  if (!ev.ok) { if (!ev.soft) setHint(`Can't lay path: ${ev.reason}`, 'bad'); return false; }
-  if (!canAfford(PATH_COST)) { setHint(`Can't lay path: need ${shortfall(PATH_COST)}`, 'bad'); return false; }
+  if (!ev.ok) { if (!ev.soft) setHint(ev.reason, 'bad'); return false; }
+  if (!canAfford(PATH_COST)) { setHint(`Need ${shortfall(PATH_COST)}`, 'bad'); return false; }
   pay(PATH_COST); road[b * N + a] = 1; rebuildRoads(); villagers.forEach(v => v.path = null);
   const m = roadMask(a, b);
-  setHint(`Path mask ${m.toString(2).padStart(4, '0')} (${BITNAME(m)}) → ${SHAPE(m)}`, 'ok');
+  setHint('<b>Path</b>', 'ok');
   return true;
 }
 let lastPaint = '', wallStroke = 0;
 function paintWall(a, b) {
   const key = a + ',' + b; if (key === lastPaint) return; lastPaint = key;
   const B = place('wall', a, b, { quiet: true });
-  if (B) { wallStroke++; sfx('click'); setHint(`Wall joins ${BITNAME(B.mask)} → ${SHAPE(B.mask)}`, 'ok'); }
+  if (B) { wallStroke++; sfx('click'); setHint('<b>Wall</b>', 'ok'); }
 }
 
 // ---------- villagers ----------
@@ -1643,6 +1692,7 @@ function makeHelm(kind) {
   }
   return h;
 }
+const UNIT_K = .78;   // everyone drawn a little smaller so they fit through doors
 function makePerson(opts) {
   const g = new THREE.Group(), body = new THREE.Group();
   const legs = [-.09, .09].map(x => { const l = box(.1, .4, .12, legM, x, 0, 0); l.geometry.translate(0, -.2, 0); l.position.y = .4; body.add(l); return l; });
@@ -1659,7 +1709,7 @@ function makePerson(opts) {
   let hatG = null; if (opts.helm) { hatG = makeHelm(opts.helm); body.add(hatG); }
   let pivot = null;
   if (opts.tool) { pivot = makeTool(opts.tool); (opts.tool === 'bow' ? arms[0] : arms[1]).add(pivot); }
-  body.scale.setScalar(opts.scale || 1);
+  body.scale.setScalar((opts.scale || 1) * UNIT_K);
   g.add(body); scene.add(g);
   return { g, body, legs, arms, torso, hatG, baseTunic: tun, pivot, x: 0, z: 0, tx: 0, tz: 0, wait: Math.random() * 2, speed: .9 + Math.random() * .6, phase: Math.random() * 6, stuck: 0 };
 }
@@ -1845,7 +1895,7 @@ function unstick(v, mode) {
   }
 }
 function walkTo(v, tx, tz, dt, mode, stop = .2, mult = 1) {
-  if (v.stuck > 3.5) { unstick(v, mode); v.stuck = 0; v.path = null; }
+  if (v.stuck > 2) { unstick(v, mode); v.stuck = 0; v.path = null; }
   v.repathT = (v.repathT || 0) - dt;
   if (!v.path || Math.hypot(v.pathX - tx, v.pathZ - tz) > .6 || (v.stuck > 1.2 && v.repathT <= 0)) {
     v.path = findPath(v.x, v.z, tx, tz, mode) || []; v.pathX = tx; v.pathZ = tz; v.repathT = 2; v.skipT = 0;
@@ -1884,6 +1934,7 @@ function updateBuilder(v, dt) {
   } else {
     v.working = true; const c = center(S); turnTo(v, Math.atan2(c.x - v.x, c.z - v.z), dt);
     S.site.progress += dt / S.site.time;
+    if ((v.dustT = (v.dustT || Math.random()) - dt) <= 0) { v.dustT = .5 + Math.random() * .6; dustAt((v.x + c.x) / 2, hAt(v.x, v.z), (v.z + c.z) / 2); }
   }
 }
 function updateWorker(v, dt, now) {
@@ -1950,7 +2001,7 @@ function updateWander(v, dt) {
   walkTo(v, v.tx, v.tz, dt, 1);
 }
 function updateVillagers(dt, now) {
-  if ((hungryLogT -= dt) <= 0 && newlyHungry) { log(`Out of food: <b>${newlyHungry}</b> villager${newlyHungry > 1 ? 's' : ''} asleep. Build a farm.`, 'warn'); newlyHungry = 0; hungryLogT = 15; }
+  if ((hungryLogT -= dt) <= 0 && newlyHungry) { log(`No food · <b>${newlyHungry}</b> asleep`, 'warn'); newlyHungry = 0; hungryLogT = 15; }
   const night = PH.kind === 'night', keep = castleB();
   for (const v of villagers) {
     v.walking = false; v.working = false;
@@ -2040,8 +2091,13 @@ function edgePoint() {
   return { x: 1.5, z: SIZE / 2 };
 }
 const arrowGeo = new THREE.BoxGeometry(.04, .04, .7), arrowMat = mat('#3a2a1a');
+// where an archer's arrow leaves: the bow in the raised left hand
+function bowPoint(p) {
+  p.arms[0].rotation.x = -1.5; p.g.updateMatrixWorld(true);
+  return (p.pivot || p.arms[0]).getWorldPosition(new THREE.Vector3());
+}
 function fireArrow(from, to, onHit) {
-  const m = new THREE.Mesh(arrowGeo, arrowMat); m.position.copy(from); scene.add(m);
+  const m = new THREE.Mesh(arrowGeo, arrowMat); m.castShadow = true; m.position.copy(from); scene.add(m);
   const d = from.distanceTo(to);
   arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit }); sfx('arrow', from);
 }
@@ -2083,7 +2139,7 @@ function updateEnemies(dt) {
           e.cool = e.rate; e.attackT = .35;
           if (e.kind === 'archer') {
             const tgt = B, dmg = e.dmg;
-            fireArrow(new THREE.Vector3(e.x, hAt(e.x, e.z) + 1.0, e.z), new THREE.Vector3(c.x, B.group.position.y + 1.2, c.z), () => hurtBuilding(tgt, dmg));
+            fireArrow(bowPoint(e), new THREE.Vector3(c.x, B.group.position.y + 1.2, c.z), () => hurtBuilding(tgt, dmg));
           } else { sfx('attack', e); hurtBuilding(B, e.dmg); }
         }
       }
@@ -2096,7 +2152,7 @@ function updateEnemies(dt) {
     else { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -.6 - e.attackT * 5.7 : -.45 + sw * .3; }
     const y = hAt(e.x, e.z);
     e.g.position.set(e.x, y < 0 ? y * .4 - .2 : y, e.z);
-    e.bar.grp.visible = e.hp < e.max; e.bar.set(e.hp / e.max); e.bar.grp.position.set(e.x, e.g.position.y + 1.6 * (ENEMY[e.kind].big || 1), e.z);
+    e.bar.grp.visible = e.hp < e.max; e.bar.set(e.hp / e.max); e.bar.grp.position.set(e.x, e.g.position.y + 1.6 * UNIT_K * (ENEMY[e.kind].big || 1), e.z);
   }
 }
 // ---------- night watch: villagers walk to the castle and towers and shoot from the top ----------
@@ -2106,7 +2162,7 @@ const POSTS = {
   castle: [
     [[1.9, 2.55, 1.9], [-1.9, 2.55, 1.9], [1.9, 2.55, -1.9], [-1.9, 2.55, -1.9]],
     [[2.6, 3.55, 2.6], [-2.6, 3.55, 2.6], [2.6, 3.55, -2.6], [-2.6, 3.55, -2.6]],
-    [[0, 4.8, -.4], [0, 2.4, -2.1], [2.1, 2.4, 0], [-2.1, 2.4, 0], [-1.8, 2.4, 2.1], [1.8, 2.4, 2.1]],   // on the wall-walk, behind the battlements
+    [[-.45, 4.8, -.4], [.45, 4.8, -.4], [0, 2.4, -2.1], [2.1, 2.4, 0], [-2.1, 2.4, 0], [-1.8, 2.4, 2.1]],   // two on the keep, one on each wall-walk
   ],
 };
 function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1]; return L[a % L.length]; }
@@ -2156,8 +2212,8 @@ function updateDefense(dt) {
       if (!best) { B.cool[a] = .2; continue; }
       B.cool[a] = T.rate[k] * (.9 + Math.random() * .2);
       const f = B.figs && B.figs[a];
-      const from = f ? new THREE.Vector3(f.g.position.x, f.g.position.y + 1.0, f.g.position.z) : new THREE.Vector3(c.x, B.group.position.y + T.shootY[k], c.z);
       if (f) { f.g.rotation.y = Math.atan2(best.x - f.g.position.x, best.z - f.g.position.z); f.attackT = .3; }
+      const from = f ? bowPoint(f) : new THREE.Vector3(c.x, B.group.position.y + T.shootY[k], c.z);
       const lead = best.walking ? .5 : 0, to = new THREE.Vector3(best.x + Math.sin(best.g.rotation.y) * lead, best.g.position.y + .7, best.z + Math.cos(best.g.rotation.y) * lead);
       const tgt = best, dmg = T.dmg[k];
       fireArrow(from, to, () => hurtEnemy(tgt, dmg));
@@ -2225,23 +2281,23 @@ function startNight() {
   if (w.captain) spawnQueue.push(['captain', pts[0]]);
   spawnT = 1;
   const ps = assignPosts();
-  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders approach`, true); setMusic('night');
-  log(`<b>Night ${PH.wave}</b>: ${spawnQueue.length} raiders · ${ps.posted} archers on watch${ps.open ? ` · ${ps.open} post${ps.open > 1 ? 's' : ''} empty` : ''}.`, 'warn');
+  banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders`, true); setMusic('night');
+  log(`<b>Night ${PH.wave}</b> · ${spawnQueue.length} raiders · ${ps.posted} archers`, 'warn');
 }
 function startDay() {
   PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
   for (const v of villagers) if (v.post) { if (v.posted) { v.posted = false; v.inside = true; } v.post = null; }
   for (const B of buildings) { B.manned = []; hideDefenders(B); }
   const hurt = startRepairs();
-  banner(`Dawn · Day ${PH.wave}`, `Wave ${PH.wave - 1} defended.${hurt ? ` Villagers head out to repair ${hurt} building${hurt > 1 ? 's' : ''}.` : ''}`); setMusic('day');
-  log(`<b>Wave ${PH.wave - 1} held.</b>${hurt ? ` ${hurt} damaged building${hurt > 1 ? 's' : ''} to repair (free, but workers leave their jobs).` : ''} ${Math.round(PH.t / 60)} min to night.`, 'good');
+  banner(`Day ${PH.wave}`, hurt ? `${hurt} to repair` : 'Wave held'); setMusic('day');
+  log(`<b>Wave ${PH.wave - 1} held</b>${hurt ? ` · ${hurt} to repair` : ''}`, 'good');
 }
 function endGame(won) {
   if (gameOver) return; gameOver = true; setMusic(won ? 'victory' : 'defeat');
   const el = (performance.now() - stats.t0) / 1000;
   $('#sumTitle').textContent = won ? 'The town holds' : 'The castle has fallen';
   $('#sumTitle').className = won ? '' : 'lost';
-  $('#sumText').textContent = won ? 'All three waves defended. The raiders will not return this season.' : `The raiders took the castle during night ${PH.wave}.`;
+  $('#sumText').textContent = won ? 'All three waves held.' : `Fell on night ${PH.wave}.`;
   const rows = [['Waves defended', `${won ? 3 : PH.wave - 1} of 3`], ['Raiders slain', stats.slain], ['Buildings built', stats.built], ['Upgrades', stats.upgrades],
     ['Buildings lost', stats.lost], ['Buildings standing', buildings.length], ['Gold earned', stats.gold], ['Wood gathered', stats.wood],
     ['Stone quarried', stats.stone], ['Food harvested', stats.food], ['Time played', fmt(el)]];
@@ -2334,40 +2390,36 @@ function refreshCard() {
   card.hidden = false;
   $('#cardIco').innerHTML = TOOL_ICON[B.type] || '';
   $('#cardTitle').textContent = T.decor ? T.name : T.tiers[k];
-  $('#cardSub').textContent = T.decor ? 'Decoration' : `${T.name} · tier ${B.tier} of 3`;
+  $('#cardSub').textContent = T.decor ? 'Decoration' : `${T.name} · ${B.tier}/3`;
   const hpf = Math.max(0, B.hp / B.max);
   $('#cardHp').style.width = `${hpf * 100}%`; $('#cardHp').style.background = hpf < .35 ? 'var(--bad)' : hpf < .7 ? '#e6c46a' : 'var(--ok)';
   const st = [];
   if (B.site) {
     const crew = villagers.filter(v => v.build === B).length;
     st.push(STAT('', `${{ new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]} ${Math.floor(B.site.progress * 100)}%`, 'warn'));
-    st.push(STAT('pop', crew ? `${crew} ${B.site.kind === 'repair' ? 'repairer' : 'builder'}${crew > 1 ? 's' : ''}` : PH.kind === 'night' ? 'Resumes at dawn' : 'Needs a villager', crew ? '' : 'bad'));
+    st.push(STAT('pop', crew ? `${crew}` : PH.kind === 'night' ? 'At dawn' : 'Waiting', crew ? '' : 'bad'));
   }
-  st.push(STAT('', `HP ${Math.ceil(B.hp)}/${B.max}`));
-  if (B.type === 'castle') { st.push(STAT('gold', `+${T.gold[k]} / 20 s`)); st.push(STAT('food', `+${T.food[k]} / 20 s`)); }
+  st.push(STAT('', `${Math.ceil(B.hp)}/${B.max} HP`));
+  if (B.type === 'castle') { st.push(STAT('gold', `+${T.gold[k]}`)); st.push(STAT('food', `+${T.food[k]}`)); }
   if (B.type === 'house') {
-    st.push(STAT('gold', `+${T.gold[k]} / 20 s`));
-    const ch = Math.round(charmOf(B) * 100); if (ch) st.push(STAT('', `Decor +${ch}%`, 'good'));
+    st.push(STAT('gold', `+${T.gold[k]}`));
+    const ch = Math.round(charmOf(B) * 100); if (ch) st.push(STAT('gold', `+${ch}%`, 'good'));
     const hg = villagers.filter(v => v.home === B && v.hungry).length; if (hg) st.push(STAT('', `${hg} hungry`, 'bad'));
   }
-  if (B.type === 'farm') st.push(STAT('food', `+${T.food[k]} / 20 s · feeds ${Math.round(T.food[k] * MEAL / TICK)}`));
-  if (T.residents) st.push(STAT('pop', `${villagers.filter(v => v.home === B).length} live here`));
-  if (T.workers && B.built) { const w = villagers.filter(v => v.job === B).length; st.push(STAT('pop', `${w}/${T.workers[k]} workers`, w < T.workers[k] ? 'warn' : '')); }
-  if (B.type === 'lodge') st.push(STAT('wood', `${LUMBER_LOAD} per trip${B.tier === 3 ? ' · fast' : ''}`));
-  if (B.type === 'quarry') st.push(STAT('stone', `1 per trip${B.tier === 3 ? ' · fast' : ''}`));
+  if (B.type === 'farm') st.push(STAT('food', `+${T.food[k]}`));
+  if (T.residents) st.push(STAT('pop', `${villagers.filter(v => v.home === B).length} home`));
+  if (T.workers && B.built) { const w = villagers.filter(v => v.job === B).length; st.push(STAT('pop', `${w}/${T.workers[k]} work`, w < T.workers[k] ? 'warn' : '')); }
   if (T.range) {
     const m = (B.manned || []).filter(Boolean).length;
-    st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.archers[k]} archers` : `${T.archers[k]} archer posts`));
-    st.push(STAT('', `${T.dmg[k]} dmg · ${T.range[k]} m`));
+    st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.archers[k]}` : `${T.archers[k]}`));
+    st.push(STAT('', `${T.dmg[k]} dmg`));
   }
-  if (B.type === 'wall' || B.type === 'gate') st.push(STAT('', SHAPE(B.mask)[0].toUpperCase() + SHAPE(B.mask).slice(1)));
-  if (B.type === 'gate') st.push(STAT('', 'Villagers only'));
-  if (T.decor) st.push(STAT('gold', `+${Math.round(T.charm * 100)}% · ${housesNear(c0.x, c0.z)} houses`, 'good'));
+  if (T.decor) st.push(STAT('gold', `+${Math.round(T.charm * 100)}%`, 'good'));
   $('#cardStats').innerHTML = st.join('');
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
-  else if (B.tier >= 3) { up.hidden = false; up.innerHTML = 'Fully upgraded'; up.disabled = true; }
-  else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? (B.site.kind === 'repair' ? 'Repairing…' : 'Building…') : `Upgrade ${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
+  else if (B.tier >= 3) { up.hidden = false; up.innerHTML = 'Max'; up.disabled = true; }
+  else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? '…' : `Upgrade ${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
   $('#cardRotBtn').hidden = !canRotate(B);
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
@@ -2375,11 +2427,11 @@ function refreshCard() {
 }
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
-$('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to build or upgrade', 'bad'); selected && upgrade(selected); });
+$('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
 $('#rotBtn').addEventListener('click', rotatePlacement);
-$('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to rotate', 'bad'); rotateBuilding(selected); });
+$('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); rotateBuilding(selected); });
 addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.target.closest('input')) { if (ROTATES[tool]) rotatePlacement(); else if (selected) rotateBuilding(selected); } });
-$('#demBtn').addEventListener('click', () => { if (paused) return setHint('Paused · resume to demolish', 'bad'); selected && removeBuilding(selected, false); });
+$('#demBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && removeBuilding(selected, false); });
 $('#closeCard').addEventListener('click', deselect);
 $('#nightBtn').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
 
@@ -2393,13 +2445,13 @@ function showGhostAt(point) {
     for (const t in ghosts) ghosts[t].visible = false; ringLine.visible = reachLine.visible = false;
     const ev = evaluateRoad(Math.floor(point.x / CELL), Math.floor(point.z / CELL));
     footLine.material.color.set(ev.ok ? '#8cc46e' : '#e2715b'); drape(footLine, ev.x0, ev.z0, ev.x1, ev.z1); cur = ev;
-    if (ev.ok) setHint(`Path · ${isTouch ? 'tap' : 'click'} or drag · +2% gold to nearby houses`, 'ok'); else setHint(`Can't lay path: ${ev.reason}`, 'bad');
+    if (ev.ok) setHint(`<b>Path</b><i class="sep">·</i>${costHTML(PATH_COST)}<i class="sep">·</i>drag`, 'ok'); else setHint(ev.reason, 'bad');
     return;
   }
   const T = DEF[tool], [ci, cj] = cellFor(point, T.size), ev = evaluate(tool, ci, cj);
   for (const t in ghosts) ghosts[t].visible = t === tool;
   const g = ghosts[tool], cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
-  g.position.set(cx, adapt && ev.target != null ? ev.target : hAt(cx, cz), cz);
+  g.position.set(cx, adapt && tool !== 'wall' && ev.target != null ? ev.target : hAt(cx, cz), cz);
   const col = ev.ok ? '#8cc46e' : '#e2715b';
   ghostMat.color.set(col); footLine.material.color.set(col);
   drape(footLine, ev.x0, ev.z0, ev.x1, ev.z1);
@@ -2407,7 +2459,7 @@ function showGhostAt(point) {
   if (adapt && ev.ok) drape(ringLine, Math.max(0, ev.x0 - FO), Math.max(0, ev.z0 - FO), Math.min(SIZE, ev.x1 + FO), Math.min(SIZE, ev.z1 + FO)); else ringLine.visible = false;
   if (T.reach) drapeCircle(reachLine, cx, cz, T.reach); else if (T.range) drapeCircle(reachLine, cx, cz, T.range[0]); else if (T.charm) drapeCircle(reachLine, cx, cz, CHARM_R); else reachLine.visible = false;
   cur = ev;
-  if (!ev.ok) { setHint(`Can't build: ${ev.reason}`, 'bad'); return; }
+  if (!ev.ok) { setHint(ev.reason, 'bad'); return; }
   // short: name, cost, then only what matters for this spot; the touch-only reminder because touch needs a second tap
   const parts = [`<b>${T.name}</b>`, costHTML(T.cost)];
   if (T.reach) parts.push(`${ev.resCount} ${tool === 'lodge' ? 'trees' : 'rocks'}`);
@@ -2458,7 +2510,7 @@ function paintAt(e) {
   if (tool === 'road') { paintRoad(a, b); showGhostAt(pt); } else { paintWall(a, b); }
 }
 function endStroke() {
-  if (wallStroke) { log(`Wall marked: <b>${wallStroke}</b> segment${wallStroke > 1 ? 's' : ''}.`); wallStroke = 0; }
+  if (wallStroke) { log(`<b>Wall</b> ×${wallStroke}`); wallStroke = 0; }
   lastPaint = '';
 }
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -2490,7 +2542,7 @@ canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e => { e.preventDefault(); dist = clamp(dist * Math.exp(e.deltaY * .001), 14, 95); updateCam(); }, { passive: false });
 function tap(e) {
   if (gameOver) return;
-  if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused · resume to build or upgrade', 'bad'); return; }
+  if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused', 'bad'); return; }
   if (PAINT[tool]) { paintAt(e); return; }
   const building = tool && tool !== 'select';
   const hb = pickBuilding(e, building);
@@ -2499,7 +2551,7 @@ function tap(e) {
   const pt = pick(e); if (!pt) return;
   const [ci, cj] = cellFor(pt, DEF[tool].size);
   if (e.pointerType !== 'mouse' && !(cur && cur.ci === ci && cur.cj === cj && cur.type === tool && ghosts[tool].visible)) { showGhostAt(pt); return; }
-  if (place(tool, ci, cj)) { sfx('click'); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Built. Tap the ground to preview the next one.'); } }
+  if (place(tool, ci, cj)) { sfx('click'); if (e.pointerType === 'mouse') showGhostAt(pt); else { hideGhost(); setHint('Placed'); } }
 }
 const ROTATES = { wall: 1, gate: 1 };
 function rotatePlacement() {
@@ -2517,9 +2569,9 @@ function setTool(t) {
   $('#rotBtn').hidden = !ROTATES[t];
   for (const c in CATS) if (CATS[c].includes(t) && c !== cat) { cat = c; renderTools(); }
   markTools();
-  if (tool === 'select') { hideGhost(); setHint(isTouch ? 'Tap a building to see, upgrade or demolish it' : 'Click a building to see, upgrade or demolish it'); }
+  if (tool === 'select') { hideGhost(); setHint('Select a building'); }
   else if (cur) regho();
-  else setHint(isTouch ? 'Tap the ground to preview' : 'Move over the ground to preview');
+  else setHint(isTouch ? 'Tap to place' : 'Pick a spot');
 }
 document.querySelector('.util .tool').addEventListener('click', () => setTool('select'));
 $('#gridBtn').addEventListener('click', e => { grid.visible = !grid.visible; e.currentTarget.setAttribute('aria-pressed', String(grid.visible)); });
@@ -2529,7 +2581,7 @@ $('#fsBtn').addEventListener('click', async () => {
   try {
     if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     else { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen; if (!rq) throw 0; await rq.call(el); }
-  } catch (e) { $('#fsBtn').textContent = 'Not available here'; setTimeout(syncFs, 2000); }
+  } catch (e) { $('#fsBtn').textContent = 'Unavailable'; setTimeout(syncFs, 2000); }
 });
 document.addEventListener('fullscreenchange', () => { syncFs(); resize(); });
 document.addEventListener('webkitfullscreenchange', () => { syncFs(); resize(); });
@@ -2586,11 +2638,10 @@ function startGame() {
   const ev = findValid('castle', 8, 12, { free: true });
   if (ev) { const B = place('castle', ev.ci, ev.cj, { instant: true, free: true, quiet: true }); const c = center(B); target.set(c.x, 2, c.z); }
   updateCam();
-  log('Drag to move · twist to rotate · pinch to zoom.');
-  log('Houses bring villagers. Villagers build, work and eat food.');
-  log('Survive <b>3 nights</b>. Lose the castle and it’s over.');
-  log('<b>Day 1</b>: build before nightfall.', 'good');
-  banner('Day 1', 'Build your town before nightfall');
+  log('Drag · twist · pinch');
+  log('Survive <b>3 nights</b>');
+  log('<b>Day 1</b>', 'good');
+  banner('Day 1', 'Build before dark');
   cat = 'eco'; renderTools(); setTool('house');
 }
 
@@ -2602,7 +2653,7 @@ let last = performance.now(), hudT = 0, buildT = 0;
 var paused = false, gameSpeed = 1, instantBuild = false;
 function setPaused(on) {
   paused = on; $('#pauseBtn').setAttribute('aria-pressed', String(on)); $('#pausedTag').hidden = !on;
-  if (on) { hideGhost(); setHint('Paused · resume to build or upgrade', 'bad'); } else setHint(isTouch ? 'Tap the ground to preview' : 'Move over the ground to preview');
+  if (on) { hideGhost(); setHint('Paused', 'bad'); } else setHint(isTouch ? 'Tap to place' : 'Pick a spot');
   $('#pauseBtn').innerHTML = on ? '<svg viewBox="0 0 24 24"><path class="solid" d="M8 5 L19 12 L8 19 Z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5 V19 M16 5 V19" stroke-width="3.2"/></svg>';
   $('#pauseBtn').setAttribute('aria-label', on ? 'Resume' : 'Pause'); $('#pauseBtn').title = on ? 'Resume (P)' : 'Pause (P)';
 }
