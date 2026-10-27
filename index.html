@@ -40,7 +40,7 @@ input{-webkit-user-select:text;user-select:text}
 .cost + .cost{margin-left:6px}
 .panel{border-radius:8px!important;position:absolute;top:8px;left:max(8px,env(safe-area-inset-left,0px));width:min(330px,calc(100% - 16px));
   max-height:calc(100% - 16px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;
-  padding:6px 8px;backdrop-filter:blur(4px);display:flex;flex-direction:column;gap:5px}
+  padding:6px 8px;display:flex;flex-direction:column;gap:5px}
 .title{font-family:var(--display);font-size:13px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
 .phase{display:flex;align-items:center;gap:8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
 .phIco{width:26px;height:26px;flex-shrink:0;display:inline-flex}
@@ -2612,6 +2612,7 @@ let yaw = .65, pitch = .9, dist = 46;
 function updateCam() {
   camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
   camera.lookAt(target);
+  scene.fog.near = dist + 35; scene.fog.far = dist + 130;   // haze starts beyond the town, so the top of a tall phone screen stays crisp
 }
 function pan(dx, dy) {
   const k = dist * .0016;
@@ -2845,7 +2846,7 @@ var SFX_GAP = { chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: 
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
 var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
 // var: sfx()/setMusic() can run during the startup reset, before this block executes
-var actx = null, master = null, audioUnlocked = false, musicWant = 'day', clips = {}, sfxLast = {}, lastPick = {}, loopEl = {}, stinger = null;
+var loopWanted = {}, actx = null, master = null, audioUnlocked = false, musicWant = 'day', clips = {}, sfxLast = {}, lastPick = {}, loopEl = {}, stinger = null;
 try { actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = MASTER; master.connect(actx.destination); } catch (e) { actx = null; }
 // loudness = RMS of the loudest LOUD_WINDOW; the gain brings it to TARGET_LOUD x trim without the peak passing the ceiling
 function levelOf(b, from = 0, to = b.length) {
@@ -2876,11 +2877,18 @@ if (actx) for (const k in SND) {
   }, () => {})).catch(() => {});
 }
 for (const k in LOOPS) {
-  const el = new Audio('audio/' + LOOPS[k].file); el.loop = true; el.preload = k === 'music' ? 'auto' : 'metadata'; el.crossOrigin = 'anonymous';
+  const el = new Audio('audio/' + LOOPS[k].file); el.loop = true; el.preload = k === 'music' ? 'auto' : 'none'; el.crossOrigin = 'anonymous';
   let node = null;
   if (actx) try { node = actx.createGain(); node.gain.value = LOOPS[k].vol; actx.createMediaElementSource(el).connect(node); node.connect(master); } catch (e) { node = null; }
   if (!node) el.volume = LOOPS[k].vol;                     // no Web Audio: plain element volume (ignored on iOS, but that path has no Web Audio anyway)
-  el.addEventListener('error', () => { delete loopEl[k]; syncMusic(); });
+  // phones only start downloading after the first tap, so a compact AAC copy (.m4a, ~60% smaller) is tried first;
+  // if it is missing or can't play, the original .mp3 takes over, and if that fails too the loop is dropped
+  const mp3 = 'audio/' + LOOPS[k].file, m4a = mp3.replace(/\.mp3$/, '.m4a');
+  if (el.canPlayType('audio/mp4; codecs="mp4a.40.2"')) el.src = m4a;
+  el.addEventListener('error', () => {
+    if (el.src.endsWith('.m4a')) { const was = !el.paused; el.src = mp3; el.load(); if (was || loopWanted[k]) el.play().catch(() => {}); return; }
+    delete loopEl[k]; syncMusic();
+  });
   loopEl[k] = el;
 }
 // at: a world point; world sounds fade with distance from what the camera looks at, and when zoomed far out
@@ -2905,6 +2913,7 @@ function syncMusic() {
   const on = !muted && audioUnlocked && !document.hidden, end = musicWant === 'victory' || musicWant === 'defeat';
   const nightOn = on && musicWant === 'night' && loopEl.night;   // falls back to the day theme if the night track is missing
   const want = { music: on && !end && !nightOn, night: !!nightOn, birds: on && musicWant === 'day' };
+  loopWanted = want;
   for (const k in loopEl) { const el = loopEl[k]; if (want[k] && el.paused) el.play().catch(() => {}); else if (!want[k] && !el.paused) el.pause(); }
   if (on && end && !stinger) stinger = sfx(musicWant) || 1;
   if (!end) stinger = null;
@@ -2928,6 +2937,26 @@ function setMuted(on) {
 $('#muteBtn').addEventListener('click', () => setMuted(!muted));
 addEventListener('keydown', e => { if ((e.key === 'm' || e.key === 'M') && !e.target.closest('input')) setMuted(!muted); });
 setMuted(muted);
+
+// ---------- personal space: units ease apart instead of standing inside each other ----------
+// villagers and live raiders push each other apart; a raider who has just fallen stays put as an obstacle,
+// so a live one never stands in the same spot and looks like he got back up. Nobody is pushed into a building or water.
+const sepUnits = [];
+function separateUnits(dt) {
+  sepUnits.length = 0;
+  for (const v of villagers) if (v.g.visible && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1 });
+  for (const e of enemies) sepUnits.push({ u: e, r: e.horse ? .55 : .26, fixed: e.dead, mode: 2 });
+  const k = Math.min(1, dt * 10);
+  for (let i = 0; i < sepUnits.length; i++) for (let j = i + 1; j < sepUnits.length; j++) {
+    const A = sepUnits[i], B = sepUnits[j]; if (A.fixed && B.fixed) continue;
+    let dx = B.u.x - A.u.x, dz = B.u.z - A.u.z; const min = A.r + B.r, d2 = dx * dx + dz * dz;
+    if (d2 >= min * min) continue;
+    let d = Math.sqrt(d2); if (d < 1e-4) { const a = Math.random() * 6.283; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
+    const push = (min - d) * k, nx = dx / d, nz = dz / d, share = A.fixed || B.fixed ? 1 : .5;
+    if (!A.fixed) { const x = A.u.x - nx * push * share, z = A.u.z - nz * push * share; if (canStand(x, z, A.mode)) { A.u.x = x; A.u.z = z; } }
+    if (!B.fixed) { const x = B.u.x + nx * push * share, z = B.u.z + nz * push * share; if (canStand(x, z, B.mode)) { B.u.x = x; B.u.z = z; } }
+  }
+}
 
 // ---------- juice: camera shake, debris, coins to the counter ----------
 var shakeT = 0, shakeAmp = 0;
@@ -3019,7 +3048,7 @@ function frame(now) {
   keyCamera(dt); updateLamps(dt, now); updateLight(dt, now);
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
-  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); }
+  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); }
   updateArrows(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
   if (anims.length) {
     for (let n = anims.length - 1; n >= 0; n--) { const a = anims[n], t = clamp((now - a.t0) / a.dur, 0, 1); applyPlan(a.plan, easeOut(t)); if (t >= 1) anims.splice(n, 1); }

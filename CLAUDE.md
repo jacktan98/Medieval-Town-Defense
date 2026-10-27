@@ -24,6 +24,8 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Medieval look over clean/modern: crooked timbers, daub, thatch, small shuttered windows.
 
 ## Recent model notes
+- Phones: the long loops load a compressed `.m4a` copy first (`afconvert -f m4af -d aac -b 96000 x.mp3 x.m4a`), falling back to the `.mp3`; regenerate the copy when a loop is replaced. Night/bird loops don't preload. The top panel has no backdrop blur, and fog follows zoom (`near = dist + 35`, `far = dist + 130`) so the top of a portrait screen stays crisp.
+- `separateUnits` (after unit updates each frame) pushes villagers and live raiders apart (radius .24/.26, horse .55); fallen raiders are fixed obstacles; no push into unwalkable ground.
 - Juice: `shake(amp, at)` (building hit .07, destroyed .35; fades with distance from the camera focus, applied around render only), `debrisBurst` + `updateDebris` on raid destruction, raiders flash (`hitFlashM`, `flashT`) when hit, finished/upgraded buildings bounce in x/z (`B.pop`) with a dust ring, `coinFly` sends DOM coins from on-screen gold payouts to `#cGold` (pulse), villagers cheer (hop, arms up) for 2.6 s at dawn (`cheerT`). `Wave_horn.mp3` plays at nightfall (`SND.horn`).
 - Guided first day (`GUIDE`, `guideTick` from the HUD tick, `guideMark` adds `.guidePulse` to the tab/tool to press): house → lumber camp → farm → archer tower → upgrade; steps tick off by game state, Skip button; once done/skipped `localStorage['mtd-guide']='done'`.
 - Walls connect only to walls and gates (`WALLY`), never to towers or the castle.

@@ -19,3 +19,5 @@
 common level, then trimmed by how prominent it should be, like medieval-td. So re-uploading a file at a
 different recording level needs no code change. World sounds also get quieter the further they are from
 where the camera looks. To add or rename a sound, edit the `SND` table in `index.html`.
+
+`Bird_chirping.m4a` is a compressed copy of `Bird_chirping.mp3` for faster phone loading; if you replace the `.mp3`, delete the `.m4a` too.
