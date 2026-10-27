@@ -668,11 +668,17 @@ function seatRocks() {
   for (const r of rocks) { r.mesh.visible = r.amount > 0; const s = r.s0 * (.4 + .6 * r.amount / 5); r.mesh.scale.set(s, s * .8, s); r.mesh.position.set(r.x, hAt(r.x, r.z) - .1, r.z); }
 }
 
-// ---------- roads (thin dirt paths, bitmask auto-tiling) ----------
-const roadMatBase = new THREE.MeshStandardMaterial({ color: '#6c573b', roughness: 1, flatShading: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-const roadMatTop = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, flatShading: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+// ---------- roads: packed-earth tracks with soft, slightly wavy edges and flat stones set in them ----------
+// built from overlapping discs along each connection, so bends come out round and edges organic rather than square
+const roadMatBase = new THREE.MeshStandardMaterial({ color: '#64553a', roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const roadMatTop = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
 const roadBase = new THREE.Mesh(new THREE.BufferGeometry(), roadMatBase), roadTop = new THREE.Mesh(new THREE.BufferGeometry(), roadMatTop);
 roadBase.receiveShadow = roadTop.receiveShadow = true; scene.add(roadBase, roadTop);
+const MAX_PSTONES = N * N * 10;
+const pathStones = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1.1, 1, 6), mat('#ffffff'), MAX_PSTONES);
+pathStones.receiveShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
+// sized up front: r128 sizes instanceColor from .count on the first setColorAt, and count starts at 0 here
+pathStones.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PSTONES * 3), 3); pathStones.count = 0;
 const DIRS = [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]];
 const SHAPE = m => { const c = [1, 2, 4, 8].filter(b => m & b).length;
   return c === 0 ? 'lone piece' : c === 1 ? 'dead end' : c === 2 ? ((m === 5 || m === 10) ? 'straight' : 'corner') : c === 3 ? 'T-junction' : 'crossroads'; };
@@ -683,23 +689,29 @@ function roadMask(a, b) {
   for (const B of buildings) { const d = B.door; if (d && d.a === a && d.b === b) m |= d.bit; }
   return m;
 }
-function rectInto(arr, x0, z0, x1, z1, lift, col) {
-  const nx = Math.max(1, Math.ceil((x1 - x0) / .5)), nz = Math.max(1, Math.ceil((z1 - z0) / .5));
-  for (let a = 0; a < nx; a++) for (let b = 0; b < nz; b++) {
-    const xa = lerp(x0, x1, a / nx), xb = lerp(x0, x1, (a + 1) / nx), za = lerp(z0, z1, b / nz), zb = lerp(z0, z1, (b + 1) / nz);
-    const y = (x, z) => hAt(x, z) + lift;
-    arr.push(xa, y(xa, za), za, xa, y(xa, zb), zb, xb, y(xb, za), za, xb, y(xb, za), za, xa, y(xa, zb), zb, xb, y(xb, zb), zb);
-    if (col) { const s = .7 + .34 * hash(Math.floor(xa * 2.5) + .3, Math.floor(za * 2.5) + .7); for (let q = 0; q < 6; q++) col.push((.62 * s) ** 2.2, (.55 * s) ** 2.2, (.43 * s) ** 2.2); }
+// packed earth: smooth, low-contrast colour drift by position (no per-square checker), lighter where feet wear it
+const pathTmp = new THREE.Color();
+function pathCol(x, z, col) {
+  const n = .5 + .25 * Math.sin(x * 2.3 + z * 1.1) + .25 * Math.sin(x * .9 - z * 2.7), j = hash(Math.round(x * 4), Math.round(z * 4));
+  pathTmp.setRGB(.47, .38, .27).multiplyScalar(.88 + .16 * n + .06 * j);    // sRGB, converted below to match the patched colours
+  col.push(pathTmp.r ** 2.2, pathTmp.g ** 2.2, pathTmp.b ** 2.2);
+}
+function discInto(arr, cx, cz, r, lift, col, seg = 12) {
+  const y = (x, z) => hAt(x, z) + lift;
+  for (let k = 0; k < seg; k++) {
+    const a0 = k / seg * 6.283, a1 = (k + 1) / seg * 6.283;
+    const x0 = cx + Math.cos(a0) * r, z0 = cz + Math.sin(a0) * r, x1 = cx + Math.cos(a1) * r, z1 = cz + Math.sin(a1) * r;
+    arr.push(cx, y(cx, cz), cz, x1, y(x1, z1), z1, x0, y(x0, z0), z0);
+    if (col) { pathCol(cx, cz, col); pathCol(x1, z1, col); pathCol(x0, z0, col); }
   }
 }
-// a path is a strip one third of a tile wide: a centre square plus an arm toward each connected neighbour
-function tileInto(arr, a, b, m, hw, lift, col) {
+// a tile: a disc at the centre and a chain of discs out to each connected edge; radii wobble by position, so neighbours agree
+function tileInto(arr, a, b, m, rad, wob, lift, col, stones) {
   const cx = (a + .5) * CELL, cz = (b + .5) * CELL, e = CELL / 2;
-  rectInto(arr, cx - hw, cz - hw, cx + hw, cz + hw, lift, col);
-  if (m & 1) rectInto(arr, cx - hw, cz - e, cx + hw, cz - hw, lift, col);
-  if (m & 2) rectInto(arr, cx + hw, cz - hw, cx + e, cz + hw, lift, col);
-  if (m & 4) rectInto(arr, cx - hw, cz + hw, cx + hw, cz + e, lift, col);
-  if (m & 8) rectInto(arr, cx - e, cz - hw, cx - hw, cz + hw, lift, col);
+  const pts = [[cx, cz]];
+  for (const [da, db, bit] of DIRS) if (m & bit) for (const t of [.34, .67, 1]) pts.push([cx + da * e * t, cz + db * e * t]);
+  for (const [x, z] of pts) discInto(arr, x, z, rad + wob * (hash(x * 3.1, z * 2.3) - .5), lift, col);
+  if (stones) for (const [x, z] of pts) if (hash(x * 1.7, z * 5.3) < .5) stones.push([x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1, x * 7 + z * 3]);
 }
 function setGeo(mesh, arr, col) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
@@ -707,9 +719,22 @@ function setGeo(mesh, arr, col) {
   g.computeVertexNormals(); mesh.geometry.dispose(); mesh.geometry = g;
 }
 function rebuildRoads() {
-  const base = [], top = [], tc = [];
-  for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (road[b * N + a]) { const m = roadMask(a, b); tileInto(base, a, b, m, CELL / 6 + .07, .05); tileInto(top, a, b, m, CELL / 6, .08, tc); }
+  const base = [], top = [], tc = [], stones = [];
+  for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (road[b * N + a]) {
+    const m = roadMask(a, b);
+    tileInto(base, a, b, m, .47, .12, .05); tileInto(top, a, b, m, .4, .1, .08, tc, stones);
+  }
   setGeo(roadBase, base); setGeo(roadTop, top, tc);
+  // flat set stones, a few per tile, grey-brown and half sunk into the earth
+  const sc = new THREE.Color(); let n = 0;
+  for (const [x, z, k] of stones) {
+    if (n >= MAX_PSTONES) break;
+    const r = .06 + .06 * hash(k, 1.3), h = hash(k, 7.7);
+    dummy.position.set(x, hAt(x, z) + .1, z); dummy.rotation.set((h - .5) * .12, h * 6.3, (hash(k, 4.4) - .5) * .12); dummy.scale.set(r, .06, r * (.75 + .4 * h)); dummy.updateMatrix();
+    pathStones.setMatrixAt(n, dummy.matrix);
+    sc.setRGB(.37 + .1 * h, .34 + .09 * h, .29 + .07 * h); sc.setRGB(sc.r ** 2.2, sc.g ** 2.2, sc.b ** 2.2); pathStones.setColorAt(n, sc); n++;
+  }
+  pathStones.count = n; pathStones.instanceMatrix.needsUpdate = true; if (pathStones.instanceColor) pathStones.instanceColor.needsUpdate = true;
   seatClutter();
 }
 function roadCellOk(a, b) { if (a < 0 || b < 0 || a >= N || b >= N) return false; const o = occB[b * N + a]; if (o && o.type !== 'gate') return false; const s = cellStats(a, b); return s.mn > .4 && s.spread < 1.9; }
@@ -1562,11 +1587,11 @@ function makePerson(opts) {
 // work clothes: each job has its own tunic, hat and (for masons and builders) a leather apron
 const OUTFIT = {
   hoe:    { tunic: mat('#8c7a48'), hat: 'straw' },
-  axe:    { tunic: mat('#6a3527'), hat: 'hood', hatM: (() => { const m = mat('#4a5a32'); m.side = THREE.DoubleSide; return m; })() },
-  pick:   { tunic: mat('#6e6a62'), hat: 'cap', hatM: mat('#d8d0bc'), apron: true },
+  axe:    { tunic: mat('#6a3527'), hat: 'woolcap', hatM: mat('#45602f'), brimM: mat('#2f4321') },
+  pick:   { tunic: mat('#6e6a62'), hat: 'flatcap', hatM: mat('#8c857a'), apron: true },
   hammer: { tunic: mat('#41658a'), hat: 'felt', hatM: mat('#8a3a26'), belt: true },   // builders: blue smock, red felt hat, tool belt
 };
-const strawM = mat('#d2b56a'), leatherM = mat('#5a4630');
+const strawM = mat('#d2b56a'), leatherM = mat('#5a4630'), featherM = mat('#b8452c');
 function dress(v, kind) {
   const O = OUTFIT[kind], tun = O ? O.tunic : v.baseTunic;
   v.torso.material = tun; v.arms.forEach(a => a.userData.sleeve.material = tun);
@@ -1575,14 +1600,14 @@ function dress(v, kind) {
   const h = new THREE.Group();
   if (!O) { if (v.plainHat) h.add(cone(.17, .22, 6, hatM, 0, 1.2, 0)); }
   else if (O.hat === 'straw') { h.add(cyl(.28, .28, .025, 12, strawM, 0, 1.13, 0)); h.add(cyl(.12, .14, .13, 10, strawM, 0, 1.2, 0)); }
-  else if (O.hat === 'hood') {              // wool hood open at the face, with a short cape over the shoulders
-    const hd = new THREE.Mesh(new THREE.SphereGeometry(.158, 12, 8, Math.PI * .75, Math.PI * 1.5, 0, Math.PI * .66), O.hatM); hd.position.set(0, 1.04, -.01); hd.castShadow = true; h.add(hd);
-    h.add(cyl(.17, .26, .15, 10, O.hatM, 0, .9, -.01));
-    const tail = cone(.05, .2, 5, O.hatM, 0, 1.12, -.17); tail.rotation.x = -1.9; h.add(tail);
+  else if (O.hat === 'woolcap') {          // woodsman: round green wool cap, thick rolled brim, a feather tucked in the side
+    const cr = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 6, 0, Math.PI * 2, 0, Math.PI * .5), O.hatM); cr.position.y = 1.07; cr.scale.y = 1.1; cr.castShadow = true; h.add(cr);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(.148, .035, 6, 14), O.brimM); rim.rotation.x = Math.PI / 2; rim.position.y = 1.075; rim.castShadow = true; h.add(rim);
+    const fe = box(.012, .17, .045, featherM, .15, 1.2, -.04); fe.rotation.z = -.45; fe.rotation.x = .25; h.add(fe);
   }
-  else if (O.hat === 'cap') {               // close linen coif tied under the chin
-    const cf = new THREE.Mesh(new THREE.SphereGeometry(.143, 12, 6, 0, Math.PI * 2, 0, Math.PI * .5), O.hatM); cf.position.y = 1.035; cf.castShadow = true; h.add(cf);
-    for (const sx of [-1, 1]) h.add(box(.02, .13, .02, O.hatM, sx * .12, .96, .02));
+  else if (O.hat === 'flatcap') {           // mason: soft cloth bonnet, puffed and slumped to one side over a leather band
+    h.add(cyl(.142, .142, .05, 12, leatherM, 0, 1.115, 0));
+    const top = new THREE.Mesh(new THREE.SphereGeometry(.2, 12, 6), O.hatM); top.scale.set(1, .38, 1); top.position.set(.03, 1.17, -.01); top.rotation.z = -.16; top.castShadow = true; h.add(top);
   }
   else if (O.hat === 'felt') { h.add(cyl(.2, .2, .03, 10, O.hatM, 0, 1.12, 0)); h.add(cyl(.12, .13, .11, 10, O.hatM, 0, 1.19, 0)); }
   v.body.add(h); v.hatG = h;
