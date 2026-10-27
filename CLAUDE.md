@@ -35,9 +35,8 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 
 ## Gameplay summary
 - 28×28 grid of 2 m cells. Start: castle prebuilt in the middle, 3 villagers, gold 40, wood 45, stone 0, food 20.
-- **Day/night**: 3 waves. Day 1 lasts 300 s, days 2–3 last 120 s (`DAYLEN=[300,120,120]`). Night ends when all enemies are dead. Summary screen at the end.
-- **Repairs**: at dawn every damaged building gets a free `repair` site (`startRepairs`, time = build time × damage × `REPAIR_K` 1.2). A building's own workers repair it first (pausing their gathering; a farm whose farmers are all repairing pays no food), then idle villagers; HP climbs with progress.
-- **Waves** (`WAVES`): 1 = 6 swords + 2 archers; 2 = 10 swords + 5 archers, hp ×1.2; 3 = 14 swords + 8 archers + captain, hp ×1.4. Enemy archer range 4.5.
+- **Day/night**: 5 waves (`NIGHTS = WAVES.length`). Day 1 lasts 300 s, days 2–5 last 120 s (`DAYLEN`). Night ends when all enemies are dead. Summary screen at the end.
+- **Waves** (`WAVES`): 1 = 6 swords + 2 archers; 2 = 8 swords + 4 archers + 3 spears (hp ×1.15); 3 = 10/6/5 + captain (hp ×1.3); 4 = 12/8/8 + captain (hp ×1.45); 5 = 16/10/10 + 2 captains (hp ×1.6). Enemy archer range 4.5; spearmen reach 1.1 and thrust; the captain rides a horse (`mountHorse`, normal size, speed 2.0, sword).
 - **Economy**: payouts every `TICK=20` s (ring in top panel). Each villager eats 1 food every `MEAL=20` s of daylight; hungry villagers go home and sleep.
 - **Villagers**: live in houses/castle, take jobs, commute, walk to construction sites and build them before they work (`assignBuilders` every 0.5 s). At night they man the castle (priority) and towers; the rest hide in the castle.
 - **Decor charm** boosts house gold within `CHARM_R=8`. Paths add `PATH_CHARM=.02` each (path bonus capped at +20%). Paths make everyone (including raiders) move ×1.6.

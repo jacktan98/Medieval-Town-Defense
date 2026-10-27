@@ -3,7 +3,7 @@
 Rendered straight from the game's models (`makePerson`, `dress`, `makeTool` in `index.html`), transparent background.
 
 - `_overview.png`: every character, front and three-quarter view, labelled.
-- Every image uses the same frame, so sizes compare directly (units are drawn at 78% since the last update; the captain is 1.35x a raider).
+- Every image uses the same frame, so sizes compare directly (units are drawn at 78%; the mounted captain uses a 1.6x frame to fit the horse).
 - One strip per character, four views left to right: front, three-quarter, side, back (720 x 960 px each).
 
 Colour code: plain villagers brown, workers yellows, soldiers blue, raiders red.
@@ -18,6 +18,7 @@ Colour code: plain villagers brown, workers yellows, soldiers blue, raiders red.
 | `guard_archer.png` | Villager archer on towers and the castle: blue shirt, steel round helmet with a blue band and nose guard, bow |
 | `raider_swordsman.png` | Raider swordsman: red shirt, iron helmet with nose guard, sword, shield |
 | `raider_archer.png` | Raider archer: red shirt, dark hood, bow |
-| `raider_captain.png` | Raider captain (wave 3): like the swordsman with a red crest, 1.35x size |
+| `raider_spearman.png` | Raider spearman (from wave 2): helmet, long spear carried upright, shield |
+| `raider_captain.png` | Raider captain (waves 3–5): red-crested helmet and sword, riding a brown horse (shown in a 1.6x larger frame) |
 
 These are images only; editing them does not change the game. Send an edited PNG and the changes can be built into the models.
