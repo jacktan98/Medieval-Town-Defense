@@ -24,6 +24,8 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Medieval look over clean/modern: crooked timbers, daub, thatch, small shuttered windows.
 
 ## Recent model notes
+- Ground shadows: `syncTerrain` must call `tGeo.computeVertexNormals()`; r128's shadow lookup reads the normal even with no normal bias, and without normals the terrain received no shadows at all.
+- Grit: `addGrit(material, 'wood'|'stone'|'rock')` adds world-space noise (wood grain, stone mottling, rock specks) on top of any existing shader, with its own `customProgramCacheKey` (needed: three keys programs by onBeforeCompile source, identical for every grit kind); `tinted` copies the key.
 - Units are drawn at `UNIT_K` (.78) so they fit doors; enemy HP bar height uses it too. `unstick` kicks in after 2 s stuck.
 - Arrows leave from the bow (`bowPoint`: raises the bow arm, reads the bow's world position) for tower/castle archers and raider archers.
 - Construction: `addScaffold` builds poles every ~1 m, plank decks per lift, braces, a ladder and material stacks; walls/torches/flowers get a light version (`LIGHT_SCAFFOLD`). Builders kick up dust (`dustAt`, shares the smoke `puffs`).

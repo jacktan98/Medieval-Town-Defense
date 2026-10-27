@@ -502,7 +502,7 @@ grid.visible = false; scene.add(grid);
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .9, flatShading: true });
 const M = { plaster: mat('#dccba2'), timber: mat('#6e4c30'), roof: mat('#8d4a2c'), stone: mat('#8a857a'),
   wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#3466b0'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
-  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#c2a04a'), thatchOld: mat('#6e5135'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
+  log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#c2a04a'), thatchOld: mat('#9a8150'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
   iron: mat('#5d6064'), soil: mat('#5e4630'), crop1: mat('#6f8f3a'), crop2: mat('#93a246'), wheat: mat('#d1b45a'), hay: mat('#c9ab55'),
   canvas: mat('#cfc2a0'), daub: mat('#c8b48c'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32'),
   roofBlue: mat('#3f5f96') };   // tier 3 roofs: blue is the town's colour (red is the raiders')
@@ -538,6 +538,37 @@ const roofGrit = sh => {
     diffuseColor.rgb *= var * mix(.7, 1.0, smoothstep(.0, .22, cf));`);
 };
 for (const m of [M.thatchOld, M.thatch, M.roofBlue]) m.onBeforeCompile = roofGrit;
+// grit for wood (grain streaks, knots of darker colour) and rock (mottling and specks); composes with any shader the material already has
+const GRIT_NOISE = `
+  float gh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float gn2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(gh2(i), gh2(i + vec2(1, 0)), f.x), mix(gh2(i + vec2(0, 1)), gh2(i + vec2(1, 1)), f.x), f.y); }
+`;
+const GRIT = {
+  wood: `float gg = gn2(vec2((vGP.x + vGP.z) * 16.0, vGP.y * 1.4)), gk = gn2(vGP.xz * 3.1 + vGP.y * 2.3);
+    diffuseColor.rgb *= .76 + .3 * gg + .1 * gk;`,
+  rock: `float r1 = gn2(vGP.xz * 3.6 + vGP.y * 2.7), r2 = gn2(vec2(vGP.x + vGP.y, vGP.z - vGP.y) * 11.0);
+    diffuseColor.rgb *= (.74 + .3 * r1 + .14 * r2) * (gh2(floor(vGP.xz * 26.0 + vGP.y * 9.0)) > .93 ? .7 : 1.0);`,
+  stone: `float s1 = gn2(vec2(vGP.x + vGP.z, vGP.y) * 9.0);
+    diffuseColor.rgb *= .9 + .18 * s1;`,
+};
+function addGrit(m, kind) {
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.vertexShader = 'varying vec3 vGP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec4 gpos = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        gpos = instanceMatrix * gpos;
+      #endif
+      vGP = (modelMatrix * gpos).xyz;`);
+    sh.fragmentShader = 'varying vec3 vGP;\n' + GRIT_NOISE + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n' + GRIT[kind]);
+  };
+  // three keys compiled shaders by the onBeforeCompile source, which is the same text for every grit kind
+  m.customProgramCacheKey = () => 'grit:' + kind + ':' + prev.toString();
+}
+for (const m of [M.wood, M.rough, M.timber, M.log, M.dark]) addGrit(m, 'wood');
+addGrit(M.stone, 'stone'); addGrit(M.stone2, 'stone');
 M.drape = mat('#2f4f8a');
 M.drape.onBeforeCompile = sh => {
   sh.uniforms.uTime = windU;
@@ -602,6 +633,7 @@ crowns.material.onBeforeCompile = sh => {
   cutaway(sh);
 };
 trunks.material.onBeforeCompile = sh => cutaway(sh);
+addGrit(trunks.material, 'wood');
 let trees = [];
 function genTrees() {
   trees = [];
@@ -631,7 +663,7 @@ const treeFree = (t, now) => !t.dead && !t.cut && t.k >= 1 && !t.claim && !((t.b
 
 // ---------- rocks ----------
 let rocks = [];
-const rockGeo = new THREE.DodecahedronGeometry(.75, 0), rockMat = mat('#958f84');
+const rockGeo = new THREE.DodecahedronGeometry(.75, 0), rockMat = mat('#958f84'); addGrit(rockMat, 'rock');
 function genRocks() {
   rocks.forEach(r => scene.remove(r.mesh)); rocks = [];
   for (let n = 0; n < 6000 && rocks.length < 28; n++) {
@@ -655,7 +687,7 @@ const CL = [
   { geo: new THREE.DodecahedronGeometry(.13, 0), mat: new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), n: 160, kind: 'pebble' },
   { geo: new THREE.IcosahedronGeometry(.42, 0).translate(0, .25, 0), mat: new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), n: 90, kind: 'bush' },
 ];
-CL.forEach(c => { c.mesh = new THREE.InstancedMesh(c.geo, c.mat, c.n); c.mesh.receiveShadow = true; c.mesh.castShadow = true; scene.add(c.mesh); });
+CL.forEach(c => { if (c.kind === 'pebble') addGrit(c.mat, 'rock'); c.mesh = new THREE.InstancedMesh(c.geo, c.mat, c.n); c.mesh.receiveShadow = true; c.mesh.castShadow = true; scene.add(c.mesh); });
 let clutter = [];
 function genClutter() {
   clutter = [];
@@ -700,7 +732,7 @@ const roadBase = new THREE.Mesh(new THREE.BufferGeometry(), roadMatBase), roadTo
 roadBase.receiveShadow = roadTop.receiveShadow = true; scene.add(roadBase, roadTop);
 const MAX_PSTONES = N * N * 10;
 const pathStones = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1.1, 1, 6), mat('#ffffff'), MAX_PSTONES);
-pathStones.receiveShadow = pathStones.castShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
+addGrit(pathStones.material, 'rock'); pathStones.receiveShadow = pathStones.castShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
 // sized up front: r128 sizes instanceColor from .count on the first setColorAt, and count starts at 0 here
 pathStones.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PSTONES * 3), 3); pathStones.count = 0;
 const DIRS = [[0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8]];
@@ -798,6 +830,7 @@ function syncTerrain() {
   for (let k = 0; k < V * V; k++) tPos[k * 3 + 1] = H[k];
   tGeo.attributes.position.needsUpdate = true; cacheCells();
   recolor(); tGeo.attributes.color.needsUpdate = true; tGeo.computeBoundingSphere();
+  tGeo.computeVertexNormals();   // the shadow lookup reads normals even with no normal bias; without them the ground received no shadows
   gIdx.forEach((k, n) => { gPos[n * 3 + 1] = H[k] + .06; }); gGeo.attributes.position.needsUpdate = true;
   seatTrees(); seatRocks(); rebuildRoads();
 }
@@ -1174,6 +1207,7 @@ function tinted(m, tier, n) {
   const key = m.uuid + ':' + tier + ':' + n; let t = tintCache.get(key);
   if (!t) {
     t = m.clone(); if (m.onBeforeCompile && m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile) t.onBeforeCompile = m.onBeforeCompile;
+    if (Object.prototype.hasOwnProperty.call(m, 'customProgramCacheKey')) t.customProgramCacheKey = m.customProgramCacheKey;
     const grime = tier === 1 ? .8 : tier === 2 ? .9 : .97, hsl = {};
     t.color.multiplyScalar(grime * (.88 + .2 * hash(n + 1, tier * 3.3))); t.color.convertLinearToSRGB(); t.color.getHSL(hsl);
     t.color.setHSL(hsl.h + (hash(n, 7) - .5) * .02, hsl.s * (tier === 1 ? .72 : .86), hsl.l);

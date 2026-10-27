@@ -3,6 +3,7 @@
 Rendered straight from the game's models (`makePerson`, `dress`, `makeTool` in `index.html`), transparent background.
 
 - `_overview.png`: every character, front and three-quarter view, labelled.
+- Every image uses the same frame, so sizes compare directly (units are drawn at 78% since the last update; the captain is 1.35x a raider).
 - One strip per character, four views left to right: front, three-quarter, side, back (720 x 960 px each).
 
 Colour code: villagers wear yellows, soldiers blue, raiders red.
