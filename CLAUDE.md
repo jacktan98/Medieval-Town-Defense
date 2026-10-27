@@ -26,7 +26,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 ## Recent model notes
 - Juice: `shake(amp, at)` (building hit .07, destroyed .35; fades with distance from the camera focus, applied around render only), `debrisBurst` + `updateDebris` on raid destruction, raiders flash (`hitFlashM`, `flashT`) when hit, finished/upgraded buildings bounce in x/z (`B.pop`) with a dust ring, `coinFly` sends DOM coins from on-screen gold payouts to `#cGold` (pulse), villagers cheer (hop, arms up) for 2.6 s at dawn (`cheerT`). `Wave_horn.mp3` plays at nightfall (`SND.horn`).
 - Guided first day (`GUIDE`, `guideTick` from the HUD tick, `guideMark` adds `.guidePulse` to the tab/tool to press): house → lumber camp → farm → archer tower → upgrade; steps tick off by game state, Skip button; once done/skipped `localStorage['mtd-guide']='done'`.
-- Walls: `wallMask` sets high bits (bit << 4) for arms that meet a tower or the castle; `makeWall` runs those arms 1.45 m so the palisade/wall touches the structure inside that tile.
+- Walls connect only to walls and gates (`WALLY`), never to towers or the castle.
 - Ground shadows: `syncTerrain` must call `tGeo.computeVertexNormals()`; r128's shadow lookup reads the normal even with no normal bias, and without normals the terrain received no shadows at all.
 - Grit: `addGrit(material, 'wood'|'stone'|'rock')` adds world-space noise (wood grain, stone mottling, rock specks) on top of any existing shader, with its own `customProgramCacheKey` (needed: three keys programs by onBeforeCompile source, identical for every grit kind); `tinted` copies the key.
 - Units are drawn at `UNIT_K` (.78) so they fit doors; enemy HP bar height uses it too. `unstick` kicks in after 2 s stuck.

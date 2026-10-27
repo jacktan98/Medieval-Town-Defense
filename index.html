@@ -369,7 +369,7 @@ for (const t in BUILD_T) DEF[t].build = BUILD_T[t];
 DEF.well.charm = .25; DEF.torch.charm = .1; DEF.flowers.charm = .15; DEF.statue.charm = .35;
 const PATH_COST = { gold: 1 }, PATH_CHARM = .02, CHARM_R = 8, WALK = { farm: 1, torch: 1, flowers: 1 };
 const CATS = { eco: ['house', 'farm', 'lodge', 'quarry'], def: ['tower', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
-const WALLY = { wall: 1, gate: 1, tower: 1, castle: 1 };
+const WALLY = { wall: 1, gate: 1 };   // walls join only walls and gates
 // spearmen are the basic raider and come first; swordsmen join from wave 2, captains from wave 3
 const WAVES = [
   { spear: 7, sword: 0, archer: 2, hp: 1, dmg: 1 },
@@ -1167,9 +1167,8 @@ function makeFarm(tier) {
 // walls pick their arms from the neighbour bitmask, like roads
 function makeWall(tier, plinth, mask = 0, rot = 0) {
   const g = new THREE.Group();
-  if (!(mask & 15)) mask = rot ? 5 : 10;      // a lone piece is a straight run along its rotation (E–W or N–S)
-  // an arm that meets a tower or the castle runs on into that tile until it touches the structure inside it
-  const arms = DIRS.filter(d => mask & d[2]).map(d => [d[0], d[1], mask & (d[2] << 4) ? 1.45 : 1]);
+  if (!mask) mask = rot ? 5 : 10;      // a lone piece is a straight run along its rotation (E–W or N–S)
+  const arms = DIRS.filter(d => mask & d[2]).map(d => [d[0], d[1], 1]);
   if (tier === 1) {
     g.add(cyl(.17, .19, 2.6, 6, M.rough, 0, .7, 0));
     for (const [dx, dz, L] of arms) {
@@ -1538,7 +1537,7 @@ function center(B) { return { x: (B.ev.x0 + B.ev.x1) / 2, z: (B.ev.z0 + B.ev.z1)
 function doorPoint(B) { const d = B.door; return d ? { x: (d.a + .5) * CELL, z: (d.b + .5) * CELL } : { x: center(B).x, z: B.ev.z1 + .6 }; }
 function wallMask(B) {
   let m = 0;
-  for (const [da, db, bit] of DIRS) { const a = B.ev.ci + da, b = B.ev.cj + db; if (a < 0 || b < 0 || a >= N || b >= N) continue; const o = occB[b * N + a]; if (o && o !== B && WALLY[o.type]) { m |= bit; if (o.type === 'tower' || o.type === 'castle') m |= bit << 4; } }   // high bits: that arm meets a tower or the castle
+  for (const [da, db, bit] of DIRS) { const a = B.ev.ci + da, b = B.ev.cj + db; if (a < 0 || b < 0 || a >= N || b >= N) continue; const o = occB[b * N + a]; if (o && o !== B && WALLY[o.type]) m |= bit; }
   return m;
 }
 function swapModel(B) {
