@@ -54,11 +54,13 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - **Pathfinding**: A* on cells (`findPath`, `cellPass`, `walkTo`), `clearLine` line-of-sight shortcuts, `unstick` after 3.5 s without progress, cache invalidated on any build/path change. `steer`/`turnTo` commit to one side round obstacles. Villagers enter/exit buildings via their door.
 - **Villager states**: wander, visit, commute, find, go, work, home, drop, building, hungry/sleeping, night posts.
 - **Shaders (`onBeforeCompile`)**: tree wind sway, procedural ground detail, masonry (running-bond + mortar) on `M.stone`/`M.stone2`, flag wave anchored on position x, hanging banners (`M.drape`) anchored at the top. `tinted()` copies `onBeforeCompile` onto clones.
+- **Connected plinths**: `refreshPavers()` (on `paversDirty`) adds stone slabs between the plinths of built neighbours that share an edge or corner; sizes in `PLINTH`.
+- **Farm obstacles**: `FARM_OBST` per tier (hut, hay, scarecrow, barn, stooks); `canStand` rejects them although farms are walkable.
 - **Tree cutaway**: `cutaway(sh)` on trunk/crown materials dither-discards trees near the camera→`target` sightline (shadows unaffected).
 - **Instancing**: trees (instanceColor), clutter (320 tufts, pebbles, bushes) hidden on occupied/path cells. Lone trees within 12 m of the castle, forest 12–18 m.
 - **Lights**: pool of 4 PointLights shared by night lamps; gradient sky dome.
 - **Sprites**: HP/progress bars (`fg.center.x=.5/f` trick); floating SVG icon pop-ups for income (`floatRes`).
-- **People**: `makePerson` → arms on pivots (angle 0 = hanging, −1.57 = forward, −3 = overhead). Tools come from `makeTool(kind)` and are parented to the hand (`arms[1]`; bow on `arms[0]`); `giveTool(v,kind)`. Task poses: axe two-handed overhead chop, pick overhead strike, hoe bent low two-handed, hammer one-handed, log on right shoulder, stone held at chest. Outfits via `OUTFIT`/`dress()`: lumberjack green wool hood + shoulder cape, mason linen coif + leather apron, farmer straw hat, builder felt hat + apron.
+- **People**: `makePerson` → arms on pivots (angle 0 = hanging, −1.57 = forward, −3 = overhead). Tools come from `makeTool(kind)` and are parented to the hand (`arms[1]`; bow on `arms[0]`); `giveTool(v,kind)`. Task poses are all one-handed (the single-segment arms can't both reach one handle; the free arm steadies): axe overhead chop, pick overhead strike, hoe bent low, hammer; log on right shoulder with the hand resting on it, stone held at chest in both hands. Axe and hoe heads sit on the local −z side so they lead the swing / face the soil. Bow is a gentle C (arc segments). Outfits via `OUTFIT`/`dress()`: lumberjack green wool hood + shoulder cape, mason linen coif + leather apron, farmer straw hat, builder blue smock + red felt hat + tool belt.
 - **Ambient**: bird flocks every 45–95 s (scale 0.55, half circle), waving flags.
 
 ## UI

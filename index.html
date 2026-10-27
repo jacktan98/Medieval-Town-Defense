@@ -824,6 +824,11 @@ function makeCastle(tier, plinth) {
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(1.78, 1.4, .82, M.thatchOld, 3.4, 0, -.6));
     g.add(box(.5, .8, .06, M.timber, 0, .7, .42));
+    for (const sx of [-1, 1]) {      // two shuttered windows high on the hall front, above the stockade
+      g.add(box(.3, .3, .05, M.glow, sx * .7, 2.25, .42));
+      g.add(box(.42, .05, .1, M.timber, sx * .7, 2.07, .44));
+      g.add(box(.05, .36, .06, M.timber, sx * .7, 2.25, .44));
+    }
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.09, 2.5, .09, M.rough, px + sx * .33, 1.25, pz + sz * .33));
@@ -1093,6 +1098,32 @@ const makeModel = (type, tier, plinth, mask) => {
   g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = true; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
   return g;
 };
+
+// stone plinths of neighbouring buildings are joined by paving, so a row of buildings stands on one continuous base
+const PLINTH = { house: [.9, .8, .1], tower: [1, 1, .2], castle: [3.3, 3.3, .2], lodge: [1.85, 1.5, .2], quarry: [1.85, 1.7, .2], gate: [.8, .8, .1] };
+const pavers = new THREE.Group(); scene.add(pavers);
+let paversDirty = false;
+function plinthRect(B) { const c = center(B), p = PLINTH[B.type]; return { x0: c.x - p[0], x1: c.x + p[0], z0: c.z - p[1], z1: c.z + p[1], top: B.group.position.y + p[2] }; }
+function refreshPavers() {
+  paversDirty = false;
+  for (const o of pavers.children.slice()) { pavers.remove(o); o.geometry.dispose(); }
+  const list = buildings.filter(B => B.built && B.plinth && PLINTH[B.type] && !B.dead);
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i].ev, b = list[j].ev;
+    const tx = a.x1 === b.x0 || b.x1 === a.x0, tz = a.z1 === b.z0 || b.z1 === a.z0;
+    const ox = Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0), oz = Math.min(a.z1, b.z1) > Math.max(a.z0, b.z0);
+    if (!(tx && (oz || tz)) && !(tz && ox)) continue;            // footprints must share an edge or a corner
+    const ra = plinthRect(list[i]), rb = plinthRect(list[j]);
+    // across the touching edge: span the gap between the two plinth faces; along it: where both plinths run
+    let [x0, x1] = tx ? (a.x1 === b.x0 ? [ra.x1, rb.x0] : [rb.x1, ra.x0]) : [Math.max(ra.x0, rb.x0), Math.min(ra.x1, rb.x1)];
+    let [z0, z1] = tz && !oz ? (a.z1 === b.z0 ? [ra.z1, rb.z0] : [rb.z1, ra.z0]) : [Math.max(ra.z0, rb.z0), Math.min(ra.z1, rb.z1)];
+    if (x1 - x0 < .01 || z1 - z0 < .01) continue;               // plinths already meet or overlap
+    if (tx) { x0 -= .03; x1 += .03; } if (tz && !oz) { z0 -= .03; z1 += .03; }
+    const top = Math.min(ra.top, rb.top) - .004;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 1.6, z1 - z0), M.stone);
+    m.position.set((x0 + x1) / 2, top - .8, (z0 + z1) / 2); m.receiveShadow = true; pavers.add(m);
+  }
+}
 
 // ---------- ghosts + outlines ----------
 const ghostMat = new THREE.MeshBasicMaterial({ color: '#8cc46e', transparent: true, opacity: .45, depthWrite: false, toneMapped: false });
@@ -1398,7 +1429,7 @@ function completeSite(B) {
   const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false;
   const c = center(B);
   if (S.kind === 'new') {
-    B.built = true; B.group.scale.y = 1; stats.built++;
+    B.built = true; B.group.scale.y = 1; stats.built++; paversDirty = true;
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]} villagers` : ''}${T.charm ? ` · +${Math.round(T.charm * 100)}% gold nearby` : ''}.`, 'good');
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
@@ -1419,7 +1450,7 @@ function upgrade(B) {
   refreshCard();
 }
 function removeBuilding(B, raid) {
-  if (B.dead) return; B.dead = true;
+  if (B.dead) return; B.dead = true; paversDirty = true;
   scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B);
   for (let n = 0; n < N * N; n++) if (occB[n] === B) occB[n] = null;
   buildings.splice(buildings.indexOf(B), 1);
@@ -1460,28 +1491,37 @@ function paintWall(a, b) {
 // ---------- villagers ----------
 const tunics = ['#7a3b2e', '#3f5a7a', '#6b6a3a', '#8a6a3a', '#5a3d5e', '#3d6b55'].map(mat);
 const skin = mat('#d6a982'), hatM = mat('#4a3a26'), legM = mat('#3a2e22');
+// solid things inside a farm plot (hut, hay, scarecrow, barn, stooks): [x, z, half-width, half-depth] from the plot centre
+const FARM_OBST = { 1: [[-1.0, -1.2, .55, .4], [.9, -1.2, .3, .3]], 2: [[1.1, -.9, .2, .2]], 3: [[-1.15, -1.15, .55, .45], [1.35, 1.35, .2, .2], [.75, 1.42, .2, .2]] };
+function farmBlocked(B, x, z) { const c = center(B); return FARM_OBST[B.tier].some(([ox, oz, hx, hz]) => Math.abs(x - c.x - ox) < hx + .18 && Math.abs(z - c.z - oz) < hz + .18); }
 function canStand(x, z, mode) {   // mode 0 villager, 1 worker, 2 enemy
   if (x < .5 || z < .5 || x > SIZE - .5 || z > SIZE - .5) return false;
   const h = hAt(x, z);
   if (h < (mode === 2 ? -1.6 : mode === 1 ? .3 : .5)) return false;
   const b = occB[cellAt(x, z)];
   if (b && !WALK[b.type] && !(b.type === 'gate' && mode !== 2)) return false;
+  if (b && b.type === 'farm' && farmBlocked(b, x, z)) return false;
   return slopeAt(x, z) < (mode ? 3.4 : 1.6);
 }
 // a tool held in the hand; its handle runs along the arm's line, so turning the arm swings the tool
 function makeTool(kind) {
   const p = new THREE.Group(); p.position.set(0, -.33, 0);
   if (kind === 'bow') {                 // long axis along the hand's z, which points up when the arm is raised forward
-    p.add(box(.035, .035, .7, M.timber, 0, 0, 0));
-    for (const s of [-1, 1]) { const tip = box(.03, .03, .16, M.timber, 0, .04, s * .38); tip.rotation.x = s * .5; p.add(tip); }
-    p.add(box(.01, .01, .74, M.canvas, 0, .1, 0));
+    // a gentle C: six tapered segments on an arc whose tips bend towards the string
+    const R = .7, TH = .54, SEG = 6;
+    for (let n = 0; n < SEG; n++) {
+      const f = -TH + (n + .5) * (2 * TH / SEG), w = .042 - Math.abs(f) / TH * .014;
+      const sg = box(w, w, R * 2 * TH / SEG + .012, M.timber, 0, R - R * Math.cos(f), R * Math.sin(f)); sg.rotation.x = -f; p.add(sg);
+    }
+    const tipY = R - R * Math.cos(TH), tipZ = R * Math.sin(TH);
+    p.add(box(.008, .008, tipZ * 2, M.canvas, 0, tipY, 0));
     return p;
   }
   if (kind === 'sword') { p.add(box(.035, .12, .035, M.timber, 0, .03, 0)); p.add(box(.05, .035, .16, M.iron, 0, -.04, 0)); p.add(box(.025, .56, .05, M.iron, 0, -.34, 0)); p.rotation.x = -.4; return p; }
   p.add(box(.035, .64, .035, M.timber, 0, -.22, 0));
-  if (kind === 'axe') p.add(box(.03, .16, .2, M.iron, 0, -.48, .1));
+  if (kind === 'axe') p.add(box(.03, .16, .2, M.iron, 0, -.48, -.1));     // blade on the side that leads the swing
   if (kind === 'pick') { p.add(box(.035, .05, .46, M.iron, 0, -.52, 0)); }
-  if (kind === 'hoe') p.add(box(.15, .02, .13, M.iron, 0, -.53, .07));
+  if (kind === 'hoe') p.add(box(.15, .02, .13, M.iron, 0, -.53, -.07));   // blade turned down towards the soil
   if (kind === 'hammer') p.add(box(.07, .09, .18, M.iron, 0, -.5, 0));
   return p;
 }
@@ -1509,7 +1549,7 @@ const OUTFIT = {
   hoe:    { tunic: mat('#8c7a48'), hat: 'straw' },
   axe:    { tunic: mat('#6a3527'), hat: 'hood', hatM: (() => { const m = mat('#4a5a32'); m.side = THREE.DoubleSide; return m; })() },
   pick:   { tunic: mat('#6e6a62'), hat: 'cap', hatM: mat('#d8d0bc'), apron: true },
-  hammer: { tunic: mat('#7d6a4c'), hat: 'felt', hatM: mat('#5a3d27'), apron: true },
+  hammer: { tunic: mat('#41658a'), hat: 'felt', hatM: mat('#8a3a26'), belt: true },   // builders: blue smock, red felt hat, tool belt
 };
 const strawM = mat('#d2b56a'), leatherM = mat('#5a4630');
 function dress(v, kind) {
@@ -1532,6 +1572,13 @@ function dress(v, kind) {
   else if (O.hat === 'felt') { h.add(cyl(.2, .2, .03, 10, O.hatM, 0, 1.12, 0)); h.add(cyl(.12, .13, .11, 10, O.hatM, 0, 1.19, 0)); }
   v.body.add(h); v.hatG = h;
   if (O && O.apron) { v.apron = box(.27, .36, .03, leatherM, 0, .6, .19); v.body.add(v.apron); }
+  else if (O && O.belt) {                    // leather tool belt with a pouch and a spare chisel
+    v.apron = new THREE.Group();
+    v.apron.add(cyl(.192, .196, .06, 10, leatherM, 0, .47, 0));
+    v.apron.add(box(.09, .11, .05, leatherM, .12, .42, .16));
+    v.apron.add(box(.02, .14, .02, M.iron, -.13, .42, .16));
+    v.body.add(v.apron);
+  }
 }
 function giveTool(v, kind) {
   if (v.torso) dress(v, kind);
@@ -1709,7 +1756,7 @@ function updateWorker(v, dt, now) {
   if (W.type === 'farm') {
     const e = W.ev;
     if (v.state === 'work') { v.working = true; if ((v.wait -= dt) <= 0) v.state = 'find'; return; }
-    if (v.state !== 'go') { v.tx = lerp(e.x0 + .4, e.x1 - .4, Math.random()); v.tz = lerp(e.z0 + .4, e.z1 - .4, Math.random()); v.state = 'go'; v.stuck = 0; }
+    if (v.state !== 'go') { for (let n = 0; n < 12; n++) { v.tx = lerp(e.x0 + .4, e.x1 - .4, Math.random()); v.tz = lerp(e.z0 + .4, e.z1 - .4, Math.random()); if (canStand(v.tx, v.tz, 1)) break; } v.state = 'go'; v.stuck = 0; }
     if (walkTo(v, v.tx, v.tz, dt, 1, .2, .7) || v.stuck > 3) { v.state = 'work'; v.wait = 2 + Math.random() * 2; }
     return;
   }
@@ -1809,13 +1856,13 @@ function updateVillagers(dt, now) {
     // arm angle: 0 hangs down, -1.57 points straight ahead, -3 is overhead; tools follow the right hand
     const kind = v.pivot ? v.toolKind : null, logC = v.carryLog.visible, stoneC = v.carryStone.visible;
     let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0;
-    if (logC) { Rt = -2.95; L = -swing * .6; }                       // hand on the log over the right shoulder
+    if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
     else if (v.working && kind) {
       const t = now / 1000 + v.phase;
-      if (kind === 'axe') { const w = Math.sin(t * 5.8); Rt = L = -1.75 + w * .95; tilt = -.6; lean = .08 + w * -.06; }
-      else if (kind === 'pick') { const w = Math.sin(t * 5.2); Rt = L = -1.5 + w * 1.0; tilt = -.75; lean = .14 - w * .08; }
-      else if (kind === 'hoe') { const w = Math.sin(t * 4.8); Rt = L = -.85 + w * .35; tilt = -1.05; lean = .32 + w * .05; }
+      if (kind === 'axe') { const w = Math.sin(t * 5.8); Rt = -1.75 + w * .95; L = -.35 - w * .15; tilt = -.6; lean = .08 + w * -.06; }   // one-handed chop, free arm steadies
+      else if (kind === 'pick') { const w = Math.sin(t * 5.2); Rt = -1.5 + w * 1.0; L = -.35 - w * .15; tilt = -.75; lean = .14 - w * .08; }   // one-handed: the rig's hands can't meet on one handle
+      else if (kind === 'hoe') { const w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
       else if (kind === 'hammer') { const w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
     } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = tilt; }
@@ -2365,7 +2412,7 @@ function startGame() {
   anims.length = 0; spawnQueue = [];
   for (const B of buildings) { scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B); hideDefenders(B); } buildings.length = 0;
   for (const v of villagers) scene.remove(v.g); villagers.length = 0;
-  for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0;
+  for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0; paversDirty = true;
   for (const a of arrows) scene.remove(a.m); arrows.length = 0;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
@@ -2443,6 +2490,7 @@ function frame(now) {
   }
   for (let n = floats.length - 1; n >= 0; n--) { const f = floats[n]; f.t += dt; f.sp.position.y += dt * .9; f.sp.material.opacity = 1 - f.t / 1.8; if (f.t > 1.8) { scene.remove(f.sp); f.sp.material.dispose(); floats.splice(n, 1); } }
   if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); }
+  if (paversDirty) refreshPavers();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
