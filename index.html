@@ -748,7 +748,7 @@ function syncTerrain() {
 // ---------- building models (3 tiers each) ----------
 function makeHouse(tier, plinth) {
   const g = new THREE.Group();
-  if (plinth) g.add(box(1.8, 1.6, 1.6, M.stone, 0, -.7, 0));
+  if (plinth) g.add(box(2.0, 1.6, 2.0, M.stone, 0, -.7, 0));
   if (tier === 1) {            // hovel: crooked wattle-and-daub, sagging thatch
     const w = box(1.25, .85, 1.05, M.mud, 0, .5, 0); w.rotation.z = .035; g.add(w);
     for (const sx of [-1, 1]) g.add(box(.09, .9, .09, M.rough, sx * .62, .5, .52));
@@ -816,7 +816,7 @@ function makeTower(tier, plinth) {
 }
 function makeCastle(tier, plinth) {
   const g = new THREE.Group(), W = 2.6;
-  if (plinth) g.add(box(6.6, 2.0, 6.6, M.stone, 0, -.8, 0));
+  if (plinth) g.add(box(6.0, 2.0, 6.0, M.stone, 0, -.8, 0));
   g.add(box(4.8, .12, 4.8, M.court, 0, .26, 0));
   if (tier === 1) {            // palisade fort: sharpened logs and a timber hall
     for (let s = -W; s <= W + .01; s += .45) {
@@ -886,7 +886,7 @@ function makeCastle(tier, plinth) {
 }
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
-  if (plinth) g.add(box(3.7, 1.8, 3.0, M.stone, 0, -.7, 0));
+  if (plinth) g.add(box(4.0, 1.8, 4.0, M.stone, 0, -.7, 0));
   const pile = (x, z, n) => { for (let r = 0; r < n; r++) for (let c = 0; c < n - r; c++) { const l = cyl(.17, .17, 1.1, 7, M.log, x + (c - (n - r - 1) / 2) * .36, .3 + r * .3, z); l.rotation.x = Math.PI / 2; g.add(l); } };
   const axeStump = (x, z) => { g.add(cyl(.28, .3, .45, 8, M.logEnd, x, .25, z)); const h = box(.05, .6, .05, M.timber, x + .08, .7, z); h.rotation.z = -.4; g.add(h); g.add(box(.05, .16, .22, M.iron, x - .02, .5, z)); };
   if (tier === 1) {            // woodcutter's hut: short log walls, thatched roof, chopping stump
@@ -926,7 +926,7 @@ function makeLodge(tier, plinth) {
 }
 function makeQuarry(tier, plinth) {
   const g = new THREE.Group();
-  if (plinth) g.add(box(3.7, 1.8, 3.4, M.stone, 0, -.7, 0));
+  if (plinth) g.add(box(4.0, 1.8, 4.0, M.stone, 0, -.7, 0));
   const blocks = list => list.forEach(([x, y, z]) => g.add(box(.5, .45, .5, M.stone2, x, y, z)));
   if (tier === 1) {            // stone pit: masons' shed, cut blocks, timber hoist
     g.add(box(1.3, .9, 1.1, M.rough, -.85, .55, -.85));
@@ -1022,7 +1022,7 @@ function makeWall(tier, plinth, mask = 0) {
 }
 function makeGate(tier, plinth, mask = 0) {
   const outer = new THREE.Group(), g = new THREE.Group(); outer.add(g);
-  if (plinth) outer.add(box(1.6, 1.4, 1.6, M.stone, 0, -.6, 0));
+  if (plinth) outer.add(box(2.0, 1.4, 2.0, M.stone, 0, -.6, 0));
   if ((mask & 5) && !(mask & 10)) g.rotation.y = Math.PI / 2;   // walls run N–S, so turn the opening
   if (tier === 1) {
     for (const sx of [-1, 1]) { g.add(cyl(.2, .22, 2.5, 6, M.rough, sx * .8, 1.25, 0)); const leaf = box(.07, 1.6, .62, M.wood, sx * .66, .85, .36); g.add(leaf); }
@@ -1102,30 +1102,23 @@ const makeModel = (type, tier, plinth, mask) => {
   return g;
 };
 
-// stone plinths of neighbouring buildings are joined by paving, so a row of buildings stands on one continuous base
-const PLINTH = { house: [.9, .8, .1], tower: [1, 1, .2], castle: [3.3, 3.3, .2], lodge: [1.85, 1.5, .2], quarry: [1.85, 1.7, .2], gate: [.8, .8, .1] };
-const pavers = new THREE.Group(); scene.add(pavers);
-let paversDirty = false;
-function plinthRect(B) { const c = center(B), p = PLINTH[B.type]; return { x0: c.x - p[0], x1: c.x + p[0], z0: c.z - p[1], z1: c.z + p[1], top: B.group.position.y + p[2] }; }
-function refreshPavers() {
-  paversDirty = false;
-  for (const o of pavers.children.slice()) { pavers.remove(o); o.geometry.dispose(); }
-  const list = buildings.filter(B => B.built && B.plinth && PLINTH[B.type] && !B.dead);
-  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
-    const a = list[i].ev, b = list[j].ev;
-    const tx = a.x1 === b.x0 || b.x1 === a.x0, tz = a.z1 === b.z0 || b.z1 === a.z0;
-    const ox = Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0), oz = Math.min(a.z1, b.z1) > Math.max(a.z0, b.z0);
-    if (!(tx && (oz || tz)) && !(tz && ox)) continue;            // footprints must share an edge or a corner
-    const ra = plinthRect(list[i]), rb = plinthRect(list[j]);
-    // across the touching edge: span the gap between the two plinth faces; along it: where both plinths run
-    let [x0, x1] = tx ? (a.x1 === b.x0 ? [ra.x1, rb.x0] : [rb.x1, ra.x0]) : [Math.max(ra.x0, rb.x0), Math.min(ra.x1, rb.x1)];
-    let [z0, z1] = tz && !oz ? (a.z1 === b.z0 ? [ra.z1, rb.z0] : [rb.z1, ra.z0]) : [Math.max(ra.z0, rb.z0), Math.min(ra.z1, rb.z1)];
-    if (x1 - x0 < .01 || z1 - z0 < .01) continue;               // plinths already meet or overlap
-    if (tx) { x0 -= .03; x1 += .03; } if (tz && !oz) { z0 -= .03; z1 += .03; }
-    const top = Math.min(ra.top, rb.top) - .004;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 1.6, z1 - z0), M.stone);
-    m.position.set((x0 + x1) / 2, top - .8, (z0 + z1) / 2); m.receiveShadow = true; pavers.add(m);
+// stone bases fill their tiles exactly; this is how far each one's top sits above the building's ground level
+const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, gate: .1 };
+// a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
+// so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
+function snapToNeighbours(type, ev) {
+  if (PLINTH_TOP[type] == null) return;
+  let best = null;
+  for (const B of buildings) {
+    if (B.dead || !B.plinth || PLINTH_TOP[B.type] == null) continue;
+    const e = B.ev;
+    const touch = ((e.x1 === ev.x0 || ev.x1 === e.x0) && Math.min(e.z1, ev.z1) > Math.max(e.z0, ev.z0)) ||
+                  ((e.z1 === ev.z0 || ev.z1 === e.z0) && Math.min(e.x1, ev.x1) > Math.max(e.x0, ev.x0));
+    if (!touch) continue;
+    const t = B.group.position.y + PLINTH_TOP[B.type] - PLINTH_TOP[type];
+    if (Math.abs(t - ev.target) < .8 && (best === null || Math.abs(t - ev.target) < Math.abs(best - ev.target))) best = t;
   }
+  if (best !== null) ev.target = best;
 }
 
 // ---------- ghosts + outlines ----------
@@ -1327,6 +1320,7 @@ function evaluate(type, ci, cj, free) {
     if (type === 'quarry' && r.resCount < 1) return { ...r, ok: false, reason: `No rock within ${T.reach} m` };
   }
   if (!free && !canAfford(T.cost)) return { ...r, ok: false, reason: `Need ${shortfall(T.cost)}` };
+  if (adapt) snapToNeighbours(type, r);
   return r;
 }
 function evaluateRoad(a, b) {
@@ -1449,7 +1443,7 @@ function completeSite(B) {
     refreshCard(); return;
   }
   if (S.kind === 'new') {
-    B.built = true; B.group.scale.y = 1; stats.built++; paversDirty = true; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
+    B.built = true; B.group.scale.y = 1; stats.built++; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]} villagers` : ''}${T.charm ? ` · +${Math.round(T.charm * 100)}% gold nearby` : ''}.`, 'good');
   } else {
     B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
@@ -1470,7 +1464,7 @@ function upgrade(B) {
   refreshCard();
 }
 function removeBuilding(B, raid) {
-  if (B.dead) return; B.dead = true; paversDirty = true;
+  if (B.dead) return; B.dead = true;
   scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B);
   for (let n = 0; n < N * N; n++) if (occB[n] === B) occB[n] = null;
   buildings.splice(buildings.indexOf(B), 1);
@@ -2443,7 +2437,7 @@ function startGame() {
   anims.length = 0; spawnQueue = [];
   for (const B of buildings) { scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B); hideDefenders(B); } buildings.length = 0;
   for (const v of villagers) scene.remove(v.g); villagers.length = 0;
-  for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0; paversDirty = true;
+  for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0;
   for (const a of arrows) scene.remove(a.m); arrows.length = 0;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
@@ -2638,7 +2632,6 @@ function frame(now) {
   }
   for (let n = floats.length - 1; n >= 0; n--) { const f = floats[n]; f.t += dt; f.sp.position.y += dt * .9; f.sp.material.opacity = 1 - f.t / 1.8; if (f.t > 1.8) { scene.remove(f.sp); f.sp.material.dispose(); floats.splice(n, 1); } }
   if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); }
-  if (paversDirty) refreshPavers();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

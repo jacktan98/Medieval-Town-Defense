@@ -55,7 +55,7 @@ Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden 
 - **Pathfinding**: A* on cells (`findPath`, `cellPass`, `walkTo`), `clearLine` line-of-sight shortcuts, `unstick` after 3.5 s without progress, cache invalidated on any build/path change. `steer`/`turnTo` commit to one side round obstacles. Villagers enter/exit buildings via their door.
 - **Villager states**: wander, visit, commute, find, go, work, home, drop, building, hungry/sleeping, night posts.
 - **Shaders (`onBeforeCompile`)**: tree wind sway, procedural ground detail, masonry (running-bond + mortar) on `M.stone`/`M.stone2`, flag wave anchored on position x, hanging banners (`M.drape`) anchored at the top. `tinted()` copies `onBeforeCompile` onto clones.
-- **Connected plinths**: `refreshPavers()` (on `paversDirty`) adds stone slabs between the plinths of built neighbours that share an edge or corner; sizes in `PLINTH`.
+- **Stone bases**: every plinth fills its footprint exactly (2 m per tile), so neighbours meet edge to edge. `snapToNeighbours` (called from `evaluate`) sets a new stone-based building's target height so its plinth top (`PLINTH_TOP`) is flush with an edge-sharing neighbour's, if within 0.8 m; the masonry shader is world-space, so joints run straight across.
 - **Farm obstacles**: `FARM_OBST` per tier (hut, hay, scarecrow, barn, stooks); `canStand` rejects them although farms are walkable.
 - **Tree cutaway**: `cutaway(sh)` on trunk/crown materials dither-discards trees near the camera→`target` sightline (shadows unaffected).
 - **Instancing**: trees (instanceColor), clutter (320 tufts, pebbles, bushes) hidden on occupied/path cells. Lone trees within 12 m of the castle, forest 12–18 m.
