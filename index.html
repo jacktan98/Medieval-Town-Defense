@@ -498,7 +498,7 @@ grid.visible = false; scene.add(grid);
 // ---------- materials + primitives ----------
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .9, flatShading: true });
 const M = { plaster: mat('#dccba2'), timber: mat('#6e4c30'), roof: mat('#8d4a2c'), stone: mat('#8a857a'),
-  wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#b8392a'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
+  wood: mat('#957049'), rough: mat('#8a6a48'), dark: mat('#2a2018'), flag: mat('#3466b0'), stone2: mat('#a39d8f'), court: mat('#7d6a4f'),
   log: mat('#6e4b2c'), logEnd: mat('#c9a271'), thatch: mat('#b39446'), thatchOld: mat('#9e8650'), tile: mat('#9b4a2e'), mud: mat('#8a7350'),
   iron: mat('#5d6064'), soil: mat('#5e4630'), crop1: mat('#6f8f3a'), crop2: mat('#93a246'), wheat: mat('#d1b45a'), hay: mat('#c9ab55'),
   canvas: mat('#cfc2a0'), banner: mat('#2f4f8a'), leaf: mat('#4f7a32') };
@@ -1590,7 +1590,7 @@ function makeHair(m) {
   return h;
 }
 // headgear for soldiers and raiders, rounded rather than pointed
-const steelM = mat('#a3aab2'), ironM = mat('#5b6067'), bandM = mat('#3b3129'), plumeM = mat('#b3261e'),
+const steelM = mat('#a3aab2'), soldierBandM = mat('#2d4f86'), ironM = mat('#5b6067'), bandM = mat('#3b3129'), plumeM = mat('#b3261e'),
   raiderHoodM = (() => { const m = mat('#3a2a26'); m.side = THREE.DoubleSide; return m; })();
 function makeHelm(kind) {
   const h = new THREE.Group(), add = o => { o.castShadow = true; h.add(o); return o; };
@@ -1598,6 +1598,10 @@ function makeHelm(kind) {
     const d = add(new THREE.Mesh(new THREE.SphereGeometry(.152, 14, 7, 0, Math.PI * 2, 0, Math.PI * .5), steelM)); d.position.y = 1.07; d.scale.y = 1.05;
     add(cyl(.25, .25, .022, 16, steelM, 0, 1.075, 0));
     add(cyl(.155, .155, .03, 14, bandM, 0, 1.095, 0));
+  } else if (kind === 'soldier') {          // town archer: bright steel round helm, blue band, nose guard
+    const d = add(new THREE.Mesh(new THREE.SphereGeometry(.153, 14, 7, 0, Math.PI * 2, 0, Math.PI * .55), steelM)); d.position.y = 1.045; d.scale.y = 1.12;
+    add(cyl(.156, .156, .032, 14, soldierBandM, 0, 1.06, 0));
+    add(box(.028, .12, .022, steelM, 0, 1.0, .148));
   } else if (kind === 'hood') {              // raider archer: dark rounded hood open at the face, short collar
     const d = add(new THREE.Mesh(new THREE.SphereGeometry(.158, 12, 8, Math.PI * .75, Math.PI * 1.5, 0, Math.PI * .66), raiderHoodM)); d.position.set(0, 1.04, -.01);
     add(cyl(.16, .23, .1, 10, raiderHoodM, 0, .9, -.01));
@@ -1647,6 +1651,7 @@ const OUTFIT = {
   hammer: { tunic: mat('#c98f2e'), hat: 'felt', hatM: mat('#6b4a2b'), belt: true },   // builders: amber smock, brown felt hat, tool belt
 };
 const strawM = mat('#d2b56a'), leatherM = mat('#5a4630'), featherM = mat('#b8452c');
+const apronM = (() => { const m = mat('#b9ae96'); m.side = THREE.DoubleSide; return m; })(), apronHemM = (() => { const m = mat('#ddd5c2'); m.side = THREE.DoubleSide; return m; })();
 function dress(v, kind) {
   const O = OUTFIT[kind], tun = O ? O.tunic : v.baseTunic;
   v.torso.material = tun; v.arms.forEach(a => a.userData.sleeve.material = tun);
@@ -1666,7 +1671,13 @@ function dress(v, kind) {
   }
   else if (O.hat === 'felt') { h.add(cyl(.2, .2, .03, 10, O.hatM, 0, 1.12, 0)); h.add(cyl(.12, .13, .11, 10, O.hatM, 0, 1.19, 0)); }
   v.body.add(h); v.hatG = h;
-  if (O && O.apron) { v.apron = box(.27, .36, .03, leatherM, 0, .6, .19); v.body.add(v.apron); }
+  if (O && O.apron) {                       // mason's canvas apron: curved round the front of the body, waist tie and a chalk-pale hem
+    v.apron = new THREE.Group();
+    const cloth = new THREE.Mesh(new THREE.CylinderGeometry(.17, .216, .4, 12, 1, true, -Math.PI / 3, Math.PI * 2 / 3), apronM); cloth.position.y = .56; cloth.castShadow = true; v.apron.add(cloth);
+    const hem = new THREE.Mesh(new THREE.CylinderGeometry(.216, .218, .04, 12, 1, true, -Math.PI / 3, Math.PI * 2 / 3), apronHemM); hem.position.y = .37; v.apron.add(hem);
+    v.apron.add(cyl(.176, .176, .045, 12, leatherM, 0, .77, 0));
+    v.body.add(v.apron);
+  }
   else if (O && O.belt) {                    // leather tool belt with a pouch and a spare chisel
     v.apron = new THREE.Group();
     v.apron.add(cyl(.192, .196, .06, 10, leatherM, 0, .47, 0));
@@ -2072,7 +2083,7 @@ const POSTS = {
 function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1]; return L[a % L.length]; }
 function showDefender(B, a) {
   B.figs = B.figs || [];
-  if (!B.figs[a]) B.figs[a] = makePerson({ tunic: guardTunic, helm: 'kettle', tool: 'bow' });
+  if (!B.figs[a]) B.figs[a] = makePerson({ tunic: guardTunic, helm: 'soldier', tool: 'bow' });
   const f = B.figs[a], o = postOffset(B, a), c = center(B);
   f.g.position.set(c.x + o[0], B.group.position.y + o[1], c.z + o[2]); f.g.rotation.y = Math.atan2(o[0] || .01, o[2] || .01); f.g.visible = true;
 }

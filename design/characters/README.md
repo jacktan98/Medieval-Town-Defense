@@ -12,9 +12,9 @@ Colour code: villagers wear yellows, soldiers blue, raiders red.
 | `villager.png` / `villager2.png` | Villager with a soft cloth cap, and with just hair (shirt shade and hair colour vary in game) |
 | `farmer.png` | Farmer: straw-yellow shirt, straw hat, hoe |
 | `lumberjack.png` | Lumberjack: yellow and brown checked shirt, green wool cap with feather, axe |
-| `mason.png` | Mason: khaki shirt, grey cloth bonnet, leather apron, pick |
+| `mason.png` | Mason: khaki shirt, grey cloth bonnet, canvas apron with a leather waist band, pick |
 | `builder.png` | Builder: amber smock, brown felt hat, tool belt, hammer |
-| `guard_archer.png` | Soldier archer on towers and the castle: blue shirt, steel kettle helmet, bow |
+| `guard_archer.png` | Villager archer on towers and the castle: blue shirt, steel round helmet with a blue band and nose guard, bow |
 | `raider_swordsman.png` | Raider swordsman: red shirt, iron helmet with nose guard, sword, shield |
 | `raider_archer.png` | Raider archer: red shirt, dark hood, bow |
 | `raider_captain.png` | Raider captain (wave 3): like the swordsman with a red crest, 1.35x size |
