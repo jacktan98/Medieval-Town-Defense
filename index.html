@@ -550,19 +550,24 @@ M.thatchOld.onBeforeCompile = sh => {
     float ragged = sh1(vec2(floor(u * .25), floor(row) + 3.0)) * .25;
     diffuseColor.rgb *= (.78 + .32 * strand) * mix(.62, 1.0, smoothstep(ragged, ragged + .25, cf));`);
 };
-// tier 2: compact rounded logs laid side by side from the ridge down to the eaves (like the palisade);
-// pyramids space them by angle round the peak, gable slabs (M.logGable) by position along the ridge
+// tier 2 wooden roofs: pyramids (M.thatch) are covered in staggered wooden shingles; the cottage's gable slabs (M.logGable)
+// keep compact rounded logs from ridge to eave
 const logRoof = gable => sh => {
   sh.vertexShader = 'varying vec3 vLO; varying vec3 vLW; varying vec3 vLN;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vLO = transformed; vLW = (modelMatrix * vec4(transformed, 1.0)).xyz; vLN = objectNormal;`);
   sh.fragmentShader = `varying vec3 vLO; varying vec3 vLW; varying vec3 vLN;
     float lh(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7); }
   ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    // pyramids: horizontal logs stacked in courses from the eaves up to the peak (rows of constant height)
-    float u = ${gable ? 'vLO.x * 11.0' : 'vLW.y * 12.0'}, f = fract(u), id = floor(u);
+    ${gable ? `float u = vLO.x * 11.0, f = fract(u), id = floor(u);
     float rnd = sqrt(max(0.0, sin(f * 3.14159)));
-    float along = ${gable ? 'vLO.z' : '(abs(vLN.z) > abs(vLN.x) ? vLW.x : vLW.z)'} * 7.0;
-    diffuseColor.rgb *= (.82 + .3 * lh(vec2(id, 1.0))) * (.38 + .7 * rnd) * (.92 + .12 * lh(vec2(id, floor(along))));`);
+    diffuseColor.rgb *= (.82 + .3 * lh(vec2(id, 1.0))) * (.38 + .7 * rnd) * (.92 + .12 * lh(vec2(id, floor(vLO.z * 7.0))));` :
+    `// pyramids: wooden shingles in staggered rows, each with its own shade, a shadowed lower edge where it laps the row below, and grain
+    float row = vLW.y * 9.0, cf = fract(row), across = (abs(vLN.z) > abs(vLN.x) ? vLW.x : vLW.z) * 6.5 + floor(row) * .5;
+    float cid = floor(across), cx = fract(across);
+    float tone = .74 + .34 * lh(vec2(cid, floor(row)));
+    float lap = mix(.5, 1.0, smoothstep(.0, .28, cf)), gap = mix(.62, 1.0, smoothstep(.0, .07, min(cx, 1.0 - cx)));
+    float grain = .93 + .1 * lh(vec2(floor(across * 7.0), floor(row)));
+    diffuseColor.rgb *= tone * lap * gap * grain;`}`);
 };
 M.thatch.onBeforeCompile = logRoof(false); M.thatch.customProgramCacheKey = () => 'logroof:peak';   // both variants share one function source
 M.logGable = M.thatch.clone(); M.logGable.onBeforeCompile = logRoof(true); M.logGable.customProgramCacheKey = () => 'logroof:gable';
