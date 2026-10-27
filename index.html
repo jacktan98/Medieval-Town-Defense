@@ -1984,8 +1984,15 @@ function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
     else { v.stuck += dt * .4; if (!v.side) v.side = Math.sign(off); v.sideT = .8; }
     return false;
   }
-  v.stuck += dt; v.side = -(v.side || 1); v.sideT = .8; return false;
+  v.stuck += dt; v.side = -(v.side || 1); v.sideT = .8; v.walking = true; return false;   // keeps striding while it finds a way round
 }
+// what players see: position eased toward the logical one and a stride that fades in and out, so blocked units never jitter
+function smoothPos(u, dt, now) {
+  if (u.rx === undefined || now - u.rT > 200 || Math.hypot(u.x - u.rx, u.z - u.rz) > 2.5) { u.rx = u.x; u.rz = u.z; }
+  else { const k = Math.min(1, dt * 10); u.rx += (u.x - u.rx) * k; u.rz += (u.z - u.rz) * k; }
+  u.rT = now;
+}
+function stride(u, dt, rate) { u.amp = (u.amp || 0) + ((u.walking ? 1 : 0) - (u.amp || 0)) * Math.min(1, dt * 6); if (u.amp > .02) u.phase += dt * rate; return u.amp; }
 // ---------- pathfinding: A* over the cell grid, then follow cell centres, skipping any we can see past ----------
 function cellPass(n, mode) {
   const o = occB[n]; if (o && !WALK[o.type] && !(o.type === 'gate' && mode !== 2)) return false;
@@ -2192,10 +2199,9 @@ function updateVillagers(dt, now) {
       }
     }
     if (!v.doorWalk && (v.inside || v.hideT > 0 || v.posted || v.sleeping || !v.g.visible)) continue;
-    v.phase += dt * (v.walking ? 9 : 0);
-    const swing = v.walking ? Math.sin(v.phase) * .6 : 0;
+    const amp = stride(v, dt, 9), swing = Math.sin(v.phase) * .6 * amp;
     v.legs[0].rotation.x = swing; v.legs[1].rotation.x = -swing;
-    v.body.position.y = v.walking ? Math.abs(Math.sin(v.phase)) * .05 : 0;
+    v.body.position.y = Math.abs(Math.sin(v.phase)) * .05 * amp;
     const cheer = v.cheerT > 0 && !v.build && !v.working; if (v.cheerT > 0) v.cheerT -= dt;
     if (cheer) v.body.position.y += Math.abs(Math.sin(now / 1000 * 9 + v.phase)) * .14;
     const carrying = v.carryLog.visible || v.carryStone.visible;
@@ -2215,7 +2221,7 @@ function updateVillagers(dt, now) {
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = tilt; }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
     v.arms[0].rotation.x = L; v.arms[1].rotation.x = Rt; v.body.rotation.x = lean;
-    v.g.position.set(v.x, hAt(v.x, v.z), v.z);
+    smoothPos(v, dt, now); v.g.position.set(v.rx, hAt(v.rx, v.rz), v.rz);
   }
 }
 function updateTrees(now) {
@@ -2351,17 +2357,16 @@ function updateEnemies(dt) {
       if (e.torso.material !== m) { e.torso.material = m; e.arms.forEach(a => a.userData.sleeve.material = m); }
       if (!on) e.flashT = undefined;
     }
-    e.phase += dt * (e.walking ? (e.running ? 14 : 9) : 0);
-    const sw = e.walking ? Math.sin(e.phase) * (e.running ? .95 : .6) : 0;
+    const sw = Math.sin(e.phase) * (e.running ? .95 : .6) * stride(e, dt, e.running ? 14 : 9);
     e.body.rotation.x = e.running && e.walking ? .22 : 0;      // leaning into the charge
     if (e.horse) e.horseLegs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw * .8; });   // diagonal pairs move together
     else { e.legs[0].rotation.x = sw; e.legs[1].rotation.x = -sw; }
     if (e.kind === 'archer') bowPose(e, e.aiming && !(e.attackT > 0) && e.cool < DRAW, e.attackT > 0, -.35 - sw * .3, -sw * .6);
     else if (e.kind === 'spear') { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -1.55 : -.5 + sw * .2; e.pivot.rotation.x = e.attackT > 0 ? 0 : -2.6; }   // carried upright, levelled to thrust
     else { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -.6 - e.attackT * 5.7 : -.45 + sw * .3; }
-    const y = hAt(e.x, e.z);
-    e.g.position.set(e.x, y < 0 ? y * .4 - .2 : y, e.z);
-    e.bar.grp.visible = e.hp < e.max; e.bar.set(e.hp / e.max); e.bar.grp.position.set(e.x, e.g.position.y + 1.6 * UNIT_K + (e.horse ? SADDLE : 0), e.z);
+    smoothPos(e, dt, performance.now()); const y = hAt(e.rx, e.rz);
+    e.g.position.set(e.rx, y < 0 ? y * .4 - .2 : y, e.rz);
+    e.bar.grp.visible = e.hp < e.max; e.bar.set(e.hp / e.max); e.bar.grp.position.set(e.rx, e.g.position.y + 1.6 * UNIT_K + (e.horse ? SADDLE : 0), e.rz);
   }
 }
 // ---------- night watch: villagers walk to the castle and towers and shoot from the top ----------
