@@ -868,26 +868,6 @@ function rebuildRoads() {
   pathStones.count = n; pathStones.instanceMatrix.needsUpdate = true; if (pathStones.instanceColor) pathStones.instanceColor.needsUpdate = true;
   seatClutter();
 }
-function roadCellOk(a, b) { if (a < 0 || b < 0 || a >= N || b >= N) return false; const o = occB[b * N + a]; if (o && o.type !== 'gate') return false; const s = cellStats(a, b); return s.mn > .4 && s.spread < 1.9; }
-function routeRoad(a0, b0) {
-  const dist = new Float32Array(N * N).fill(Infinity), prev = new Int32Array(N * N).fill(-1), done = new Uint8Array(N * N);
-  const s = b0 * N + a0; if (road[s]) return [s]; dist[s] = 0; const open = [s];
-  while (open.length) {
-    let bi = 0; for (let q = 1; q < open.length; q++) if (dist[open[q]] < dist[open[bi]]) bi = q;
-    const c = open.splice(bi, 1)[0]; if (done[c]) continue; done[c] = 1;
-    if (road[c] && c !== s) { const path = []; for (let p = c; p !== -1; p = prev[p]) path.push(p); return path; }
-    if (dist[c] > 45) continue;
-    const a = c % N, b = (c / N) | 0;
-    for (const [da, db] of DIRS) {
-      const na = a + da, nb = b + db; if (na < 0 || nb < 0 || na >= N || nb >= N) continue;
-      const nc = nb * N + na; if (done[nc]) continue;
-      if (!road[nc] && !roadCellOk(na, nb)) continue;
-      const nd = dist[c] + 1 + cellStats(na, nb).spread * .6;
-      if (nd < dist[nc]) { dist[nc] = nd; prev[nc] = c; open.push(nc); }
-    }
-  }
-  return null;
-}
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
@@ -895,27 +875,18 @@ const DOOR = {
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
 };
-// buildings turned to face their door's path; face 0 = +z, 1 = +x, 2 = -z, 3 = -x
-const FACING = { house: 1, lodge: 1, quarry: 1 };
+// buildings the player can turn (walls and gates have their own E–W / N–S rotation); face 0 = +z, 1 = +x, 2 = -z, 3 = -x
+const FACING = { house: 1, lodge: 1, quarry: 1, farm: 1, tower: 1, castle: 1, well: 1, torch: 1, flowers: 1, statue: 1 };
+const unrot = (f, x, z) => faceRot((4 - f) % 4, x, z);
 const faceRot = (f, x, z) => { const a = f * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a)); return [x * c + z * s, -x * s + z * c]; };
-// the path tile in front of the door on side f, lined up with the door so villagers walk straight in
+// the tile in front of the door when the building faces f, lined up with the door so villagers walk straight in
 function doorCell(ev, type, f) {
   const lat = DOOR[type] ? DOOR[type][0][0] : ev.s === 2 ? -1 : 0, cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
-  const [dx, dz] = faceRot(FACING[type] ? f : 0, lat, 0), [nx, nz] = faceRot(f, 0, ev.s * CELL / 2 + CELL / 2);
-  return { a: Math.floor((cx + (FACING[type] ? dx : 0) + nx) / CELL), b: Math.floor((cz + (FACING[type] ? dz : 0) + nz) / CELL), bit: [1, 8, 4, 2][f], f };
+  const [dx, dz] = faceRot(f, lat, 0), [nx, nz] = faceRot(f, 0, ev.s * CELL / 2 + CELL / 2);
+  return { a: Math.floor((cx + dx + nx) / CELL), b: Math.floor((cz + dz + nz) / CELL), bit: [1, 8, 4, 2][f], f };
 }
-// the side whose door tile is the shortest walk from the path network (front first on ties)
-function pickDoor(ev, type) {
-  const had = road.some(v => v); let best = null, bd = Infinity;
-  for (const f of [0, 1, 3, 2]) {
-    const d = doorCell(ev, type, f);
-    if (d.a < 0 || d.b < 0 || d.a >= N || d.b >= N || !(road[d.b * N + d.a] || roadCellOk(d.a, d.b))) continue;
-    if (!FACING[type]) return d;
-    const p = had ? routeRoad(d.a, d.b) : null, cost = p ? p.length : 99;
-    if (cost < bd) { bd = cost; best = d; }
-  }
-  return best;
-}
+// someone has to be able to stand in front of the door
+const doorOk = d => d.a >= 0 && d.b >= 0 && d.a < N && d.b < N && cellPass(d.b * N + d.a, 1);
 function syncTerrain() {
   for (let k = 0; k < V * V; k++) tPos[k * 3 + 1] = H[k];
   tGeo.attributes.position.needsUpdate = true; cacheCells();
@@ -1325,6 +1296,7 @@ function snapToNeighbours(type, ev) {
 const ghostMat = new THREE.MeshBasicMaterial({ color: '#8cc46e', transparent: true, opacity: .45, depthWrite: false, toneMapped: false });
 const ghosts = {};
 let placeRot = 0;                         // rotation for the next wall or gate: 0 = E–W, 1 = N–S
+var placeFace = 0;                        // which way the next building faces (FACING); var: evaluate runs during the startup reset
 function makeGhost(t) {
   if (ghosts[t]) scene.remove(ghosts[t]);
   const g = MODELS[t](1, false, 0, placeRot); g.traverse(o => { if (o.isMesh) { o.material = ghostMat; o.castShadow = false; } });
@@ -1521,6 +1493,7 @@ function evaluate(type, ci, cj, free) {
     if (type === 'lodge' && r.resCount < 3) return { ...r, ok: false, reason: 'No forest nearby' };
     if (type === 'quarry' && r.resCount < 1) return { ...r, ok: false, reason: 'No rock nearby' };
   }
+  if (!T.noRoad && !doorOk(doorCell(r, type, placeFace))) return { ...r, ok: false, reason: 'Door blocked' };
   if (!free && !canAfford(T.cost)) return { ...r, ok: false, reason: `Need ${shortfall(T.cost)}` };
   if (adapt) snapToNeighbours(type, r);
   return r;
@@ -1567,12 +1540,12 @@ function center(B) { return { x: (B.ev.x0 + B.ev.x1) / 2, z: (B.ev.z0 + B.ev.z1)
 function doorPoint(B) { const d = B.door; if (!d) return { x: center(B).x, z: B.ev.z1 + .6 }; const [sx, sz] = doorShift(B); return { x: (d.a + .5) * CELL + sx, z: (d.b + .5) * CELL + sz }; }
 // how far this tier's door sits across from the door tile's centre line (the tile lines up with the tier-1 door)
 function doorShift(B) {
-  const L = DOOR[B.type]; if (!L || !FACING[B.type] || !B.door) return [0, 0];
+  const L = DOOR[B.type]; if (!L || !B.door) return [0, 0];
   return faceRot(B.face || 0, L[B.tier - 1][0] - L[0][0], 0);
 }
 // where the model's own door is; villagers walk from the path tile to here before they vanish inside
 function innerDoor(B) {
-  const L = DOOR[B.type]; if (!L || !B.door || !B.built || (!FACING[B.type] && B.door.f)) return null;
+  const L = DOOR[B.type]; if (!L || !B.door || !B.built) return null;
   const c = center(B), [x, z] = faceRot(B.face || 0, ...L[B.tier - 1]); return { x: c.x + x, z: c.z + z };
 }
 function wallMask(B) {
@@ -1602,17 +1575,8 @@ function place(type, ci, cj, opts = {}) {
     if (opts.instant) applyPlan(plan, 1); else anims.push({ plan, t0: now, dur: 450 });
     g.position.set(c.x, ev.target, c.z);
   } else g.position.set(c.x, ev.center, c.z);
-  B.door = null;
-  let roadNote = '';
-  if (!T.noRoad) {
-    B.door = pickDoor(ev, type);
-    if (B.door) {
-      if (FACING[type]) { B.face = B.door.f; g.rotation.y = B.face * Math.PI / 2; }
-      const had = road.some(v => v), path = had ? routeRoad(B.door.a, B.door.b) : null;
-      if (path) { path.forEach(p => road[p] = 1); if (path.length > 1) roadNote = ` A path was routed ${path.length - 1} tiles to the network.`; }
-      else road[B.door.b * N + B.door.a] = 1;
-    }
-  }
+  B.face = FACING[type] ? placeFace : 0; g.rotation.y = B.face * Math.PI / 2;
+  B.door = T.noRoad ? null : doorCell(ev, type, B.face);     // paths are the player's to lay
   scene.add(g); buildings.push(B);
   const bw = type === 'castle' ? 2.6 : T.size === 1 ? 1.2 : 1.8;
   B.bar = makeBar(bw); B.pbar = makeBar(bw);
@@ -1753,7 +1717,7 @@ const hairs = ['#3a2716', '#5a3a1e', '#2a221c', '#8a5a2e', '#b8894a', '#6b6b66']
 const skin = mat('#d6a982'), hatM = mat('#6b5236'), legM = mat('#3a2e22');
 // solid things inside a farm plot (hut, hay, scarecrow, barn, stooks): [x, z, half-width, half-depth] from the plot centre
 const FARM_OBST = { 1: [[-1.0, -1.2, .55, .4], [.9, -1.2, .3, .3]], 2: [[1.1, -.9, .2, .2]], 3: [[-1.15, -1.15, .55, .45], [1.35, 1.35, .2, .2], [.75, 1.42, .2, .2]] };
-function farmBlocked(B, x, z) { const c = center(B); return FARM_OBST[B.tier].some(([ox, oz, hx, hz]) => Math.abs(x - c.x - ox) < hx + .18 && Math.abs(z - c.z - oz) < hz + .18); }
+function farmBlocked(B, x, z) { const c = center(B), [lx, lz] = unrot(B.face || 0, x - c.x, z - c.z); return FARM_OBST[B.tier].some(([ox, oz, hx, hz]) => Math.abs(lx - ox) < hx + .18 && Math.abs(lz - oz) < hz + .18); }
 function canStand(x, z, mode) {   // mode 0 villager, 1 worker, 2 enemy
   if (x < .5 || z < .5 || x > SIZE - .5 || z > SIZE - .5) return false;
   const h = hAt(x, z);
@@ -2379,7 +2343,7 @@ const POSTS = {
     [[-.45, 4.8, -.4], [.45, 4.8, -.4], [0, 2.4, -2.1], [2.1, 2.4, 0], [-2.1, 2.4, 0]],   // two on the keep, one on each wall-walk except the gate side
   ].map((L, i) => L.map(([x, y, z]) => [x * CASTLE_K[i], y, z * CASTLE_K[i]])),
 };
-function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1]; return L[a % L.length]; }
+function postOffset(B, a) { const L = POSTS[B.type][B.tier - 1], [x, y, z] = L[a % L.length], [rx, rz] = faceRot(B.face || 0, x, z); return [rx, y, rz]; }
 function showDefender(B, a) {
   B.figs = B.figs || [];
   if (!B.figs[a]) B.figs[a] = makePerson({ tunic: guardTunic, helm: 'soldier', tool: 'bow' });
@@ -2652,7 +2616,7 @@ function deselect() { selected = null; selLine.visible = false; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
 $('#rotBtn').addEventListener('click', rotatePlacement);
 $('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); rotateBuilding(selected); });
-addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.target.closest('input')) { if (ROTATES[tool]) rotatePlacement(); else if (selected) rotateBuilding(selected); } });
+addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.target.closest('input')) { if (ROTATES[tool] || FACING[tool]) rotatePlacement(); else if (selected) rotateBuilding(selected); } });
 $('#demBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && removeBuilding(selected, false); });
 $('#closeCard').addEventListener('click', deselect);
 $('#nightBtn').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
@@ -2674,7 +2638,7 @@ function showGhostAt(point) {
   for (const t in ghosts) ghosts[t].visible = t === tool;
   const g = ghosts[tool], cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
   g.position.set(cx, adapt && tool !== 'wall' && ev.target != null ? ev.target : hAt(cx, cz), cz);
-  if (FACING[tool]) { const d = ev.ok ? pickDoor(ev, tool) : null; g.rotation.y = d ? d.f * Math.PI / 2 : 0; }
+  g.rotation.y = FACING[tool] ? placeFace * Math.PI / 2 : 0;
   const col = ev.ok ? '#8cc46e' : '#e2715b';
   ghostMat.color.set(col); footLine.material.color.set(col);
   drape(footLine, ev.x0, ev.z0, ev.x1, ev.z1);
@@ -2779,18 +2743,27 @@ function tap(e) {
 }
 const ROTATES = { wall: 1, gate: 1 };
 function rotatePlacement() {
-  if (!ROTATES[tool]) return;
-  placeRot ^= 1; for (const t in ROTATES) makeGhost(t); regho();
+  if (ROTATES[tool]) { placeRot ^= 1; for (const t in ROTATES) makeGhost(t); regho(); }
+  else if (FACING[tool]) { placeFace = (placeFace + 3) % 4; regho(); }     // a quarter turn clockwise seen from above
 }
-// on the card: gates always; walls only while they stand alone (connected walls follow their neighbours)
-const canRotate = B => B && ROTATES[B.type] && (B.type === 'gate' || !B.mask);
+// on the card: gates always; walls only while they stand alone (connected walls follow their neighbours); everything else turns to any side its door can open on
+const canRotate = B => B && ((ROTATES[B.type] && (B.type === 'gate' || !B.mask)) || FACING[B.type]);
 function rotateBuilding(B) {
   if (!canRotate(B)) return;
-  B.rot ^= 1; B.rotFixed = true; swapModel(B); select(B);
+  if (ROTATES[B.type]) { B.rot ^= 1; B.rotFixed = true; swapModel(B); select(B); return; }
+  const T = DEF[B.type];
+  for (let k = 1; k < 4; k++) {
+    const f = ((B.face || 0) + 4 - k) % 4, d = T.noRoad ? null : doorCell(B.ev, B.type, f);
+    if (d && !doorOk(d)) continue;
+    if (d && buildings.some(o => o !== B && !o.dead && !WALK[o.type] && o.type !== 'gate' && occB[d.b * N + d.a] === o)) continue;
+    B.face = f; B.door = d; B.group.rotation.y = f * Math.PI / 2; if (B.scaffold) B.scaffold.rotation.y = B.group.rotation.y;
+    rebuildRoads(); villagers.forEach(v => v.path = null); select(B); return;
+  }
+  setHint('Door blocked', 'bad');
 }
 function setTool(t) {
   tool = t;
-  $('#rotBtn').hidden = !ROTATES[t];
+  $('#rotBtn').hidden = !(ROTATES[t] || FACING[t]);
   for (const c in CATS) if (CATS[c].includes(t) && c !== cat) { cat = c; renderTools(); }
   markTools();
   if (tool === 'select') { hideGhost(); setHint('Select a building'); }
