@@ -833,10 +833,12 @@ function discInto(arr, cx, cz, r, lift, col, seg = 12) {
   }
 }
 // a tile: a disc at the centre and a chain of discs out to each connected edge; radii wobble by position, so neighbours agree
-function tileInto(arr, a, b, m, rad, wob, lift, col, stones) {
+function tileInto(arr, a, b, m, rad, wob, lift, col, stones, door) {
   const cx = (a + .5) * CELL, cz = (b + .5) * CELL, e = CELL / 2;
   const pts = [[cx, cz]];
-  for (const [da, db, bit] of DIRS) if (m & bit) for (const t of [.34, .67, 1]) pts.push([cx + da * e * t, cz + db * e * t]);
+  // a door off the tile's centre line: the arm into the building runs straight at the door
+  if (door) pts.push([cx + door.sx, cz + door.sz]);
+  for (const [da, db, bit] of DIRS) if (m & bit) for (const t of [.34, .67, 1]) { const k = door && bit === door.bit; pts.push([cx + da * e * t + (k ? door.sx : 0), cz + db * e * t + (k ? door.sz : 0)]); }
   for (const [x, z] of pts) discInto(arr, x, z, rad + wob * (hash(x * 3.1, z * 2.3) - .5), lift, col);
   if (stones) for (const [x, z] of pts) if (hash(x * 1.7, z * 5.3) < .5 && !stoneAt(x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1)) stones.push([x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1, x * 7 + z * 3]);
 }
@@ -846,11 +848,12 @@ function setGeo(mesh, arr, col) {
   g.computeVertexNormals(); mesh.geometry.dispose(); mesh.geometry = g;
 }
 function rebuildRoads() {
-  const base = [], top = [], tc = [], stones = [];
+  const base = [], top = [], tc = [], stones = [], doors = {};
+  for (const B of buildings) if (B.door && !B.dead) { const [sx, sz] = doorShift(B); if (sx || sz) doors[B.door.b * N + B.door.a] = { bit: B.door.bit, sx, sz }; }
   for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (road[b * N + a]) {
     if (stoneAt((a + .5) * CELL, (b + .5) * CELL)) continue;    // a gate's own tile: its stone floor is the path
-    const m = roadMask(a, b);
-    tileInto(base, a, b, m, .47, .12, .05); tileInto(top, a, b, m, .4, .1, .08, tc, stones);
+    const m = roadMask(a, b), d = doors[b * N + a];
+    tileInto(base, a, b, m, .47, .12, .05, null, null, d); tileInto(top, a, b, m, .4, .1, .08, tc, stones, d);
   }
   setGeo(roadBase, base); setGeo(roadTop, top, tc);
   // flat set stones, a few per tile, grey-brown and half sunk into the earth
@@ -888,7 +891,7 @@ function routeRoad(a0, b0) {
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
-  lodge: [[-1, .52], [-1, 1.14], [-1, 1.14]],
+  lodge: [[-1, .52], [-.6, 1.14], [-.6, 1.14]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
 };
@@ -1106,14 +1109,14 @@ function makeLodge(tier, plinth) {
     }
     g.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
     g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
-    g.add(box(.55, 1.0, .06, M.timber, -1, .7, 1.08));
+    g.add(box(.55, 1.0, .06, M.timber, -.6, .7, 1.08));
     g.add(box(.3, .24, .06, M.glow, .6, 1.2, 1.08));
     pile(.7, 1.55, 3);
     axeStump(1.45, -1.45);
     if (tier === 3) {
       g.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
       pile(-1.6, -.2, 3);
-      for (const z of [-.3, .3]) { const s = box(.1, .7, .1, M.timber, .2, .35, 1.5 + z); s.rotation.z = .35; g.add(s); const s2 = box(.1, .7, .1, M.timber, -.2, .35, 1.5 + z); s2.rotation.z = -.35; g.add(s2); }
+      for (const z of [-.3, .3]) { const s = box(.1, .7, .1, M.timber, -1.3, .35, 1.5 + z); s.rotation.z = .35; g.add(s); const s2 = box(.1, .7, .1, M.timber, -1.7, .35, 1.5 + z); s2.rotation.z = -.35; g.add(s2); }
     }
   }
   return g;
@@ -1561,7 +1564,12 @@ function charmOf(B) {
 }
 const housesNear = (x, z) => buildings.filter(B => B.type === 'house' && Math.hypot(center(B).x - x, center(B).z - z) <= CHARM_R).length;
 function center(B) { return { x: (B.ev.x0 + B.ev.x1) / 2, z: (B.ev.z0 + B.ev.z1) / 2 }; }
-function doorPoint(B) { const d = B.door; return d ? { x: (d.a + .5) * CELL, z: (d.b + .5) * CELL } : { x: center(B).x, z: B.ev.z1 + .6 }; }
+function doorPoint(B) { const d = B.door; if (!d) return { x: center(B).x, z: B.ev.z1 + .6 }; const [sx, sz] = doorShift(B); return { x: (d.a + .5) * CELL + sx, z: (d.b + .5) * CELL + sz }; }
+// how far this tier's door sits across from the door tile's centre line (the tile lines up with the tier-1 door)
+function doorShift(B) {
+  const L = DOOR[B.type]; if (!L || !FACING[B.type] || !B.door) return [0, 0];
+  return faceRot(B.face || 0, L[B.tier - 1][0] - L[0][0], 0);
+}
 // where the model's own door is; villagers walk from the path tile to here before they vanish inside
 function innerDoor(B) {
   const L = DOOR[B.type]; if (!L || !B.door || !B.built || (!FACING[B.type] && B.door.f)) return null;
@@ -1680,7 +1688,7 @@ function completeSite(B) {
     B.built = true; B.group.scale.y = 1; stats.built++; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]}` : ''}`, 'good');
   } else {
-    B.tier++; stats.upgrades++; swapModel(B); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
+    B.tier++; stats.upgrades++; swapModel(B); rebuildRoads(); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
     if (B.tier === 2) rebuildRoads();   // the new stone base: paths now stop at its edge
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
     floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('build', c);
