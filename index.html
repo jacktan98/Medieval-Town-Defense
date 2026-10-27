@@ -540,28 +540,31 @@ const roofGrit = sh => {
 M.roofBlue.onBeforeCompile = roofGrit;
 // tier 1: straw thatch - fine strands running down the slope in ragged bundles, with darker gaps between courses
 M.thatchOld.onBeforeCompile = sh => {
-  sh.vertexShader = 'varying vec3 vSP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-    vSP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
-  sh.fragmentShader = `varying vec3 vSP;
+  sh.vertexShader = 'varying vec3 vSP; varying vec3 vSO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    vSP = (modelMatrix * vec4(transformed, 1.0)).xyz; vSO = transformed;`);
+  sh.fragmentShader = `varying vec3 vSP; varying vec3 vSO;
     float sh1(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float u = (vSP.x + vSP.z) * 38.0, row = vSP.y * 4.5, cf = fract(row);
+    float u = atan(vSO.z, vSO.x) * 25.46, row = vSP.y * 4.5, cf = fract(row);   // ~160 strands round the peak, running straight down each face
     float strand = sh1(vec2(floor(u), floor(row)));
     float ragged = sh1(vec2(floor(u * .25), floor(row) + 3.0)) * .25;
     diffuseColor.rgb *= (.78 + .32 * strand) * mix(.62, 1.0, smoothstep(ragged, ragged + .25, cf));`);
 };
-// tier 2: roofs of split logs laid in rounded courses, with grain along each log
-M.thatch.onBeforeCompile = sh => {
-  sh.vertexShader = 'varying vec3 vLP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-    vLP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
-  sh.fragmentShader = `varying vec3 vLP;
+// tier 2: compact rounded logs laid side by side from the ridge down to the eaves (like the palisade);
+// pyramids space them by angle round the peak, gable slabs (M.logGable) by position along the ridge
+const logRoof = gable => sh => {
+  sh.vertexShader = 'varying vec3 vLO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    vLO = transformed;`);
+  sh.fragmentShader = `varying vec3 vLO;
     float lh(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7); }
   ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float row = vLP.y * 6.0, cf = fract(row), along = (vLP.x + vLP.z) * 2.0;
-    float rnd = sin(cf * 3.14159), grain = lh(vec2(floor(along * 8.0), floor(row)));
-    float log_ = .85 + .25 * lh(vec2(floor(row), floor(along * .6)));
-    diffuseColor.rgb *= log_ * (.45 + .6 * rnd) * (.9 + .15 * grain);`);
+    float u = ${gable ? 'vLO.x * 11.0' : 'atan(vLO.z, vLO.x) * 14.3'}, f = fract(u), id = floor(u);
+    float rnd = sqrt(max(0.0, sin(f * 3.14159)));
+    float along = ${gable ? 'vLO.z' : 'length(vLO.xz)'} * 7.0;
+    diffuseColor.rgb *= (.82 + .3 * lh(vec2(id, 1.0))) * (.38 + .7 * rnd) * (.92 + .12 * lh(vec2(id, floor(along))));`);
 };
+M.thatch.onBeforeCompile = logRoof(false); M.thatch.customProgramCacheKey = () => 'logroof:peak';   // both variants share one function source
+M.logGable = M.thatch.clone(); M.logGable.onBeforeCompile = logRoof(true); M.logGable.customProgramCacheKey = () => 'logroof:gable';
 // grit for wood (grain streaks, knots of darker colour) and rock (mottling and specks); composes with any shader the material already has
 const GRIT_NOISE = `
   float gh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -867,7 +870,7 @@ function makeHouse(tier, plinth) {
     const w = box(1.25, .85, 1.05, M.mud, 0, .5, 0); w.rotation.z = .035; g.add(w);
     for (const sx of [-1, 1]) g.add(box(.09, .9, .09, M.rough, sx * .62, .5, .52));
     g.add(box(1.3, .08, .08, M.rough, 0, .92, .53));
-    const r = pyramid(1.12, 1.15, .95, M.thatchOld, 1.47); r.rotation.z = -.05; g.add(r);
+    g.add(pyramid(1.12, 1.15, .95, M.thatchOld, 1.47));
     g.add(box(.34, .58, .05, M.timber, -.22, .38, .54));
     g.add(box(.18, .14, .04, M.glow, .3, .62, .54));
     for (let n = 0; n < 4; n++) { const p = box(.05, .35 + hash(n, 3) * .15, .05, M.rough, .9, .2, -.45 + n * .3); p.rotation.x = (hash(n, 9) - .5) * .4; g.add(p); }
@@ -878,7 +881,7 @@ function makeHouse(tier, plinth) {
     g.add(box(.2, .18, .04, M.glow, .35, .52, .56));
     g.add(prism(1.4, 1.1, .7, M.daub, 0, .84, 0));
     const sl = Math.atan2(.7, .55), len = Math.hypot(.7, .55) + .2;
-    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.thatch, 0, .84 + .35, sz * .35); r.rotation.x = sz * sl; g.add(r); }
+    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.logGable, 0, .84 + .35, sz * .35); r.rotation.x = sz * sl; g.add(r); }
     g.add(box(.18, .45, .18, M.stone, .45, 1.45, -.25));
   } else {                     // town house: stone ground floor, plaster upper floor, blue gable roof
     g.add(box(1.4, .75, 1.2, M.stone2, 0, .375, 0));
@@ -1665,8 +1668,8 @@ function paintWall(a, b) {
 }
 
 // ---------- villagers ----------
-// colour code: villagers wear yellows, soldiers blue, raiders red
-const tunics = ['#c9a227', '#b8892f', '#d4b45a', '#a87d2a', '#c49a3c', '#9c8a3a'].map(mat);
+// colour code: plain villagers brown, workers yellows, soldiers blue, raiders red
+const tunics = ['#7a5434', '#8a6240', '#6b4a2e', '#956b44', '#7f5a3a', '#5f4229'].map(mat);   // plain villagers: homespun browns
 const hairs = ['#3a2716', '#5a3a1e', '#2a221c', '#8a5a2e', '#b8894a', '#6b6b66'].map(mat);
 const skin = mat('#d6a982'), hatM = mat('#6b5236'), legM = mat('#3a2e22');
 // solid things inside a farm plot (hut, hay, scarecrow, barn, stooks): [x, z, half-width, half-depth] from the plot centre
