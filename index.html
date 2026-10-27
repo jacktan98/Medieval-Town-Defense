@@ -885,10 +885,33 @@ function routeRoad(a0, b0) {
   }
   return null;
 }
-function pickDoor(ev) {
-  const s = ev.s, mid = Math.floor((s - 1) / 2), ci = ev.ci, cj = ev.cj;
-  const cands = [{ a: ci + mid, b: cj + s, bit: 1 }, { a: ci + mid, b: cj - 1, bit: 4 }, { a: ci - 1, b: cj + mid, bit: 2 }, { a: ci + s, b: cj + mid, bit: 8 }];
-  return cands.find(d => road[d.b * N + d.a] || roadCellOk(d.a, d.b)) || null;
+// each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
+const DOOR = {
+  house: [[0, .6], [0, .62], [0, .66]],
+  lodge: [[-1, .52], [-1, 1.14], [-1, 1.14]],
+  quarry: [[-1, -.22], [-1, .03], [-1, .03]],
+  castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
+};
+// buildings turned to face their door's path; face 0 = +z, 1 = +x, 2 = -z, 3 = -x
+const FACING = { house: 1, lodge: 1, quarry: 1 };
+const faceRot = (f, x, z) => { const a = f * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a)); return [x * c + z * s, -x * s + z * c]; };
+// the path tile in front of the door on side f, lined up with the door so villagers walk straight in
+function doorCell(ev, type, f) {
+  const lat = DOOR[type] ? DOOR[type][0][0] : ev.s === 2 ? -1 : 0, cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
+  const [dx, dz] = faceRot(FACING[type] ? f : 0, lat, 0), [nx, nz] = faceRot(f, 0, ev.s * CELL / 2 + CELL / 2);
+  return { a: Math.floor((cx + (FACING[type] ? dx : 0) + nx) / CELL), b: Math.floor((cz + (FACING[type] ? dz : 0) + nz) / CELL), bit: [1, 8, 4, 2][f], f };
+}
+// the side whose door tile is the shortest walk from the path network (front first on ties)
+function pickDoor(ev, type) {
+  const had = road.some(v => v); let best = null, bd = Infinity;
+  for (const f of [0, 1, 3, 2]) {
+    const d = doorCell(ev, type, f);
+    if (d.a < 0 || d.b < 0 || d.a >= N || d.b >= N || !(road[d.b * N + d.a] || roadCellOk(d.a, d.b))) continue;
+    if (!FACING[type]) return d;
+    const p = had ? routeRoad(d.a, d.b) : null, cost = p ? p.length : 99;
+    if (cost < bd) { bd = cost; best = d; }
+  }
+  return best;
 }
 function syncTerrain() {
   for (let k = 0; k < V * V; k++) tPos[k * 3 + 1] = H[k];
@@ -908,13 +931,13 @@ function makeHouse(tier, plinth) {
     for (const sx of [-1, 1]) g.add(box(.09, .9, .09, M.rough, sx * .62, .5, .52));
     g.add(box(1.3, .08, .08, M.rough, 0, .92, .53));
     g.add(pyramid(1.12, 1.15, .95, M.thatchOld, 1.47));
-    g.add(box(.34, .58, .05, M.timber, -.22, .38, .54));
-    g.add(box(.18, .14, .04, M.glow, .3, .62, .54));
+    g.add(box(.34, .58, .05, M.timber, 0, .38, .54));
+    g.add(box(.18, .14, .04, M.glow, .38, .62, .54));
     for (let n = 0; n < 4; n++) { const p = box(.05, .35 + hash(n, 3) * .15, .05, M.rough, .9, .2, -.45 + n * .3); p.rotation.x = (hash(n, 9) - .5) * .4; g.add(p); }
   } else if (tier === 2) {     // cottage: plain daub walls, corner posts, a straw gable roof, one door and one window
     g.add(box(1.4, .78, 1.1, M.daub, 0, .45, 0));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, .8, .1, M.timber, sx * .68, .45, sz * .53));
-    g.add(box(.34, .56, .05, M.wood, -.3, .36, .56));
+    g.add(box(.34, .56, .05, M.wood, 0, .36, .56));
     g.add(box(.2, .18, .04, M.glow, .35, .52, .56));
     g.add(prism(1.4, 1.1, .7, M.daub, 0, .84, 0));
     const sl = Math.atan2(.7, .55), len = Math.hypot(.7, .55) + .2;
@@ -922,7 +945,7 @@ function makeHouse(tier, plinth) {
     g.add(box(.18, .45, .18, M.stone, .45, 1.45, -.25));
   } else {                     // town house: stone ground floor, plaster upper floor, blue gable roof
     g.add(box(1.4, .75, 1.2, M.stone2, 0, .375, 0));
-    g.add(box(.34, .58, .05, M.wood, -.3, .3, .61));
+    g.add(box(.34, .58, .05, M.wood, 0, .3, .61));
     g.add(box(.18, .16, .04, M.glow, .35, .45, .61));
     g.add(box(1.46, .07, 1.26, M.timber, 0, .78, 0));
     g.add(box(1.4, .7, 1.2, M.plaster, 0, 1.16, 0));
@@ -1059,18 +1082,20 @@ function makeLodge(tier, plinth) {
   const pile = (x, z, n) => { for (let r = 0; r < n; r++) for (let c = 0; c < n - r; c++) { const l = cyl(.17, .17, 1.1, 7, M.log, x + (c - (n - r - 1) / 2) * .36, .3 + r * .3, z); l.rotation.x = Math.PI / 2; g.add(l); } };
   const axeStump = (x, z) => { g.add(cyl(.28, .3, .45, 8, M.logEnd, x, .25, z)); const h = box(.05, .6, .05, M.timber, x + .08, .7, z); h.rotation.z = -.4; g.add(h); g.add(box(.05, .16, .22, M.iron, x - .02, .5, z)); };
   if (tier === 1) {            // woodcutter's hut: short log walls, thatched roof, chopping stump
+    const X = -.9;              // the door (x -1) lines up with the left column's path tile
     for (let n = 0; n < 3; n++) {
       const y = .3 + n * .3;
-      const l1 = cyl(.15, .15, 2.0, 6, M.log, -.3, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1);
-      const l2 = cyl(.15, .15, 2.0, 6, M.log, -.3, y, -.75); l2.rotation.z = Math.PI / 2; g.add(l2);
-      const l3 = cyl(.15, .15, 1.4, 6, M.log, .6, y + .15, -.15); l3.rotation.x = Math.PI / 2; g.add(l3);
-      const l4 = cyl(.15, .15, 1.4, 6, M.log, -1.2, y + .15, -.15); l4.rotation.x = Math.PI / 2; g.add(l4);
+      if (n < 2) for (const [x0, x1] of [[X - 1, -1.27], [-.73, X + 1]]) { const l1 = cyl(.15, .15, x1 - x0, 6, M.log, (x0 + x1) / 2, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
+      else { const l1 = cyl(.15, .15, 2.0, 6, M.log, X, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
+      const l2 = cyl(.15, .15, 2.0, 6, M.log, X, y, -.75); l2.rotation.z = Math.PI / 2; g.add(l2);
+      const l3 = cyl(.15, .15, 1.4, 6, M.log, X + .9, y + .15, -.15); l3.rotation.x = Math.PI / 2; g.add(l3);
+      const l4 = cyl(.15, .15, 1.4, 6, M.log, X - .9, y + .15, -.15); l4.rotation.x = Math.PI / 2; g.add(l4);
     }
-    g.add(box(1.7, .9, 1.1, M.rough, -.3, .6, -.15));
-    g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.6, -.3, -.15));
-    g.add(box(.4, .65, .06, M.timber, -.6, .45, .52));
-    pile(.9, 1.2, 2);
-    axeStump(-1.0, 1.2);
+    g.add(box(1.7, .9, 1.1, M.rough, X, .6, -.15));
+    g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.6, X, -.15));
+    g.add(box(.46, .66, .06, M.timber, -1, .42, .46));
+    pile(1.05, 1.25, 2);
+    axeStump(.15, 1.25);
   } else {                     // log cabin, then timber yard
     for (let n = 0; n < 5; n++) {
       const y = .35 + n * .32;
@@ -1081,10 +1106,10 @@ function makeLodge(tier, plinth) {
     }
     g.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
     g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
-    g.add(box(.55, 1.0, .06, M.timber, -.6, .7, 1.08));
+    g.add(box(.55, 1.0, .06, M.timber, -1, .7, 1.08));
     g.add(box(.3, .24, .06, M.glow, .6, 1.2, 1.08));
     pile(.7, 1.55, 3);
-    axeStump(-1.2, 1.5);
+    axeStump(1.45, -1.45);
     if (tier === 3) {
       g.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
       pile(-1.6, -.2, 3);
@@ -1098,10 +1123,10 @@ function makeQuarry(tier, plinth) {
   if (plinth) g.add(box(4.0, 1.8, 4.0, M.stone, 0, -.7, 0));
   const blocks = list => list.forEach(([x, y, z]) => g.add(box(.5, .45, .5, M.stone2, x, y, z)));
   if (tier === 1) {            // stone pit: masons' shed, cut blocks, timber hoist
-    g.add(box(1.3, .9, 1.1, M.rough, -.85, .55, -.85));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, .95, .1, M.timber, -.85 + sx * .62, .55, -.85 + sz * .52));
-    g.add(pyramid(1.1, .95, .9, M.thatchOld, 1.45, -.85, -.85));
-    g.add(box(.36, .6, .05, M.timber, -.85, .4, -.28));
+    g.add(box(1.3, .9, 1.1, M.rough, -1, .55, -.85));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, .95, .1, M.timber, -1 + sx * .62, .55, -.85 + sz * .52));
+    g.add(pyramid(1.1, .95, .9, M.thatchOld, 1.45, -1, -.85));
+    g.add(box(.36, .6, .05, M.timber, -1, .4, -.28));
     blocks([[.55, .32, .55], [1.1, .32, .55], [.82, .76, .55]]);
     for (let n = 0; n < 5; n++) { const r = new THREE.Mesh(rockGeo, rockMat); r.scale.setScalar(.25 + hash(n, 2) * .15); r.position.set(.4 + hash(n, 5) * 1.1, .15, 1.1 + hash(n, 8) * .4); r.castShadow = true; g.add(r); }
     // A-frame hoist with a block on the rope
@@ -1111,16 +1136,16 @@ function makeQuarry(tier, plinth) {
     // low dry-stone wall
     for (let s = -1.6; s <= 1.61; s += .45) g.add(box(.42, .3, .3, M.stone, s, .15, -1.65));
   } else {
-    g.add(box(1.8, 1.4, 1.5, M.stone2, -.75, .9, -.8));
-    g.add(pyramid(1.45, .9, .9, tier === 3 ? M.roofBlue : M.thatch, 2.05, -.75, -.8));
-    g.add(box(.5, .9, .06, M.timber, -.75, .65, -.03)); g.add(box(.28, .24, .06, M.glow, -.2, 1.1, -.03));
+    g.add(box(1.8, 1.4, 1.5, M.stone2, -1, .9, -.8));
+    g.add(pyramid(1.45, .9, .9, tier === 3 ? M.roofBlue : M.thatch, 2.05, -1, -.8));
+    g.add(box(.5, .9, .06, M.timber, -1, .65, -.03)); g.add(box(.28, .24, .06, M.glow, -.35, 1.1, -.03));
     blocks([[.6, .35, .6], [1.15, .35, .6], [.6, .35, 1.15], [1.15, .35, 1.15], [.88, .8, .88]]);
     if (tier === 3) {
       g.add(box(.14, 2.6, .14, M.timber, 1.0, 1.4, -1.0)); g.add(box(1.8, .12, .12, M.timber, .4, 2.6, -1.0));
       g.add(box(.03, .9, .03, M.dark, -.4, 2.15, -1.0)); g.add(box(.35, .3, .35, M.stone2, -.4, 1.55, -1.0));
-      g.add(box(1.0, .35, .6, M.wood, -1.0, .55, 1.0));
-      for (const x of [-1.4, -.6]) { const w = cyl(.22, .22, .08, 10, M.timber, x, .25, 1.33); w.rotation.x = Math.PI / 2; g.add(w); }
-      blocks([[-1.15, .95, 1.0], [-.75, .95, 1.0]]);
+      g.add(box(1.0, .35, .6, M.wood, .6, .55, -1.55));      // cart parked behind, off the door path
+      for (const x of [.2, 1.0]) { const w = cyl(.22, .22, .08, 10, M.timber, x, .25, -1.22); w.rotation.x = Math.PI / 2; g.add(w); }
+      blocks([[.45, .95, -1.55], [.85, .95, -1.55]]);
     }
   }
   return g;
@@ -1537,6 +1562,11 @@ function charmOf(B) {
 const housesNear = (x, z) => buildings.filter(B => B.type === 'house' && Math.hypot(center(B).x - x, center(B).z - z) <= CHARM_R).length;
 function center(B) { return { x: (B.ev.x0 + B.ev.x1) / 2, z: (B.ev.z0 + B.ev.z1) / 2 }; }
 function doorPoint(B) { const d = B.door; return d ? { x: (d.a + .5) * CELL, z: (d.b + .5) * CELL } : { x: center(B).x, z: B.ev.z1 + .6 }; }
+// where the model's own door is; villagers walk from the path tile to here before they vanish inside
+function innerDoor(B) {
+  const L = DOOR[B.type]; if (!L || !B.door || !B.built || (!FACING[B.type] && B.door.f)) return null;
+  const c = center(B), [x, z] = faceRot(B.face || 0, ...L[B.tier - 1]); return { x: c.x + x, z: c.z + z };
+}
 function wallMask(B) {
   let m = 0;
   for (const [da, db, bit] of DIRS) { const a = B.ev.ci + da, b = B.ev.cj + db; if (a < 0 || b < 0 || a >= N || b >= N) continue; const o = occB[b * N + a]; if (o && o !== B && WALLY[o.type]) m |= bit; }
@@ -1544,7 +1574,7 @@ function wallMask(B) {
 }
 function swapModel(B) {
   const old = B.group, g = makeModel(B.type, B.tier, B.plinth, B.mask, B.rot, B.rotFixed);
-  g.position.copy(old.position); g.scale.copy(old.scale); g.userData.B = B; scene.remove(old); scene.add(g); B.group = g;
+  g.position.copy(old.position); g.rotation.y = old.rotation.y; g.scale.copy(old.scale); g.userData.B = B; scene.remove(old); scene.add(g); B.group = g;
 }
 function refreshWalls() { for (const B of buildings) if (B.type === 'wall' || B.type === 'gate') { const m = wallMask(B); if (m !== B.mask) { B.mask = m; swapModel(B); } } }
 
@@ -1567,8 +1597,9 @@ function place(type, ci, cj, opts = {}) {
   B.door = null;
   let roadNote = '';
   if (!T.noRoad) {
-    B.door = pickDoor(ev);
+    B.door = pickDoor(ev, type);
     if (B.door) {
+      if (FACING[type]) { B.face = B.door.f; g.rotation.y = B.face * Math.PI / 2; }
       const had = road.some(v => v), path = had ? routeRoad(B.door.a, B.door.b) : null;
       if (path) { path.forEach(p => road[p] = 1); if (path.length > 1) roadNote = ` A path was routed ${path.length - 1} tiles to the network.`; }
       else road[B.door.b * N + B.door.a] = 1;
@@ -2001,8 +2032,30 @@ function walkTo(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   if (v.path.length) { steer(v, v.path[0].x, v.path[0].z, dt, mode, .3, mult); return false; }
   return steer(v, tx, tz, dt, mode, stop, mult);
 }
-function enter(v, B, secs) { release(v); v.path = null; v.indoor = B; v.hideT = secs; v.g.visible = false; v.stuck = 0; }
-function exitDoor(v) { const dp = doorPoint(v.indoor && !v.indoor.dead ? v.indoor : (v.home && !v.home.dead ? v.home : castleB() || v.home)); v.x = v.tx = dp.x; v.z = v.tz = dp.z; v.indoor = null; v.hideT = 0; v.g.visible = true; v.stuck = 0; v.path = null; }
+function enter(v, B, secs) { release(v); v.path = null; v.indoor = B; v.hideT = secs; goIn(v, B); v.stuck = 0; }
+// villagers vanish only at the model's door: from the path tile they walk straight in, and come out the same way
+function goIn(v, B) {
+  const p = innerDoor(B);
+  if (p && v.g.visible && Math.hypot(p.x - v.x, p.z - v.z) < 4) v.doorWalk = { x: p.x, z: p.z, hide: true };
+  else { v.doorWalk = null; v.g.visible = false; }
+}
+function exitDoor(v) {
+  const B = v.indoor && !v.indoor.dead ? v.indoor : (v.home && !v.home.dead ? v.home : castleB() || v.home), dp = doorPoint(B), p = innerDoor(B);
+  dropLoad(v);
+  if (v.doorWalk && v.g.visible) v.doorWalk = { x: dp.x, z: dp.z };              // turned back on the way in
+  else if (p) { v.x = p.x; v.z = p.z; v.doorWalk = { x: dp.x, z: dp.z }; }
+  else { v.x = dp.x; v.z = dp.z; v.doorWalk = null; }
+  v.tx = dp.x; v.tz = dp.z; v.indoor = null; v.hideT = 0; v.g.visible = true; v.stuck = 0; v.path = null;
+}
+// one step of a door walk; true while it lasts (the villager's own logic waits)
+function doorStep(v, dt) {
+  const W = v.doorWalk, dx = W.x - v.x, dz = W.z - v.z, d = Math.hypot(dx, dz), step = v.speed * dt;
+  v.walking = true; turnTo(v, Math.atan2(dx, dz), dt);
+  if (d > step) { v.x += dx / d * step; v.z += dz / d * step; return true; }
+  v.x = W.x; v.z = W.z; v.doorWalk = null;
+  if (W.hide) { v.g.visible = false; dropLoad(v); }
+  return false;
+}
 function nearDoor(v, B, dp) { return Math.hypot(dp.x - v.x, dp.z - v.z) < .6 || (v.stuck > 1 && distRect(B, v.x, v.z) < 1.4); }
 function claimResource(v, now) {
   const hb = center(v.job), R = DEF[v.job.type].reach;
@@ -2014,9 +2067,12 @@ function claimResource(v, now) {
 }
 function release(v) { if (v.target && v.target.claim === v) v.target.claim = null; v.target = null; }
 function deliver(v) {
-  if (v.carryLog && v.carryLog.visible) { res.wood += LUMBER_LOAD; stats.wood += LUMBER_LOAD; v.carryLog.visible = false; }
-  if (v.carryStone && v.carryStone.visible) { res.stone++; stats.stone++; v.carryStone.visible = false; }
+  if (v.dropLoad) return;
+  if (v.carryLog && v.carryLog.visible) { res.wood += LUMBER_LOAD; stats.wood += LUMBER_LOAD; v.dropLoad = true; }
+  if (v.carryStone && v.carryStone.visible) { res.stone++; stats.stone++; v.dropLoad = true; }
+  if (!v.doorWalk) dropLoad(v);           // otherwise it is carried in through the door
 }
+function dropLoad(v) { if (v.dropLoad) { v.carryLog.visible = v.carryStone.visible = false; v.dropLoad = false; } }
 function updateBuilder(v, dt) {
   const S = v.build;
   if (S.dead || !S.site) { v.build = null; v.state = v.job ? 'commute' : 'find'; giveTool(v, toolFor(v)); return; }
@@ -2067,7 +2123,7 @@ function updateWorker(v, dt, now) {
       break;
     }
     case 'home':
-      if (walkTo(v, dp.x, dp.z, dt, 1, .35, mult) || nearDoor(v, W, dp) || v.stuck > 5) { deliver(v); enter(v, W, 1.5 + Math.random() * 2); v.state = 'drop'; }
+      if (walkTo(v, dp.x, dp.z, dt, 1, .35, mult) || nearDoor(v, W, dp) || v.stuck > 5) { enter(v, W, 1.5 + Math.random() * 2); deliver(v); v.state = 'drop'; }
       break;
     case 'drop': if ((v.hideT -= dt) <= 0) { exitDoor(v); v.state = 'find'; v.wait = .2; } break;
     default: v.state = 'find';
@@ -2097,7 +2153,8 @@ function updateVillagers(dt, now) {
   const night = PH.kind === 'night', keep = castleB();
   for (const v of villagers) {
     v.walking = false; v.working = false;
-    if (night) {
+    if (v.doorWalk && doorStep(v, dt)) { /* walking through a door */ }
+    else if (night) {
       if (v.sleeping) continue;
       if (v.post) {
         if (!v.posted) {
@@ -2105,7 +2162,7 @@ function updateVillagers(dt, now) {
           if (v.hideT > 0 || v.inside) { v.inside = false; exitDoor(v); }
           const P = v.post;
           if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.stuck > 6 || distRect(P.B, v.x, v.z) < .9) {
-            v.posted = true; v.g.visible = false; P.B.manned[P.a] = true; showDefender(P.B, P.a);
+            v.posted = true; v.doorWalk = null; dropLoad(v); v.g.visible = false; P.B.manned[P.a] = true; showDefender(P.B, P.a);
           }
         }
       } else if (!v.inside) {                       // everyone else shelters in the castle
@@ -2114,7 +2171,7 @@ function updateVillagers(dt, now) {
         if (v.hideT > 0) { v.hideT = 0; v.indoor = K; v.inside = true; v.g.visible = false; }
         else {
           const dp = doorPoint(K);
-          if (walkTo(v, dp.x, dp.z, dt, 1, .4, 1.4) || nearDoor(v, K, dp) || v.stuck > 4) { deliver(v); v.inside = true; v.indoor = K; v.g.visible = false; }
+          if (walkTo(v, dp.x, dp.z, dt, 1, .4, 1.4) || nearDoor(v, K, dp) || v.stuck > 4) { v.inside = true; v.indoor = K; goIn(v, K); deliver(v); }
         }
       }
     } else {
@@ -2126,7 +2183,7 @@ function updateVillagers(dt, now) {
         if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
       }
     }
-    if (v.inside || v.hideT > 0 || v.posted || v.sleeping) continue;
+    if (!v.doorWalk && (v.inside || v.hideT > 0 || v.posted || v.sleeping || !v.g.visible)) continue;
     v.phase += dt * (v.walking ? 9 : 0);
     const swing = v.walking ? Math.sin(v.phase) * .6 : 0;
     v.legs[0].rotation.x = swing; v.legs[1].rotation.x = -swing;
@@ -2209,8 +2266,16 @@ function edgePoint() {
 }
 const arrowGeo = new THREE.BoxGeometry(.04, .04, .7), arrowMat = mat('#3a2a1a');
 // where an archer's arrow leaves: the bow in the raised left hand
+// archers: both hands meet at the bow for the draw just before a shot, then the string hand flies back
+const DRAW = .45;
+function bowPose(p, draw, loose, L0, R0) {
+  const [l, r] = p.arms;
+  if (draw) { l.rotation.set(-1.55, 0, .6); r.rotation.set(-1.42, 0, -.62); }
+  else if (loose) { l.rotation.set(-1.5, 0, .6); r.rotation.set(-1.0, 0, .2); }
+  else { l.rotation.set(L0, 0, 0); r.rotation.set(R0, 0, 0); }
+}
 function bowPoint(p) {
-  p.arms[0].rotation.x = -1.5; p.g.updateMatrixWorld(true);
+  p.arms[0].rotation.x = -1.5; p.arms[0].rotation.z = .6; p.g.updateMatrixWorld(true);
   return (p.pivot || p.arms[0]).getWorldPosition(new THREE.Vector3());
 }
 function fireArrow(from, to, onHit) {
@@ -2245,14 +2310,15 @@ function updateEnemies(dt) {
       if (e.deadT > 2.4) { scene.remove(e.g); scene.remove(e.bar.grp); enemies.splice(n, 1); }
       continue;
     }
-    e.walking = false;
+    e.walking = false; e.aiming = false; e.running = false;
     if (!e.target || e.target.dead || (e.retarget -= dt) < 0) { const t = pickTarget(e); if (t !== e.target) e.lob = false; e.target = t; e.retarget = 3; }
     const B = e.target;
     if (B) {
       const d = distRect(B, e.x, e.z);
       if (e.detour) { steer(e, e.detour.x, e.detour.z, dt, 2); if ((e.detour.t -= dt) < 0) e.detour = null; }
       else if (d > e.range + (e.lob ? 3.5 : 0)) {
-        steer(e, clamp(e.x, B.ev.x0, B.ev.x1), clamp(e.z, B.ev.z0, B.ev.z1), dt, 2, e.range * .9);
+        e.running = e.kind !== 'archer' && !e.horse && d < 6;
+        steer(e, clamp(e.x, B.ev.x0, B.ev.x1), clamp(e.z, B.ev.z0, B.ev.z1), dt, 2, e.range * .9, e.running ? 1.6 : 1);
         if (e.stuck > 2) {
           const blk = nearestBuilding(e.x, e.z, 1.6);         // a wall is in the way: attack it
           if (blk && e.kind === 'archer' && !NOT_WALL(blk) && d <= e.range + 3.5) e.lob = true;   // archers loose over it instead
@@ -2261,7 +2327,7 @@ function updateEnemies(dt) {
           e.stuck = 0;
         }
       } else {
-        const c = center(B); e.g.rotation.y = Math.atan2(c.x - e.x, c.z - e.z);
+        const c = center(B); e.g.rotation.y = Math.atan2(c.x - e.x, c.z - e.z); e.aiming = true;
         if ((e.cool -= dt) <= 0) {
           e.cool = e.rate; e.attackT = .35;
           if (e.kind === 'archer') {
@@ -2277,11 +2343,12 @@ function updateEnemies(dt) {
       if (e.torso.material !== m) { e.torso.material = m; e.arms.forEach(a => a.userData.sleeve.material = m); }
       if (!on) e.flashT = undefined;
     }
-    e.phase += dt * (e.walking ? 9 : 0);
-    const sw = e.walking ? Math.sin(e.phase) * .6 : 0;
+    e.phase += dt * (e.walking ? (e.running ? 14 : 9) : 0);
+    const sw = e.walking ? Math.sin(e.phase) * (e.running ? .95 : .6) : 0;
+    e.body.rotation.x = e.running && e.walking ? .22 : 0;      // leaning into the charge
     if (e.horse) e.horseLegs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw * .8; });   // diagonal pairs move together
     else { e.legs[0].rotation.x = sw; e.legs[1].rotation.x = -sw; }
-    if (e.kind === 'archer') { e.arms[0].rotation.x = e.attackT > 0 ? -1.5 : -.35 - sw * .3; e.arms[1].rotation.x = e.attackT > 0 ? -1.35 : -sw * .6; }
+    if (e.kind === 'archer') bowPose(e, e.aiming && !(e.attackT > 0) && e.cool < DRAW, e.attackT > 0, -.35 - sw * .3, -sw * .6);
     else if (e.kind === 'spear') { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -1.55 : -.5 + sw * .2; e.pivot.rotation.x = e.attackT > 0 ? 0 : -2.6; }   // carried upright, levelled to thrust
     else { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -.6 - e.attackT * 5.7 : -.45 + sw * .3; }
     const y = hAt(e.x, e.z);
@@ -2337,13 +2404,19 @@ function updateDefense(dt) {
     const T = DEF[B.type]; if (!T.range) continue;
     const k = B.tier - 1, n = T.archers[k], c = center(B), R = T.range[k];
     while (B.cool.length < n) B.cool.push(Math.random() * T.rate[k]);
-    for (const f of B.figs || []) if (f) { f.attackT = Math.max(0, (f.attackT || 0) - dt); f.arms[0].rotation.x = f.attackT > 0 ? -1.5 : -.9; f.arms[1].rotation.x = f.attackT > 0 ? -1.35 : -.6; }
+    let best = null, bd = R;
+    for (const e of enemies) if (!e.dead) { const d = Math.hypot(e.x - c.x, e.z - c.z); if (d < bd) { bd = d; best = e; } }
+    (B.figs || []).forEach((f, a) => {
+      if (!f) return;
+      f.attackT = Math.max(0, (f.attackT || 0) - dt);
+      const draw = best && !(f.attackT > 0) && B.cool[a] < DRAW;
+      if (draw) f.g.rotation.y = Math.atan2(best.x - f.g.position.x, best.z - f.g.position.z);
+      bowPose(f, draw, f.attackT > 0, -.9, -.6);
+    });
     for (let a = 0; a < n; a++) {
       if (!(B.manned && B.manned[a])) continue;
       if ((B.cool[a] -= dt) > 0) continue;
-      let best = null, bd = R;
-      for (const e of enemies) if (!e.dead) { const d = Math.hypot(e.x - c.x, e.z - c.z); if (d < bd) { bd = d; best = e; } }
-      if (!best) { B.cool[a] = .2; continue; }
+      if (!best) { B.cool[a] = DRAW; continue; }
       B.cool[a] = T.rate[k] * (.9 + Math.random() * .2);
       const f = B.figs && B.figs[a];
       if (f) { f.g.rotation.y = Math.atan2(best.x - f.g.position.x, best.z - f.g.position.z); f.attackT = .3; }
@@ -2393,10 +2466,10 @@ function updateHungry(v, dt) {
   }
   const H0 = v.home && !v.home.dead ? v.home : castleB();
   if (v.hideT > 0) { v.hideT = 0; }
-  if (!v.g.visible && !v.hideT) v.g.visible = true;
+  if (!v.g.visible && !v.hideT) exitDoor(v);
   const dp = doorPoint(H0);
   if (walkTo(v, dp.x, dp.z, dt, 1, .4, .8) || nearDoor(v, H0, dp) || v.stuck > 5) {
-    v.sleeping = true; v.indoor = H0; v.g.visible = false; floatText('Zzz', '#bcd0ff', dp.x, hAt(dp.x, dp.z) + 1.8, dp.z);
+    v.sleeping = true; v.indoor = H0; goIn(v, H0); floatText('Zzz', '#bcd0ff', dp.x, hAt(dp.x, dp.z) + 1.8, dp.z);
   }
 }
 
@@ -2588,6 +2661,7 @@ function showGhostAt(point) {
   for (const t in ghosts) ghosts[t].visible = t === tool;
   const g = ghosts[tool], cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
   g.position.set(cx, adapt && tool !== 'wall' && ev.target != null ? ev.target : hAt(cx, cz), cz);
+  if (FACING[tool]) { const d = ev.ok ? pickDoor(ev, tool) : null; g.rotation.y = d ? d.f * Math.PI / 2 : 0; }
   const col = ev.ok ? '#8cc46e' : '#e2715b';
   ghostMat.color.set(col); footLine.material.color.set(col);
   drape(footLine, ev.x0, ev.z0, ev.x1, ev.z1);
@@ -2946,7 +3020,7 @@ setMuted(muted);
 const sepUnits = [];
 function separateUnits(dt) {
   sepUnits.length = 0;
-  for (const v of villagers) if (v.g.visible && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1 });
+  for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1 });
   for (const e of enemies) sepUnits.push({ u: e, r: e.horse ? .55 : .26, fixed: e.dead, mode: 2 });
   const k = Math.min(1, dt * 10);
   for (let i = 0; i < sepUnits.length; i++) for (let j = i + 1; j < sepUnits.length; j++) {
