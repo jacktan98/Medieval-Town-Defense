@@ -30,8 +30,8 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Arrows leave from the bow (`bowPoint`: raises the bow arm, reads the bow's world position) for tower/castle archers and raider archers.
 - Construction: `addScaffold` builds poles every ~1 m, plank decks per lift, braces, a ladder and material stacks; walls/torches/flowers get a light version (`LIGHT_SCAFFOLD`). Builders kick up dust (`dustAt`, shares the smoke `puffs`).
 - Walls are not flattened and have no AO plane; their posts/blocks run 0.3–0.6 m below ground so runs follow slopes cleanly.
-- Castle T2 is all stone: plain curtain walls, square corner towers open on top under straw roofs on posts, keep with a straw roof. Castle T3 holds 6 archers (2 on the keep, 1 per wall-walk).
-- Houses: T2 cottage (daub in a heavy timber frame, deep gabled thatch, woodpile); T3 burgher's house (rubble ground floor with arched door, jettied close-studded upper floor, tall blue roof with a dormer).
+- Castle T2 is all warm stone (`M.stone2`, like T3): plain curtain walls, square corner towers open on top, keep with a straw roof. Castle T3 holds 6 archers (2 on the keep, 1 per wall-walk).
+- Houses stay plain and ordinary so they never outshine the castle: T2 daub cottage with corner posts and a straw gable roof; T3 stone ground floor + plaster upper floor with a blue gable roof. One door, few windows, small chimney.
 
 ## Gameplay summary
 - 28×28 grid of 2 m cells. Start: castle prebuilt in the middle, 3 villagers, gold 40, wood 45, stone 0, food 20.
