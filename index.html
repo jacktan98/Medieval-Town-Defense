@@ -1426,9 +1426,26 @@ function addScaffold(B) {
   g.position.set(c.x, B.group.position.y, c.z); scene.add(g); B.scaffold = g;
 }
 function removeScaffold(B) { if (B.scaffold) { scene.remove(B.scaffold); B.scaffold = null; } }
+// repairs are free but take builder-time; a building's own workers mend it themselves, pausing their gathering
+const REPAIR_K = 1.2;
+function startRepairs() {
+  let n = 0;
+  for (const B of buildings) {
+    if (B.dead || B.hp >= B.max) continue;
+    if (B.site && B.site.kind !== 'repair') { B.hp = B.max; continue; }      // half-built sites just get patched up
+    const lost = 1 - B.hp / B.max;
+    B.site = { kind: 'repair', progress: instantBuild ? 1 : 0, time: Math.max(3, DEF[B.type].build * lost * REPAIR_K), hp0: B.hp };
+    n++;
+  }
+  return n;
+}
 function completeSite(B) {
   const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false;
   const c = center(B);
+  if (S.kind === 'repair') {
+    B.hp = B.max; floatText('Repaired', '#8cc46e', c.x, B.group.position.y + 3, c.z); sfx('build', c, .7);
+    refreshCard(); return;
+  }
   if (S.kind === 'new') {
     B.built = true; B.group.scale.y = 1; stats.built++; paversDirty = true; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]} villagers` : ''}${T.charm ? ` · +${Math.round(T.charm * 100)}% gold nearby` : ''}.`, 'good');
@@ -1630,13 +1647,14 @@ function assignBuilders() {
     if (!S.site) continue;
     const crew = villagers.filter(v => v.build === S).length;
     if (crew >= 2) continue;
-    const anyBuilding = villagers.some(v => v.build), c = center(S);
+    const anyBuilding = villagers.some(v => v.build), c = center(S), repair = S.site.kind === 'repair';
     let best = null, bd = 1e9;
     for (const v of villagers) {
       if (v.build || v.post || v.hungry) continue;
-      if (v.job && (anyBuilding || crew > 0)) continue;
+      const own = repair && v.job === S;
+      if (v.job && !own && (anyBuilding || crew > 0)) continue;
       if (v.carryLog.visible || v.carryStone.visible) continue;
-      const d = Math.hypot(v.x - c.x, v.z - c.z) + (v.job ? 40 : 0); if (d < bd) { bd = d; best = v; }
+      const d = Math.hypot(v.x - c.x, v.z - c.z) + (own ? -100 : v.job ? 40 : 0); if (d < bd) { bd = d; best = v; }
     }
     if (!best) continue;
     release(best); best.build = S; best.state = 'tobuild'; best.path = null; best.visit = null;
@@ -2035,6 +2053,7 @@ function econTick() {
   for (const B of buildings) {
     if (!B.built) continue;
     const c = center(B), T = DEF[B.type];
+    if (B.type === 'farm' && villagers.some(v => v.job === B) && villagers.every(v => v.job !== B || v.build)) continue;
     if (B.type === 'farm') { const f = T.food[B.tier - 1]; res.food += f; stats.food += f; floatRes('food', f, c.x, B.group.position.y + 1.6, c.z); }
     if (B.type === 'castle') {
       const g = T.gold[B.tier - 1], f = T.food[B.tier - 1]; res.gold += g; stats.gold += g; res.food += f; stats.food += f;
@@ -2096,9 +2115,9 @@ function startDay() {
   PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
   for (const v of villagers) if (v.post) { if (v.posted) { v.posted = false; v.inside = true; } v.post = null; }
   for (const B of buildings) { B.manned = []; hideDefenders(B); }
-  for (const B of buildings) B.hp = B.max;
-  banner(`Dawn · Day ${PH.wave}`, `Wave ${PH.wave - 1} defended. Buildings repaired.`); setMusic('day');
-  log(`<b>Wave ${PH.wave - 1} held.</b> Repairs done · ${Math.round(PH.t / 60)} min to night.`, 'good');
+  const hurt = startRepairs();
+  banner(`Dawn · Day ${PH.wave}`, `Wave ${PH.wave - 1} defended.${hurt ? ` Villagers head out to repair ${hurt} building${hurt > 1 ? 's' : ''}.` : ''}`); setMusic('day');
+  log(`<b>Wave ${PH.wave - 1} held.</b>${hurt ? ` ${hurt} damaged building${hurt > 1 ? 's' : ''} to repair (free, but workers leave their jobs).` : ''} ${Math.round(PH.t / 60)} min to night.`, 'good');
 }
 function endGame(won) {
   if (gameOver) return; gameOver = true; setMusic(won ? 'victory' : 'defeat');
@@ -2204,8 +2223,8 @@ function refreshCard() {
   const st = [];
   if (B.site) {
     const crew = villagers.filter(v => v.build === B).length;
-    st.push(STAT('', `${B.site.kind === 'new' ? 'Building' : 'Upgrading'} ${Math.floor(B.site.progress * 100)}%`, 'warn'));
-    st.push(STAT('pop', crew ? `${crew} builder${crew > 1 ? 's' : ''}` : PH.kind === 'night' ? 'Resumes at dawn' : 'Needs a villager', crew ? '' : 'bad'));
+    st.push(STAT('', `${{ new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]} ${Math.floor(B.site.progress * 100)}%`, 'warn'));
+    st.push(STAT('pop', crew ? `${crew} ${B.site.kind === 'repair' ? 'repairer' : 'builder'}${crew > 1 ? 's' : ''}` : PH.kind === 'night' ? 'Resumes at dawn' : 'Needs a villager', crew ? '' : 'bad'));
   }
   st.push(STAT('', `HP ${Math.ceil(B.hp)}/${B.max}`));
   if (B.type === 'castle') { st.push(STAT('gold', `+${T.gold[k]} / 20 s`)); st.push(STAT('food', `+${T.food[k]} / 20 s`)); }
@@ -2231,7 +2250,7 @@ function refreshCard() {
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
   else if (B.tier >= 3) { up.hidden = false; up.innerHTML = 'Fully upgraded'; up.disabled = true; }
-  else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? 'Building…' : `Upgrade ${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
+  else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? (B.site.kind === 'repair' ? 'Repairing…' : 'Building…') : `Upgrade ${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
   if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); dem.innerHTML = `Demolish ${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
@@ -2549,7 +2568,8 @@ function frame(now) {
     if (B.site) {
       const p = clamp(B.site.progress, 0, 1);
       if (B.site.kind === 'new') B.group.scale.y = .08 + .92 * p;
-      B.pbar.grp.visible = true; B.pbar.set(Math.max(p, .02)); B.pbar.fg.material.color.set('#e0b84a');
+      if (B.site.kind === 'repair') B.hp = B.site.hp0 + (B.max - B.site.hp0) * p;
+      B.pbar.grp.visible = true; B.pbar.set(Math.max(p, .02)); B.pbar.fg.material.color.set(B.site.kind === 'repair' ? '#8cc46e' : '#e0b84a');
       B.pbar.grp.position.set(center(B).x, B.group.position.y + BAR_TOP[B.type] + .3, center(B).z);
       if (p >= 1) completeSite(B);
     }
