@@ -603,7 +603,7 @@ terrainMat.onBeforeCompile = sh => {
 };
 const terrain = new THREE.Mesh(tGeo, terrainMat);
 terrain.receiveShadow = true; scene.add(terrain);
-const waterMat = new THREE.MeshStandardMaterial({ color: '#3e6e7a', transparent: true, opacity: .85, roughness: .2, metalness: .1 });
+const waterMat = new THREE.MeshStandardMaterial({ color: '#3e6e7a', transparent: true, opacity: .85, roughness: .7, metalness: 0 });   // rough enough that low-angle views don't glare white
 const SKIRT = 50;   // scenery beyond the playable map on every side (see genSkirt); the water plane covers it too
 const water = new THREE.Mesh(new THREE.PlaneGeometry(SIZE + 2 * SKIRT, SIZE + 2 * SKIRT).rotateX(-Math.PI / 2).translate(SIZE / 2, 0, SIZE / 2), waterMat);
 water.receiveShadow = true; scene.add(water);
