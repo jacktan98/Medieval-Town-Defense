@@ -2068,7 +2068,7 @@ function assignJobs() {
     let have = villagers.filter(v => v.job === B).length;
     while (have < T.workers[B.tier - 1]) {
       const c = center(B); let best = null, bd = 1e9;
-      for (const v of villagers) if (!v.job) { const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; } }
+      for (const v of villagers) if (!v.job && !v.soldier && !v.unkit) { const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; } }
       if (!best) break;
       best.job = B; release(best); best.path = null; best.visit = null;
       if (!best.build) best.state = 'commute';
@@ -2345,7 +2345,7 @@ function updateVillagers(dt, now) {
   if ((hungryLogT -= dt) <= 0 && newlyHungry) { log(`No food · <b>${newlyHungry}</b> asleep`, 'warn'); newlyHungry = 0; hungryLogT = 15; }
   const night = PH.kind === 'night', keep = castleB();
   for (const v of villagers) {
-    v.walking = false; v.working = false;
+    v.walking = false; v.working = false; v.changing = false;
     if (v.doorWalk && doorStep(v, dt)) { /* walking through a door */ }
     else if (night) {
       if (v.sleeping) continue;
@@ -2379,7 +2379,7 @@ function updateVillagers(dt, now) {
       if (v.hungry) { updateHungry(v, dt); if (v.sleeping) continue; }
       else {
         const want = toolFor(v) || null;
-        if ((v.toolKind || null) !== want) updateChange(v, dt, want);     // wrong clothes for the next task: home to change first
+        if ((v.toolKind || null) !== want || v.changeT > 0) updateChange(v, dt, want);     // wrong clothes for the next task: change first
         else {
           if (!(v.hideT > 0) && !canStand(v.x, v.z, 1)) exitDoor(v);
           if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
@@ -2401,6 +2401,12 @@ function updateVillagers(dt, now) {
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
     else if (v.working && TOOL_POSE[kind]) ({ w, R: Rt, L, tilt, lean } = TOOL_POSE[kind](now / 1000 + v.seed)); else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
+    if (v.changing) {                                                 // bending down to change: lean in and out, arms to the ground
+      // down on one knee and up again (the figure bends only at the ground, so it kneels rather than stoops), hands to the ground
+      const k = Math.sin(Math.PI * clamp(1 - v.changeT / CHANGE_T, 0, 1)); lean = .22 * k; L = Rt = -1.0 * k; tilt = -.2;
+      v.body.position.y = -.2 * k; v.legs[0].rotation.x = -1.3 * k; v.legs[1].rotation.x = .6 * k;
+      v.toolOff = k > .35;
+    }
     if (v.soldier) {                                                  // weapon carried upright; a thrust or a cut when striking
       const at = v.attackT || 0; L = -.55 - swing * .2; lean = 0;
       if (v.toolKind === 'spear') { const u = spearThrust(at); Rt = -1.0 - .45 * u + swing * .08; tilt = -.57 + .45 * u - swing * .08; v.pivot.position.y = -.33 - .3 * u; }   // see spearPose
@@ -2408,7 +2414,7 @@ function updateVillagers(dt, now) {
     }
     if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
     const ease = (o, t) => o + (t - o) * Math.min(1, dt * 14);    // poses blend over ~0.1 s, so switching task never snaps
-    if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
+    if (v.pivot) { v.pivot.visible = !logC && !stoneC && !(v.changing && v.toolOff); v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
     v.arms[0].rotation.x = ease(v.arms[0].rotation.x, L); v.arms[1].rotation.x = ease(v.arms[1].rotation.x, Rt); v.body.rotation.x = ease(v.body.rotation.x, lean);
     if (v.soldier && v.toolKind === 'spear') { v.arms[1].rotation.x = Rt; v.pivot.rotation.x = tilt; }   // exact, or the shaft tips mid-thrust
@@ -2686,18 +2692,15 @@ function updateSoldier(v, dt) {
   } else if (Math.hypot(hx - v.x, hz - v.z) > .35) walkTo(v, hx, hz, dt, 1, .3, 1.3);
 }
 // dawn: back to the barracks, in, out of the kit, out again to the day's work (a lost barracks: change where they stand)
-// a change of job (or to and from building) means a change of clothes: walk home, in, change, out to the new task
+// a change of job (or to and from building) means a change of clothes, on the spot: the villager stops, bends down,
+// swaps outfit and tool at the bottom of the bend and straightens up (indoors it just happens); soldiers change at the barracks
+const CHANGE_T = 1.1;
 function updateChange(v, dt, want) {
-  const H = v.home && !v.home.dead && buildings.includes(v.home) && v.home.built ? v.home : castleB();
-  if (!H) { giveTool(v, want); return; }
-  if (v.kitT > 0) {
-    if (v.g.visible && !v.doorWalk) v.kitT = 0;                    // interrupted (by the night): start the trip again
-    else { if (!v.g.visible && !v.doorWalk && (v.kitT -= dt) <= 0) { giveTool(v, want); v.kitT = 0; if (!v.indoor || v.indoor.dead) v.indoor = H; exitDoor(v); v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .2; } return; }
-  }
-  release(v); v.visit = null;
-  if (v.hideT > 0) { v.hideT = 0; v.kitT = 1.2; return; }      // already indoors somewhere: change there, come out of the same door
-  const dp = doorPoint(H);
-  if (walkTo(v, dp.x, dp.z, dt, 1, .4) || nearDoor(v, H, dp) || v.noProg > 6) { deliver(v); v.kitT = 1.2; v.indoor = H; goIn(v, H); }
+  if (v.hideT > 0 || !v.g.visible) { giveTool(v, want); v.changeT = 0; return; }
+  if (!(v.changeT > 0)) { v.changeT = CHANGE_T; v.swapped = false; release(v); v.path = null; }
+  v.changing = true;
+  if ((v.changeT -= dt) <= CHANGE_T / 2 && !v.swapped) { giveTool(v, want); v.swapped = true; }
+  if (v.changeT <= 0) { v.changeT = 0; if (!v.swapped) giveTool(v, want); v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .1; }
 }
 function updateUnkit(v, dt) {
   const B = v.unkit, done = () => { stripKit(v); v.unkit = null; v.kitT = 0; v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .3; };
