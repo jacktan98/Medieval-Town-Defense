@@ -1393,7 +1393,10 @@ const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
   if (plinth && tier === 1 && SLAB[type]) { const w = DEF[type].size * CELL; g.add(box(w, 1.0, w, M.court, 0, SLAB_TOP - .5, 0)); }   // a metre deep: ground lowered by a neighbour never opens a gap
   if (!NO_AO[type]) { const w = DEF[type].size * CELL + 1.3, ao = new THREE.Mesh(new THREE.PlaneGeometry(w, w).rotateX(-Math.PI / 2), aoMat); ao.position.y = .04; ao.userData.ao = true; g.add(ao); }
   let n = 0;
-  g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = !o.userData.noShadow; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
+  // every part gets a slightly different shade, except the base (slab or plinth: footprint-wide, below ground level), which has one
+  // shade per tier so neighbouring bases join without a seam
+  const fp = DEF[type].size * CELL, isBase = o => o.geometry.parameters && Math.abs(o.geometry.parameters.width - fp) < .01 && o.position.y < 0;
+  g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = !o.userData.noShadow; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, isBase(o) ? 0 : (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
   return g;
 };
 
@@ -2084,7 +2087,7 @@ function assignBuilders() {
     const anyBuilding = villagers.some(v => v.build), c = center(S), repair = S.site.kind === 'repair';
     let best = null, bd = 1e9;
     for (const v of villagers) {
-      if (v.build || v.post || v.hungry) continue;
+      if (v.build || v.post || v.hungry || v.unkit) continue;
       const own = repair && v.job === S;
       if (v.job && !own && (anyBuilding || crew > 0)) continue;
       if (v.carryLog.visible || v.carryStone.visible) continue;
@@ -2354,9 +2357,11 @@ function updateVillagers(dt, now) {
           const P = v.post;
           if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.noProg > 6 || distRect(P.B, v.x, v.z) < .9) {
             v.posted = true; v.doorWalk = null; deliver(v); dropLoad(v); P.B.manned[P.a] = true;   // a log or stone in hand is put down first
-            if (DEF[P.B.type].soldiers) { soldierKit(v, P.B.tier); v.sbar = v.sbar || makeBar(.6); v.prog = null; }   // gears up and stays out to fight
+            if (DEF[P.B.type].soldiers) { v.kitT = 1.4; v.indoor = P.B; goIn(v, P.B); }   // goes inside to gear up (see below)
             else { v.g.visible = false; showDefender(P.B, P.a); }
           }
+        } else if (v.kitT > 0) {                    // changing inside the barracks; out again armed
+          if (!v.g.visible && !v.doorWalk && (v.kitT -= dt) <= 0) { soldierKit(v, v.post.B.tier); v.sbar = v.sbar || makeBar(.6); v.prog = null; v.indoor = v.post.B; exitDoor(v); }
         } else if (v.soldier) updateSoldier(v, dt);
       } else if (!v.inside) {                       // everyone else shelters in the castle
         release(v); v.visit = null; if (v.state === 'building') v.state = 'tobuild';
@@ -2368,12 +2373,15 @@ function updateVillagers(dt, now) {
         }
       }
     } else {
+      if (v.unkit) { updateUnkit(v, dt); }
+      else {
       if (v.inside) { v.inside = false; exitDoor(v); v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = Math.random() * 1.5; }
       feedVillager(v, dt);
       if (v.hungry) { updateHungry(v, dt); if (v.sleeping) continue; }
       else {
         if (!(v.hideT > 0) && !canStand(v.x, v.z, 1)) exitDoor(v);
         if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
+      }
       }
     }
     if (!v.doorWalk && (v.inside || v.hideT > 0 || (v.posted && !v.soldier) || v.sleeping || !v.g.visible)) continue;
@@ -2674,6 +2682,14 @@ function updateSoldier(v, dt) {
     else { turnTo(v, Math.atan2(foe.x - v.x, foe.z - v.z), dt); if (v.cool <= 0) { v.cool = SOLDIER.rate; v.attackT = .35; hurtEnemy(foe, SOLDIER.dmg[k]); sfx('attack', v); } }
   } else if (Math.hypot(hx - v.x, hz - v.z) > .35) walkTo(v, hx, hz, dt, 1, .3, 1.3);
 }
+// dawn: back to the barracks, in, out of the kit, out again to the day's work (a lost barracks: change where they stand)
+function updateUnkit(v, dt) {
+  const B = v.unkit, done = () => { stripKit(v); v.unkit = null; v.kitT = 0; v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .3; };
+  if (B.dead || !buildings.includes(B)) { done(); return; }
+  if (v.kitT > 0) { if (!v.g.visible && !v.doorWalk && (v.kitT -= dt) <= 0) { done(); v.indoor = B; exitDoor(v); } return; }
+  const dp = doorPoint(B);
+  if (walkTo(v, dp.x, dp.z, dt, 1, .4) || nearDoor(v, B, dp) || v.noProg > 6) { v.kitT = 1.2; v.indoor = B; goIn(v, B); }
+}
 function hurtSoldier(v, d) {
   if (!v.soldier) return;
   v.hp -= d;
@@ -2802,7 +2818,8 @@ function startNight() {
 function startDay() {
   PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
   for (const v of villagers) if (v.post) {
-    if (v.soldier) { stripKit(v); v.posted = false; v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.path = null; }   // soldiers stand down where they are
+    if (v.soldier) { v.unkit = v.post.B; v.posted = false; v.prog = null; v.path = null; }     // walk back to the barracks to change
+    else if (v.kitT > 0) { v.kitT = 0; v.posted = false; if (!v.g.visible || v.doorWalk) { v.indoor = v.post.B; exitDoor(v); } }   // dawn caught them changing
     else if (v.posted) { v.posted = false; v.inside = true; }
     v.post = null;
   }
