@@ -3052,7 +3052,7 @@ function refreshCard() {
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
   $('#cardActs').hidden = [...$('#cardActs').children].every(b => b.hidden);
-  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>' : `<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M3 3 L10.5 11 L8.5 13.5 L21 21.5"/></svg>${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
+  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>' : `<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
 }
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
