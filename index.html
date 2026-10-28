@@ -218,6 +218,11 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
   .pausedTag{padding-top:0;align-items:center}
 }
 @media (prefers-reduced-motion:reduce){.banner{transition:none}}
+/* design gallery: everything but the canvas and its own bar is hidden */
+#app.gallery > :not(canvas):not(#galBar){display:none!important}
+.galBar{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(24,26,20,.88);border:1px solid #4a4838;color:#efe6cf;z-index:20}
+.galBar b{padding:0 6px;font-family:inherit}
+.galBar button{min-height:32px;padding:2px 10px}
 </style>
 
 <div id="app">
@@ -253,6 +258,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       <div class="adminRow"><button id="adFill">Fill all to 9,999</button><button id="adFinish">Finish all building</button></div>
       <label class="adminTog"><input type="checkbox" id="adInstant"> Instant build and upgrades</label>
       <div class="adminRow"><button id="adPop">+5 villagers</button><button id="adDay">Skip to night</button></div>
+      <div class="adminRow"><button id="adGallery">Gallery</button></div>
     </div>
     <div class="cornerBtns">
       <button class="iconBtn" id="muteBtn" aria-pressed="false" aria-label="Mute sound" title="Sound on (M to mute)"></button>
@@ -290,6 +296,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       <div class="tools" id="tools"></div>
     </div>
   </div>
+  <div class="galBar" id="galBar" hidden><b>Gallery</b><button id="galTurn">Turn</button><button id="galDoors">Doors</button><button id="galWalk">Walk</button><button class="primary" id="galBack">Back</button></div>
   <div class="modal" id="summary" hidden>
     <div class="sheet">
       <h2 id="sumTitle"></h2>
@@ -1898,12 +1905,23 @@ function giveTool(v, kind) {
   const p = makeTool(kind); v.arms[1].add(p); v.pivot = p;
 }
 const JOB_TOOL = { lodge: 'axe', quarry: 'pick', farm: 'hoe' };
+// working swings (t in seconds): right arm R, free arm L, tool tilt, body lean; w is the swing sine (a strike sounds as it passes +0.85)
+const TOOL_POSE = {
+  axe: t => { const w = Math.sin(t * 5.8); return { w, R: -1.75 + w * .95, L: -.35 - w * .15, tilt: -.6, lean: .08 - w * .06 }; },     // one-handed chop, free arm steadies
+  pick: t => { const w = Math.sin(t * 5.2); return { w, R: -1.5 + w, L: -.35 - w * .15, tilt: -.75, lean: .14 - w * .08 }; },       // one-handed: the rig's hands can't meet on one handle
+  hoe: t => { const w = Math.sin(t * 4.8); return { w, R: -.85 + w * .35, L: -.25, tilt: -.32, lean: .32 + w * .05 }; },           // blade pulled through the soil
+  hammer: t => { const w = Math.sin(t * 8.5); return { w, R: -1.25 + w * .55, L: -.75, tilt: -.95, lean: .12 }; },
+};
 const toolFor = v => v.build ? 'hammer' : v.job ? JOB_TOOL[v.job.type] : null;
 const castleB = () => buildings.find(B => B.type === 'castle');
-function makeVillager(home) {
-  const v = makePerson({}); v.plainHat = Math.random() < .5; dress(v, null);
+// a log for the right shoulder and a block held at the chest, hidden until carried
+function addLoads(v) {
   v.carryLog = cyl(.085, .085, .9, 6, M.log, .19, 1.03, .02); v.carryLog.rotation.x = Math.PI / 2; v.carryLog.visible = false; v.body.add(v.carryLog);
   v.carryStone = box(.32, .26, .3, M.stone2, 0, .72, .26); v.carryStone.visible = false; v.body.add(v.carryStone);
+}
+function makeVillager(home) {
+  const v = makePerson({}); v.plainHat = Math.random() < .5; dress(v, null);
+  addLoads(v);
   const dp = doorPoint(home);
   Object.assign(v, { home, job: null, build: null, state: 'find', x: dp.x + (Math.random() - .5) * .6, z: dp.z + (Math.random() - .5) * .6 });
   v.tx = v.x; v.tz = v.z; v.wait = Math.random() * .4; v.fresh = true;
@@ -2246,13 +2264,7 @@ function updateVillagers(dt, now) {
     let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0, w = null;
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
-    else if (v.working && kind) {
-      const t = now / 1000 + v.seed;
-      if (kind === 'axe') { w = Math.sin(t * 5.8); Rt = -1.75 + w * .95; L = -.35 - w * .15; tilt = -.6; lean = .08 + w * -.06; }   // one-handed chop, free arm steadies
-      else if (kind === 'pick') { w = Math.sin(t * 5.2); Rt = -1.5 + w * 1.0; L = -.35 - w * .15; tilt = -.75; lean = .14 - w * .08; }   // one-handed: the rig's hands can't meet on one handle
-      else if (kind === 'hoe') { w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
-      else if (kind === 'hammer') { w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
-    } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
+    else if (v.working && TOOL_POSE[kind]) ({ w, R: Rt, L, tilt, lean } = TOOL_POSE[kind](now / 1000 + v.seed)); else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
     if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
     const ease = (o, t) => o + (t - o) * Math.min(1, dt * 14);    // poses blend over ~0.1 s, so switching task never snaps
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
@@ -2295,11 +2307,14 @@ function mountHorse(p) {
   for (const [n, sx] of [[0, -1], [1, 1]]) { p.legs[n].rotation.x = -1.2; p.legs[n].rotation.z = sx * .55; }
   p.horse = h;
 }
-function spawnEnemy(kind, sp, wave) {
-  const E = ENEMY[kind], w = WAVES[wave - 1];
+function makeRaider(kind) {
   const p = makePerson({ tunic: enemyTunic[kind], helm: kind === 'archer' ? 'hood' : kind === 'captain' ? 'captain' : 'raider', tool: kind === 'archer' ? 'bow' : kind === 'spear' ? 'spear' : 'sword' });
   if (kind !== 'archer') p.body.add(box(.05, .38, .3, shieldM, -.2, .7, .1));
-  if (E.mounted) mountHorse(p);
+  if (ENEMY[kind].mounted) mountHorse(p);
+  return p;
+}
+function spawnEnemy(kind, sp, wave) {
+  const E = ENEMY[kind], w = WAVES[wave - 1], p = makeRaider(kind);
   const e = Object.assign(p, { kind, x: clamp(sp.x + (Math.random() - .5) * 2, 1, SIZE - 1), z: clamp(sp.z + (Math.random() - .5) * 2, 1, SIZE - 1),
     hp: E.hp * w.hp, max: E.hp * w.hp, speed: E.speed * (.9 + Math.random() * .2), range: E.range, dmg: E.dmg * w.dmg, rate: E.rate,
     cool: Math.random(), target: null, retarget: 0, dead: false, deadT: 0, bar: makeBar(kind === 'captain' ? 1.2 : .8) });
@@ -2740,10 +2755,11 @@ function updateCam() {
   camera.lookAt(target);
   scene.fog.near = dist + 35; scene.fog.far = dist + 130;   // haze starts beyond the town, so the top of a tall phone screen stays crisp
 }
+var CAM_LIM = { lo: 0, hi: SIZE, near: 14 };      // the gallery widens these
 function pan(dx, dy) {
   const k = dist * .0016;
-  target.x = clamp(target.x + (-Math.cos(yaw) * dx - Math.sin(yaw) * dy) * k, 0, SIZE);
-  target.z = clamp(target.z + (Math.sin(yaw) * dx - Math.cos(yaw) * dy) * k, 0, SIZE);
+  target.x = clamp(target.x + (-Math.cos(yaw) * dx - Math.sin(yaw) * dy) * k, CAM_LIM.lo, CAM_LIM.hi);
+  target.z = clamp(target.z + (Math.sin(yaw) * dx - Math.cos(yaw) * dy) * k, CAM_LIM.lo, CAM_LIM.hi);
 }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function setRay(e) { const r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); }
@@ -2789,7 +2805,7 @@ canvas.addEventListener('pointermove', e => {
     if (down.painting) { if (down.moved) paintAt(e); return; }
     if (down.moved) { if (down.btn === 2 || down.shift) { yaw -= dx * .006; pitch = clamp(pitch + dy * .005, .3, 1.45); } else pan(dx, dy); updateCam(); }
   } else if (ptrs.size === 2 && pinch) {
-    const s = pinchState(); let da = s.ang - pinch.ang; da = Math.atan2(Math.sin(da), Math.cos(da)); yaw += da; dist = clamp(dist * pinch.d / s.d, 14, 95); pan(s.mx - pinch.mx, s.my - pinch.my); pinch = s; updateCam();
+    const s = pinchState(); let da = s.ang - pinch.ang; da = Math.atan2(Math.sin(da), Math.cos(da)); yaw += da; dist = clamp(dist * pinch.d / s.d, CAM_LIM.near, 95); pan(s.mx - pinch.mx, s.my - pinch.my); pinch = s; updateCam();
   }
 });
 function endPtr(e) {
@@ -2800,8 +2816,9 @@ function endPtr(e) {
 }
 canvas.addEventListener('pointerup', endPtr);
 canvas.addEventListener('pointercancel', endPtr);
-canvas.addEventListener('wheel', e => { e.preventDefault(); dist = clamp(dist * Math.exp(e.deltaY * .001), 14, 95); updateCam(); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); dist = clamp(dist * Math.exp(e.deltaY * .001), CAM_LIM.near, 95); updateCam(); }, { passive: false });
 function tap(e) {
+  if (galleryOn) { galleryTap(e); return; }
   if (gameOver) return;
   if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused', 'bad'); return; }
   if (PAINT[tool]) { paintAt(e); return; }
@@ -2882,6 +2899,108 @@ function keyCamera(dt) {
   if (has('q')) yaw += 1.6 * dt; if (has('e')) yaw -= 1.6 * dt;
   updateCam();
 }
+
+// ---------- design gallery (Admin → Gallery, or open with ?gallery): every building at every tier and every character, on a lawn ----------
+// its own scene, lit like midday; the game is paused underneath and comes back untouched on Back
+var galleryOn = false;
+let gScene = null, gSaved = null, gDoors = 0, gDoorK = 0, gWalk = false;
+const gItems = [], gPeople = [], gRows = [], GAL_X = [10, 22, 34];     // gRows: { title, z, depth } for tools/render
+function galLabel(text, color, x, z, big, k = 1) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex(text, color), transparent: true, depthWrite: false, toneMapped: false }));
+  sp.scale.set((big ? 4.4 : 3.4) * k, (big ? 1.1 : .85) * k, 1); sp.position.set(x, big ? 1.4 : .55, z); sp.renderOrder = 5; gScene.add(sp);
+}
+function buildGallery() {
+  gScene = new THREE.Scene(); gScene.background = SKY_DAY.clone();
+  gScene.add(new THREE.HemisphereLight('#d6e6ff', '#4a3d28', .7));
+  const s = new THREE.DirectionalLight('#ffe7c4', 1.05);
+  s.position.set(-12, 46, 8); s.target.position.set(24, 0, 44); s.castShadow = true; s.shadow.mapSize.set(2048, 2048);
+  Object.assign(s.shadow.camera, { left: -62, right: 62, top: 62, bottom: -62, near: 1, far: 170 }); s.shadow.bias = -.0006;
+  gScene.add(s, s.target);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220).rotateX(-Math.PI / 2), mat('#6f8a45')); ground.position.set(24, 0, 44); ground.receiveShadow = true; gScene.add(ground);
+  let z = 3;
+  const row = (title, depth, fill) => { const zc = z + depth / 2; galLabel(title, '#f2c95e', 1.5, zc, true); fill(zc, depth); gRows.push({ title, z: zc, depth }); z += depth + 3.4; };
+  const add = (g, x, zc, turns) => { g.position.set(x, 0, zc); g.userData.turn = 0; gScene.add(g); gItems.push({ g, turns }); return g; };
+  for (const type of ['castle', 'house', 'lodge', 'quarry', 'farm', 'tower']) {
+    const T = DEF[type], d = T.size * CELL;
+    row(T.name, d, zc => T.tiers.forEach((nm, i) => { add(makeModel(type, i + 1, true, 0, 0), GAL_X[i], zc, true); galLabel(nm, '#fff', GAL_X[i], zc + d / 2 + 1.1); }));
+  }
+  // walls run into a gate from both sides: E–W wall, gate, wall
+  row('Walls · gate', 2, zc => DEF.gate.tiers.forEach((nm, i) => {
+    add(makeModel('wall', i + 1, true, 2, 0), GAL_X[i] - 2, zc); add(makeModel('gate', i + 1, true, 10, 0), GAL_X[i], zc); add(makeModel('wall', i + 1, true, 8, 0), GAL_X[i] + 2, zc);
+    galLabel(nm, '#fff', GAL_X[i], zc + 2.1);
+  }));
+  row('Decor', 2, zc => ['well', 'torch', 'flowers', 'statue'].forEach((t, i) => { add(makeModel(t, 1, true, 0, 0), 8 + i * 9, zc, true); galLabel(DEF[t].name, '#fff', 8 + i * 9, zc + 2.1); }));
+  const people = (title, list) => (row(title, 1.2, zc => list.forEach((P, i) => {
+    const x = 6 + i * 3.3, p = P.raider ? makeRaider(P.raider) : P.guard ? makePerson({ tunic: guardTunic, helm: 'soldier', tool: 'bow' }) : makePerson({});
+    if (!P.raider && !P.guard) { p.plainHat = !P.tool; addLoads(p); giveTool(p, P.tool || null); dress(p, P.tool || null); if (P.carry === 'log') p.carryLog.visible = true; if (P.carry === 'stone') p.carryStone.visible = true; }
+    p.g.position.set(x, 0, zc); p.g.rotation.y = .5; gScene.add(p.g); Object.assign(p, P, { seed: i * .7 }); gPeople.push(p);
+    galLabel(P.name, P.raider ? '#ff9a8a' : '#fff', x, zc + 1.2, false, .75);
+  })), gRows[gRows.length - 1].n = list.length);     // how many people: tools/render takes two shots of a long row
+  people('Villagers', [{ name: 'Villager' }, { name: 'Farmer', tool: 'hoe', work: 1 }, { name: 'Lumberjack', tool: 'axe', work: 1 }, { name: 'Log carrier', tool: 'axe', carry: 'log' },
+    { name: 'Mason', tool: 'pick', work: 1 }, { name: 'Stone carrier', tool: 'pick', carry: 'stone' }, { name: 'Builder', tool: 'hammer', work: 1 }, { name: 'Archer', guard: 1 }]);
+  people('Raiders', [{ name: 'Spearman', raider: 'spear' }, { name: 'Swordsman', raider: 'sword' }, { name: 'Archer', raider: 'archer' }, { name: 'Captain', raider: 'captain' }]);
+}
+function openGallery() {
+  if (galleryOn) return;
+  if (!gScene) buildGallery();
+  gSaved = { target: target.clone(), yaw, pitch, dist, paused, lim: { ...CAM_LIM } };
+  paused = true; galleryOn = true; hideGhost();
+  Object.assign(CAM_LIM, { lo: -10, hi: 110, near: 4 });
+  target.set(22, 0, 16); yaw = 0; pitch = .75; dist = 34; updateCam();
+  $('#app').classList.add('gallery'); $('#galBar').hidden = false;
+}
+function closeGallery() {
+  if (!galleryOn) return;
+  galleryOn = false; Object.assign(CAM_LIM, gSaved.lim);
+  target.copy(gSaved.target); yaw = gSaved.yaw; pitch = gSaved.pitch; dist = gSaved.dist; paused = gSaved.paused; updateCam();
+  $('#app').classList.remove('gallery'); $('#galBar').hidden = true;
+}
+// tap a building: a quarter turn, to see its other sides
+function galleryTap(e) {
+  setRay(e);
+  const hit = ray.intersectObjects(gItems.map(i => i.g), true)[0]; if (!hit) return;
+  const it = gItems.find(i => { let o = hit.object; while (o) { if (o === i.g) return true; o = o.parent; } return false; });
+  if (it && it.turns) it.g.userData.turn++;
+}
+function galPose(p, t, dt) {
+  const ease = (o, v) => o + (v - o) * Math.min(1, dt * 14), walking = gWalk || p.carry || (!p.work && !p.guard && !p.raider);
+  const ph = t * 9 + p.seed, sw = walking ? Math.sin(ph) * .6 : 0;
+  if (p.horseLegs) p.horseLegs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw * .8; });
+  else { p.legs[0].rotation.x = sw; p.legs[1].rotation.x = -sw; }
+  p.body.position.y = walking && !p.horseLegs ? Math.abs(Math.sin(ph)) * .05 : 0;
+  let L = -sw * .8, R = sw * .8, tilt = -.2, lean = 0;
+  if (p.guard || p.raider === 'archer') {                        // loose a shot every 1.8 s: idle, draw with both hands, loose
+    const c = (t + p.seed) % 1.8; bowPose(p, c > .6 && c < 1.05, c >= 1.05 && c < 1.4, p.guard ? -.9 : -.35, p.guard ? -.6 : 0); return;
+  }
+  if (p.raider) {                                                 // a strike every 1.2 s, as in a raid
+    const at = gWalk ? 0 : Math.max(0, .35 - (t + p.seed) % 1.2);
+    p.arms[0].rotation.x = -.55 - sw * .2;
+    if (p.raider === 'spear') { p.arms[1].rotation.x = at > 0 ? -1.55 : -.5 + sw * .2; p.pivot.rotation.x = at > 0 ? 0 : -2.6; }
+    else p.arms[1].rotation.x = at > 0 ? -.6 - at * 5.7 : -.45 + sw * .3;
+    return;
+  }
+  if (p.carry === 'log') { R = -2.75; L = -sw * .6; } else if (p.carry === 'stone') { L = R = -1.2; }
+  else if (p.work && !gWalk) ({ R, L, tilt, lean } = TOOL_POSE[p.tool](t + p.seed));
+  else if (p.tool) { R = -.3 + sw * .25; tilt = -.25; }
+  if (p.pivot) { p.pivot.visible = !p.carry; p.pivot.rotation.x = ease(p.pivot.rotation.x, tilt); }
+  p.arms[0].rotation.x = ease(p.arms[0].rotation.x, L); p.arms[1].rotation.x = ease(p.arms[1].rotation.x, R); p.body.rotation.x = ease(p.body.rotation.x, lean);
+}
+function updateGallery(dt, now) {
+  const t = now / 1000;
+  gDoorK += (gDoors - gDoorK) * Math.min(1, dt * 4);
+  for (const it of gItems) {
+    const g = it.g, goal = g.userData.turn * Math.PI / 2;
+    g.rotation.y += (goal - g.rotation.y) * Math.min(1, dt * 6);
+    if (!g.userData.leaves) { const L = []; g.traverse(o => { if (o.userData.leaf !== undefined) L.push(o); }); g.userData.leaves = L; }
+    for (const l of g.userData.leaves) l.rotation.y = l.userData.leaf * gDoorK;
+  }
+  for (const p of gPeople) galPose(p, t, dt);
+}
+$('#adGallery').addEventListener('click', openGallery);
+$('#galBack').addEventListener('click', closeGallery);
+$('#galTurn').addEventListener('click', () => { for (const it of gItems) if (it.turns) it.g.userData.turn++; });
+$('#galDoors').addEventListener('click', () => { gDoors = gDoors ? 0 : 1; $('#galDoors').setAttribute('aria-pressed', String(!!gDoors)); });
+$('#galWalk').addEventListener('click', () => { gWalk = !gWalk; $('#galWalk').setAttribute('aria-pressed', String(gWalk)); });
 
 // ---------- game setup ----------
 function findValid(type, ci0, cj0, opts = {}) {
@@ -3198,7 +3317,8 @@ $('#gSkip').addEventListener('click', () => { guideFinish(); $('#guide').hidden 
 
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  keyCamera(dt); updateLamps(dt, now); updateLight(dt, now);
+  keyCamera(dt);
+  if (galleryOn) { updateGallery(dt, now); renderer.render(gScene, camera); requestAnimationFrame(frame); return; } updateLamps(dt, now); updateLight(dt, now);
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
   if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); }
@@ -3233,6 +3353,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+if (/[?&]gallery\b/.test(location.search)) openGallery();
 // dev hook: open with ?debug to evaluate code inside the game scope from the console (window.G('dist=20;updateCam()'))
 if (/[?&]debug\b/.test(location.search)) window.G = s => eval(s);
 })();
