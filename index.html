@@ -1839,8 +1839,8 @@ function removeBuilding(B, raid) {
   if (B.rallyFlag) setRally(B, null);
   for (const v of villagers) {
     if (v.post && v.post.B === B) v.post = null;
-    if (v.job === B) { v.job = null; v.state = 'find'; release(v); if (!v.build) giveTool(v, null); }
-    if (v.build === B) { v.build = null; v.state = v.job ? 'commute' : 'find'; giveTool(v, toolFor(v)); }
+    if (v.job === B) { v.job = null; v.state = 'find'; release(v); }
+    if (v.build === B) { v.build = null; v.state = v.job ? 'commute' : 'find'; }
   }
   hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
@@ -2071,7 +2071,7 @@ function assignJobs() {
       for (const v of villagers) if (!v.job) { const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; } }
       if (!best) break;
       best.job = B; release(best); best.path = null; best.visit = null;
-      if (!best.build) { best.state = 'commute'; giveTool(best, toolFor(best)); }
+      if (!best.build) best.state = 'commute';
       have++;
     }
   }
@@ -2096,7 +2096,6 @@ function assignBuilders() {
     if (!best) continue;
     release(best); best.build = S; best.state = 'tobuild'; best.path = null; best.visit = null;
     if (best.hideT > 0) exitDoor(best);
-    giveTool(best, 'hammer');
   }
 }
 function randomNear(B, rmin, rmax) {
@@ -2267,7 +2266,7 @@ function workSpot(S, v, avoid) {
 }
 function updateBuilder(v, dt) {
   const S = v.build;
-  if (S.dead || !S.site) { v.build = null; v.state = v.job ? 'commute' : 'find'; giveTool(v, toolFor(v)); return; }
+  if (S.dead || !S.site) { v.build = null; v.state = v.job ? 'commute' : 'find'; return; }
   if (v.spotS !== S || !v.spot) { v.spot = workSpot(S, v); v.spotS = S; }
   if (v.state !== 'building') {
     const sp = v.spot || center(S), near = distRect(S, v.x, v.z);
@@ -2379,8 +2378,12 @@ function updateVillagers(dt, now) {
       feedVillager(v, dt);
       if (v.hungry) { updateHungry(v, dt); if (v.sleeping) continue; }
       else {
-        if (!(v.hideT > 0) && !canStand(v.x, v.z, 1)) exitDoor(v);
-        if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
+        const want = toolFor(v) || null;
+        if ((v.toolKind || null) !== want) updateChange(v, dt, want);     // wrong clothes for the next task: home to change first
+        else {
+          if (!(v.hideT > 0) && !canStand(v.x, v.z, 1)) exitDoor(v);
+          if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
+        }
       }
       }
     }
@@ -2683,6 +2686,19 @@ function updateSoldier(v, dt) {
   } else if (Math.hypot(hx - v.x, hz - v.z) > .35) walkTo(v, hx, hz, dt, 1, .3, 1.3);
 }
 // dawn: back to the barracks, in, out of the kit, out again to the day's work (a lost barracks: change where they stand)
+// a change of job (or to and from building) means a change of clothes: walk home, in, change, out to the new task
+function updateChange(v, dt, want) {
+  const H = v.home && !v.home.dead && buildings.includes(v.home) && v.home.built ? v.home : castleB();
+  if (!H) { giveTool(v, want); return; }
+  if (v.kitT > 0) {
+    if (v.g.visible && !v.doorWalk) v.kitT = 0;                    // interrupted (by the night): start the trip again
+    else { if (!v.g.visible && !v.doorWalk && (v.kitT -= dt) <= 0) { giveTool(v, want); v.kitT = 0; if (!v.indoor || v.indoor.dead) v.indoor = H; exitDoor(v); v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .2; } return; }
+  }
+  release(v); v.visit = null;
+  if (v.hideT > 0) { v.hideT = 0; v.kitT = 1.2; return; }      // already indoors somewhere: change there, come out of the same door
+  const dp = doorPoint(H);
+  if (walkTo(v, dp.x, dp.z, dt, 1, .4) || nearDoor(v, H, dp) || v.noProg > 6) { deliver(v); v.kitT = 1.2; v.indoor = H; goIn(v, H); }
+}
 function updateUnkit(v, dt) {
   const B = v.unkit, done = () => { stripKit(v); v.unkit = null; v.kitT = 0; v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.wait = .3; };
   if (B.dead || !buildings.includes(B)) { done(); return; }
@@ -2780,7 +2796,7 @@ function feedVillager(v, dt) {
   if ((v.mealT = (v.mealT ?? 15 + Math.random() * 30) - dt) > 0) return;
   if (res.food >= 1) { res.food -= 1; stats.eaten = (stats.eaten || 0) + 1; v.mealT = MEAL * (.85 + Math.random() * .3); return; }
   v.hungry = true; newlyHungry++; release(v); v.visit = null; v.path = null;
-  if (v.build) { v.build = null; giveTool(v, toolFor(v)); }
+  if (v.build) v.build = null;
   floatText('Hungry', '#e2715b', v.x, hAt(v.x, v.z) + 1.6, v.z);
 }
 function updateHungry(v, dt) {
