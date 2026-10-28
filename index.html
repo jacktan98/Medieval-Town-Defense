@@ -3007,10 +3007,18 @@ function updateHud() {
   markTools(); refreshCard();
   if (!$('#admin').hidden) syncAdmin(false);
 }
+const DEM_ICO = '<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>';
 const STAT = (ico, txt, cls = '') => `<span class="stat ${cls}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
 function refreshCard() {
   const card = $('#card');
   if (!selected) { card.hidden = true; return; }
+  $('#cardHp').parentElement.hidden = !!selected.path;
+  if (selected.path) {                                 // a path tile: just a name and Demolish (no refund)
+    card.hidden = false; $('#cardIco').innerHTML = TOOL_ICON.road; $('#cardTitle').textContent = 'Path'; $('#cardSub').textContent = ''; $('#cardPips').innerHTML = '';
+    $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = true;
+    const dem = $('#demBtn'), armed = demArmed.B === selected && performance.now() - demArmed.t < 3000;
+    dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick : DEM_ICO; dem.title = 'Remove path'; return;
+  }
   const B = selected, T = DEF[B.type], k = B.tier - 1, c0 = center(B);
   card.hidden = false;
   $('#cardIco').innerHTML = TOOL_ICON[B.type] || '';
@@ -3058,8 +3066,14 @@ function refreshCard() {
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
   $('#cardActs').hidden = [...$('#cardActs').children].every(b => b.hidden);
-  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>' : `<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
+  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>' : `${DEM_ICO}${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
 }
+function selectPath(a, b) {
+  const x0 = a * CELL, z0 = b * CELL;
+  selected = { path: true, a, b, ev: { x0, z0, x1: x0 + CELL, z1: z0 + CELL } };
+  drape(selLine, x0 - .1, z0 - .1, x0 + CELL + .1, z0 + CELL + .1); refreshCard();
+}
+function removePath(P) { road[P.b * N + P.a] = 0; rebuildRoads(); villagers.forEach(v => v.path = null); sfx('click'); deselect(); }
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
@@ -3070,7 +3084,7 @@ addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.ta
 var demArmed = { B: null, t: 0 };
 $('#demBtn').addEventListener('click', () => {
   if (paused) return setHint('Paused', 'bad'); if (!selected) return;
-  if (demArmed.B === selected && performance.now() - demArmed.t < 3000) { demArmed = { B: null, t: 0 }; removeBuilding(selected, false); return; }
+  if (demArmed.B === selected && performance.now() - demArmed.t < 3000) { demArmed = { B: null, t: 0 }; if (selected.path) removePath(selected); else removeBuilding(selected, false); return; }
   demArmed = { B: selected, t: performance.now() }; refreshCard(); setTimeout(refreshCard, 3050);
 });
 $('#closeCard').addEventListener('click', deselect);
@@ -3197,7 +3211,7 @@ function tap(e) {
   const building = tool && tool !== 'select';
   const hb = pickBuilding(e, building);
   if (hb) { select(hb); return; }
-  if (!building) { deselect(); return; }
+  if (!building) { const pt = pick(e), c = pt && cellAt(pt.x, pt.z); if (pt && road[c]) selectPath(c % N, Math.floor(c / N)); else deselect(); return; }
   const pt = pick(e); if (!pt) return;
   const [ci, cj] = cellFor(pt, DEF[tool].size);
   if (e.pointerType !== 'mouse' && !(cur && cur.ci === ci && cur.cj === cj && cur.type === tool && ghosts[tool].visible)) { showGhostAt(pt); return; }
