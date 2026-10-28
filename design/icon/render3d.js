@@ -64,7 +64,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
       const e = .4, nx = hill(px - e, pz) - hill(px + e, pz), nz = hill(px, pz - e) - hill(px, pz + e);
       m.position.set(px, hill(px, pz) + .16, pz); m.rotation.set(Math.atan2(nz, 2 * e) * -1 * 0 + Math.atan2(-nz, 2 * e) * -1, 0, Math.atan2(nx, 2 * e)); m.receiveShadow = true; S.add(m);
     }
-    const cam = new THREE.PerspectiveCamera(32, 1, .1, 200); cam.position.set(0, 9.6, 27.5); cam.lookAt(0, 5.0, 0);
+    const cam = new THREE.PerspectiveCamera(32, 1, .1, 200); cam.position.set(0, 9.6, 27.5); cam.lookAt(0, 6.6, 0);
     windU.value = 1.3;
     renderer.setPixelRatio(1); renderer.setSize(1024, 1024, false); renderer.render(S, cam);
     return renderer.domElement.toDataURL('image/png');
