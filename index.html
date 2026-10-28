@@ -1020,13 +1020,7 @@ function makeCastle(tier, plinth) {
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(2.1, 1.45, .86, M.thatchOld, 3.42, 0, -.6));   // eaves stick out past the hall walls
     g.add(box(.46, .76, .01, M.dark, 0, .7, .405)); g.add(leaf(.5, .8, .06, M.timber, -.25, .7, .42, 1, -1.4));   // hall door swings out
-    for (const sx of [-1, 1]) {      // two small framed windows with a cross bar and one shutter swung open, either side above the door
-      const x = sx * .52, y = 1.72;
-      g.add(box(.34, .36, .05, M.timber, x, y, .42)); g.add(box(.24, .26, .05, M.glow, x, y, .43));
-      g.add(box(.025, .26, .06, M.timber, x, y, .45)); g.add(box(.24, .025, .06, M.timber, x, y, .45));
-      const sh = box(.13, .28, .03, M.wood, x + sx * .23, y, .5); sh.rotation.y = sx * .9; g.add(sh);
-      g.add(box(.4, .05, .1, M.timber, x, y - .2, .46));
-    }
+    for (const sx of [-1, 1]) g.add(box(.26, .36, .06, M.glow, sx * .5, 1.72, .42));   // two plain lit windows either side above the door, like the stone keep's
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.09, 2.5, .09, M.rough, px + sx * .33, 1.25, pz + sz * .33));
