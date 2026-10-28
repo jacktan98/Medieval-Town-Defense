@@ -76,7 +76,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 |---|---|---|---|---|---|
 | castle | 3×3 | prebuilt | stone 60 wood 40 gold 70 / stone 100 gold 100 | gold 3/5/7, food 3/4/5, 4 archer posts, 3 residents | Palisade fort / Stone keep / Castle |
 | house | 1×1 | wood 15 | wood 25 gold 20 / wood 30 stone 20 gold 40 | gold 2/4/6, residents 2/3/4 | Hovel / Cottage / Townhouse |
-| farm | 2×2 | wood 15 | wood 20 gold 20 / wood 30 stone 15 gold 35 | food 4/6/9, workers 1/1/2 | Plot / Croft / Manor farm |
+| farm | 2×2 | wood 15 | wood 20 gold 20 / wood 30 stone 15 gold 35 | food 3/5/8, workers 1/1/2 | Plot / Croft / Manor farm |
 | lodge ("Lumber") | 2×2 | gold 20 | gold 45 stone 10 / gold 75 stone 25 | reach 14, workers 2/3/4, `LUMBER_LOAD=2` wood/trip, chop 2.6 s | Lumber shack / Lumber camp / Lumber yard |
 | quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4 | Stone pit / Quarry / Masons' yard |
 | tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15; shaft drawn at `TOWER_K` (.8/.8/.72, T2 also .74), roof held a fixed 1.55 m (`HEAD`) above the platform so archers fit; posts and shootY scale with `TOWER_K`; T3 is an open platform with a low parapet and a blue roof on stone columns | Lookout / Watchtower / Stone tower |
