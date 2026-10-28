@@ -120,6 +120,9 @@ Roof colours: tier 3 roofs use `M.roofBlue` (blue is the town's colour, red the 
 - Landscape layout under `@media (max-height:520px)`. Two-finger twist rotates (`yaw += da`), drag pans, pinch zooms.
 - Tap selection is strict while a build tool is active (`pickBuilding(e, strict)`: hit must be 0.35 m inside the footprint, ignores AO planes) so you don't keep selecting the castle.
 
+## App icon
+- Home-screen icon: `apple-touch-icon.png` (180), `icon-512.png`, `favicon.png` (32) at the root, linked from `index.html` (home-screen title "Town Defense"). Source `design/icon/icon.svg` (stone castle with blue roofs and flag, dusk sky, crescent moon); regenerate with `node design/icon/render.js`.
+
 ## Gotchas fixed before (don't reintroduce)
 - `var paused` (not `let`) — TDZ crash on startup.
 - Global `[hidden]{display:none!important}` — otherwise flex modals ignore `hidden`.
