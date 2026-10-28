@@ -177,7 +177,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .stat{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--parch);font-variant-numeric:tabular-nums}
 .stat .ico{width:12px;height:12px}
 .stat.good{color:var(--ok)} .stat.warn{color:#e6c46a} .stat.bad{color:var(--bad)}
-.card .row{gap:5px;flex-wrap:nowrap} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
+.card .row{gap:5px;flex-wrap:nowrap;justify-content:flex-end} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
 .card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
 .card .row button.primary{background:#3d3520;flex:1 0 auto}
 .card .row button.danger,.card .row button.ib{flex:0 0 auto} button.danger.armed{background:#8f3326;border-color:var(--bad);color:#fff} .card .row button.danger.armed{min-width:46px;justify-content:center}
@@ -293,12 +293,13 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="cardHead">
         <span class="cardIco" id="cardIco"></span>
         <div class="cardName"><h4 id="cardTitle"></h4><div class="cardSub"><span id="cardSub"></span><span class="pips" id="cardPips"></span></div></div>
+        <button class="iconBtn" id="rallyBtn" title="Rally: tap, then a spot" aria-label="Rally"><svg viewBox="0 0 24 24"><path d="M6 21 V3.5"/><path d="M6 4 H17.5 L15 8 L17.5 12 H6"/></svg></button><button class="iconBtn" id="recallBtn" title="Recall to the barracks" aria-label="Recall"><svg viewBox="0 0 24 24"><path d="M9 14 L4 9 L9 4"/><path d="M4 9 H14 A5.5 5.5 0 0 1 14 20 H9"/></svg></button>
         <button class="iconBtn" id="cardRotBtn" hidden aria-label="Rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button>
         <button class="iconBtn" id="closeCard" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg></button>
       </div>
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
-      <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="ib" id="rallyBtn" title="Rally: tap, then a spot" aria-label="Rally"><svg class="bIco" viewBox="0 0 24 24"><path d="M6 21 V3.5"/><path d="M6 4 H17.5 L15 8 L17.5 12 H6"/></svg></button><button class="ib" id="recallBtn" title="Recall to the barracks" aria-label="Recall"><svg class="bIco" viewBox="0 0 24 24"><path d="M9 14 L4 9 L9 4"/><path d="M4 9 H14 A5.5 5.5 0 0 1 14 20 H9"/></svg></button><button class="danger" id="demBtn" title="Demolish"></button></div>
+      <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="danger" id="demBtn" title="Demolish"></button></div>
     </div>
     <div class="guideCard" id="guide" hidden><span class="gStep" id="gStep"></span><b id="gText"></b><button id="gSkip">Skip</button></div>
     <div class="pill" id="hint">Pick a building</div>
