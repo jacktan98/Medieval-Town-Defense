@@ -120,9 +120,9 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .sheet h2.lost{color:var(--bad)}
 .mapSheet{align-items:center;text-align:center}
 .maps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.mapBtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;border-radius:10px;background:#24261f;border-color:#4a4838;width:150px}
-.mapBtn svg{width:132px;height:99px;display:block}
-.mapBtn b{font-size:14px;color:var(--parch)} .mapBtn.last{border-color:var(--gold)}
+.mapBtn{display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:6px 6px 8px;border-radius:12px;background:#24261f;border-color:#4a4838;width:min(170px,38vw)}
+.mapBtn img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#2e3a2c}
+.mapBtn b{font-family:var(--display);font-weight:400;font-size:17px;color:var(--parch)} .mapBtn.last{border-color:var(--gold)} .mapBtn.last b{color:var(--gold)}
 .sheet p{margin:0;color:var(--muted)}
 .sheet dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-variant-numeric:tabular-nums}
 .sheet dt{color:var(--muted)} .sheet dd{margin:0;text-align:right;font-weight:700}
@@ -319,8 +319,8 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
     <div class="sheet mapSheet">
       <h2>Choose map</h2>
       <div class="maps">
-        <button class="mapBtn" data-map="meadow"><svg viewBox="0 0 120 90"><rect width="120" height="90" rx="8" fill="#7fa456"/><path d="M84 0 C78 22 92 40 86 62 C82 76 88 84 86 90 H100 C102 80 96 72 100 60 C106 40 92 22 98 0 Z" fill="#4f8fc4"/><g fill="#3f6e2a"><circle cx="14" cy="16" r="6"/><circle cx="24" cy="10" r="5"/><circle cx="108" cy="20" r="5"/><circle cx="112" cy="72" r="6"/><circle cx="16" cy="74" r="5"/><circle cx="64" cy="14" r="5"/></g><g fill="#a19c92"><circle cx="70" cy="76" r="3.5"/><circle cx="20" cy="44" r="3"/></g><rect x="38" y="40" width="16" height="16" fill="#c9c3b6" stroke="#4d4a43" stroke-width="2"/><path d="M46 40 V30" stroke="#3a2a1a" stroke-width="1.5"/><path d="M46 30 l7 2 l-7 2 Z" fill="#3f6fd6"/></svg><b>Meadow</b></button>
-        <button class="mapBtn" data-map="isle"><svg viewBox="0 0 120 90"><rect width="120" height="90" rx="8" fill="#7fa456"/><ellipse cx="60" cy="47" rx="37" ry="34" fill="#4f8fc4"/><ellipse cx="60" cy="47" rx="27" ry="24" fill="#93b766"/><g stroke="#8a5a30" stroke-width="6"><path d="M60 9 V25"/><path d="M84 59 L98 64"/><path d="M36 59 L22 64"/></g><g fill="#3f6e2a"><circle cx="46" cy="36" r="4"/><circle cx="74" cy="34" r="4"/><circle cx="72" cy="62" r="4"/><circle cx="10" cy="12" r="5"/><circle cx="110" cy="80" r="5"/></g><g fill="#a19c92"><circle cx="104" cy="22" r="3.5"/><circle cx="16" cy="28" r="3.5"/><circle cx="60" cy="86" r="3"/></g><rect x="53" y="42" width="14" height="14" fill="#c9c3b6" stroke="#4d4a43" stroke-width="2"/><path d="M60 42 V33" stroke="#3a2a1a" stroke-width="1.5"/><path d="M60 33 l7 2 l-7 2 Z" fill="#3f6fd6"/></svg><b>River isle</b></button>
+        <button class="mapBtn" data-map="meadow"><img src="maps/meadow.jpg" alt=""><b>Meadow</b></button>
+        <button class="mapBtn" data-map="isle"><img src="maps/isle.jpg" alt=""><b>River isle</b></button>
       </div>
     </div>
   </div>
@@ -777,6 +777,8 @@ const crownGeo = new THREE.ConeGeometry(.85, 2.3, 6).translate(0, 1.9, 0);
 const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: '#4d3622', flatShading: true }), MAXT);
 const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), MAXT);
 trunks.castShadow = crowns.castShadow = true; scene.add(trunks, crowns);
+// sized for every tree up front: r128 sizes instanceColor from .count on the first setColorAt, and maps differ in tree count
+crowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXT * 3), 3);
 const windU = { value: 0 };
 // trees standing between the camera and the point it looks at dissolve (dithered), so units and buildings stay visible
 function cutaway(sh) {
