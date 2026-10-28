@@ -357,7 +357,7 @@ let KX = 19, KZ = 27;                  // castle site: Meadow cells 8â€“10, 12â€
 // MAP: 'meadow' (the original map) or 'isle' (the castle on an island ringed by a river, three fixed bridges); ?map=isle skips the picker
 var MAP = (location.search.match(/[?&]map=(meadow|isle)\b/) || [])[1] || (() => { try { return localStorage.getItem('mtd-map'); } catch (e) { return null; } })() || 'meadow';
 // river isle: the river's centre line wobbles round the castle; ISLE.r is its mean radius in metres
-const ISLE = { r: 16.6 }, ISLE_BRIDGES = [-90, 30, 150], ISLE_ROCKS = [-30, 90, 210];
+const ISLE = { r: 16.6 }, ISLE_BRIDGES = [-90, 30, 150], ISLE_ROCKS = [-30, 90, 210], MEADOW_BRIDGES = [0];   // Meadow: one bridge east from the castle over its river
 const isleR = a => ISLE.r + .9 * Math.sin(3 * a + .6) + .6 * Math.sin(5 * a + 2.1) + .4 * Math.sin(8 * a + 1.3);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -438,7 +438,7 @@ const WAVES = [
   { spear: 14, sword: 12, archer: 10, hp: 1.6, dmg: 1.5, captain: 2 },
 ];
 const NIGHTS = WAVES.length;
-const DAYLEN = [300, 120, 120, 120, 120];
+const DAYLEN = [300, 150, 150, 150, 150];
 const ENEMY = {
   sword:   { hp: 50, speed: 1.5, range: .6, dmg: 6, rate: 1.0 },
   archer:  { hp: 32, speed: 1.3, range: 4.5, dmg: 6, rate: 1.8 },
@@ -486,9 +486,8 @@ let bridges = [];
 const bridgeCell = new Uint8Array(N * N), BRIDGE_RISE = .45;
 function genBridges() {
   bridges.forEach(b => b.g && scene.remove(b.g)); bridges = []; bridgeCell.fill(0);
-  if (MAP !== 'isle') return;
-  for (const deg of ISLE_BRIDGES) {
-    const a = deg * Math.PI / 180, alongZ = Math.abs(Math.sin(a)) > .7, r = isleR(a);
+  for (const deg of MAP === 'isle' ? ISLE_BRIDGES : MEADOW_BRIDGES) {
+    const a = deg * Math.PI / 180, alongZ = Math.abs(Math.sin(a)) > .7, r = MAP === 'isle' ? isleR(a) : 0;
     const fixed = Math.floor((alongZ ? KX + Math.cos(a) * r : KZ + Math.sin(a) * r) / CELL), dir = Math.sign(alongZ ? Math.sin(a) : Math.cos(a));
     const cellOf = k => alongZ ? k * N + fixed : fixed * N + k, wet = k => { const n = cellOf(k); return cellStats(n % N, (n / N) | 0).mn < 0; };
     let k = Math.floor((alongZ ? KZ : KX) / CELL); while (!wet(k)) k += dir;
@@ -610,7 +609,7 @@ waterMat.onBeforeCompile = sh => {
     float streak = smoothstep(.5, .85, wn(q1 * 1.1) * .55 + wn(q2 * 2.4) * .45), dark = smoothstep(.55, .2, wn(q2 * .7 + 3.1));
     diffuseColor.rgb *= .88 + .12 * dark;
     diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.7 + vec3(.05, .07, .08), streak * .6);
-    float shore = 1.0 - smoothstep(.02, .5, depth);
+    float shore = 1.0 - smoothstep(.02, .3, depth);
     float froth = smoothstep(.45, .75, wn(q1 * 2.6 + vec2(0.0, uTime * .7)) * .6 + wn(vWP.xz * 5.0 - uTime * .9) * .4 + shore * .35);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .9, .9), shore * froth * .85);
     diffuseColor.a = mix(diffuseColor.a, 1.0, shore * froth * .6);`);
@@ -864,7 +863,7 @@ function genTrees() {
       if (woods || lone) trees.push({ x, z, s: .75 + hash(z, x) * .5, k: 1 });
       continue;
     }
-    if (dk < 7.5 || (z > KZ && Math.abs(x - KX) < 3 && dk < 16)) continue;
+    if (dk < 7.5 || (z > KZ && Math.abs(x - KX) < 3 && dk < 16) || nearBridge(x, z, 3)) continue;
     const mask = fbm(x * .08 + 20, z * .08 + 11), h = hAt(x, z);
     const lone = hash(x * 2.1, z * 1.7) < .07, forest = dk > 12 && mask > .5 && hash(x * 1.3, z * .7) < (mask - .45) * 3 * sstep(12, 18, dk);
     if (h > 1 && (dk < 12 ? lone : (forest || (dk < 16 && lone)))) trees.push({ x, z, s: .75 + hash(z, x) * .5, k: 1 });
@@ -907,7 +906,7 @@ function genRocks() {
   for (let n = 0; n < 6000 && rocks.length < 28; n++) {
     const x = 1 + Math.random() * (SIZE - 2), z = 1 + Math.random() * (SIZE - 2);
     if (Math.hypot(x - KX, z - KZ) < 12 || hAt(x, z) < 1.2 || slopeAt(x, z) < .75) continue;
-    if (rocks.some(r => Math.hypot(r.x - x, r.z - z) < 2.6)) continue;
+    if (rocks.some(r => Math.hypot(r.x - x, r.z - z) < 2.6) || nearBridge(x, z, 2)) continue;
     const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true;
     mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
     rocks.push({ x, z, amount: 5, s0: .9 + Math.random() * .6, mesh }); scene.add(mesh);
@@ -2064,7 +2063,7 @@ function canStand(x, z, mode) {   // mode 0 villager, 1 worker, 2 enemy
   if (x < .5 || z < .5 || x > SIZE - .5 || z > SIZE - .5) return false;
   if (bridgeCell[cellAt(x, z)]) return true;
   const h = hAt(x, z);
-  if (h < (mode === 2 ? (MAP === 'isle' ? .3 : -1.6) : mode === 1 ? .3 : .5)) return false;   // raiders wade the meadow's river, never the isle's
+  if (h < (mode === 2 || mode === 1 ? .3 : .5)) return false;   // nobody wades: rivers are crossed by bridge
   const b = occB[cellAt(x, z)];
   if (b && !WALK[b.type] && !(b.type === 'gate' && mode !== 2)) return false;
   if (b && b.type === 'farm' && farmBlocked(b, x, z)) return false;
@@ -2389,7 +2388,7 @@ function stride(u, dt, rate) { u.amp = (u.amp || 0) + ((u.walking ? 1 : 0) - (u.
 function cellPass(n, mode) {
   if (bridgeCell[n]) return true;
   const o = occB[n]; if (o && !WALK[o.type] && !(o.type === 'gate' && mode !== 2)) return false;
-  return cH[n] > (mode === 1 ? .2 : mode === 2 && MAP !== 'isle' ? -1.5 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);   // raiders route through the meadow's river (they wade it)
+  return cH[n] > (mode === 1 ? .2 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);
 }
 const ND = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
 function findPath(sx, sz, tx, tz, mode) {
@@ -2505,6 +2504,7 @@ function claimResource(v, now) {
 function release(v) { if (v.target && v.target.claim === v) v.target.claim = null; v.target = null; }
 function deliver(v) {
   if (v.dropLoad) return;
+  if (PH.kind === 'night') { if ((v.carryLog && v.carryLog.visible) || (v.carryStone && v.carryStone.visible)) v.dropLoad = true; if (!v.doorWalk) dropLoad(v); return; }   // nothing is gathered at night: a load carried in after dark is lost
   if (v.carryLog && v.carryLog.visible) { res.wood += LUMBER_LOAD; stats.wood += LUMBER_LOAD; v.dropLoad = true; }
   if (v.carryStone && v.carryStone.visible) { res.stone++; stats.stone++; v.dropLoad = true; }
   if (!v.doorWalk) dropLoad(v);           // otherwise it is carried in through the door
@@ -2774,10 +2774,12 @@ function spawnEnemy(kind, sp, wave) {
 function distRect(B, x, z) { const e = B.ev; return Math.hypot(Math.max(e.x0 - x, 0, x - e.x1), Math.max(e.z0 - z, 0, z - e.z1)); }
 function nearestBuilding(x, z, maxD = 1e9, ok = null) { let best = null, bd = maxD; for (const B of buildings) { if (DEF[B.type].decor || (ok && !ok(B))) continue; const d = distRect(B, x, z); if (d < bd) { bd = d; best = B; } } return best; }
 function edgePoint() {
+  const C = castleB(), dp = C && doorPoint(C);   // a spawn must have a walkable route to the castle's door
   for (let n = 0; n < 80; n++) {
     const side = Math.floor(Math.random() * 4), t = 2 + Math.random() * (SIZE - 4);
     const [x, z] = side === 0 ? [t, 1.2] : side === 1 ? [SIZE - 1.2, t] : side === 2 ? [t, SIZE - 1.2] : [1.2, t];
-    if (hAt(x, z) > .5 && slopeAt(x, z) < 1.6 && buildings.every(B => distRect(B, x, z) > 10)) return { x, z };
+    if (hAt(x, z) > .5 && slopeAt(x, z) < 1.6 && buildings.every(B => distRect(B, x, z) > 10)
+      && cellPass(cellAt(x, z), 2) && (!dp || findPath(x, z, dp.x, dp.z, 2))) return { x, z };   // somewhere they can actually walk to the castle from
   }
   return { x: 1.5, z: SIZE / 2 };
 }
@@ -3149,7 +3151,7 @@ function updatePhase(dt) {
     if (spawnQueue.length && (spawnT -= dt) <= 0) { const [k, p] = spawnQueue.shift(); spawnEnemy(k, p, PH.wave); spawnT = 1.1; }
     if (!spawnQueue.length && !enemies.some(e => !e.dead)) { if (PH.wave >= NIGHTS) endGame(true); else startDay(); }
   }
-  if ((econT -= dt) <= 0) { econT = TICK; econTick(); }
+  if (PH.kind === 'day' && (econT -= dt) <= 0) { econT = TICK; econTick(); }   // no payouts at night: the ring waits for dawn
 }
 let skyT = 0;
 function updateLight(dt, now) {
@@ -3234,7 +3236,7 @@ function refreshCard() {
     card.hidden = false; $('#cardIco').innerHTML = TOOL_ICON.road; $('#cardTitle').textContent = 'Path'; $('#cardSub').textContent = ''; $('#cardPips').innerHTML = '';
     $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = true;
     const dem = $('#demBtn'), armed = demArmed.B === selected && performance.now() - demArmed.t < 3000;
-    dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick : DEM_ICO; dem.title = 'Remove path'; return;
+    dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick.replace('<svg ', '<svg class="bIco" ') : DEM_ICO; dem.title = 'Remove path'; return;
   }
   const B = selected, T = DEF[B.type], k = B.tier - 1, c0 = center(B);
   card.hidden = false;
