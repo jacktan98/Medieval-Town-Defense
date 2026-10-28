@@ -358,6 +358,7 @@ let KX = 19, KZ = 27;                  // castle site: Meadow cells 8–10, 12�
 var MAP = (location.search.match(/[?&]map=(meadow|isle)\b/) || [])[1] || (() => { try { return localStorage.getItem('mtd-map'); } catch (e) { return null; } })() || 'meadow';
 // river isle: the river's centre line wobbles round the castle; ISLE.r is its mean radius in metres
 const ISLE = { r: 16.6 }, ISLE_BRIDGES = [-90, 30, 150], ISLE_ROCKS = [-30, 90, 210], MEADOW_BRIDGES = [0];   // Meadow: one bridge east from the castle over its river
+const isleOutN = z => 41 + 2.5 * Math.sin(z * .22 + .5), isleOutS = z => 18 + 2.5 * Math.sin(z * .2 + 2);   // the isle's two outflows: centre x by z
 const isleR = a => ISLE.r + .9 * Math.sin(3 * a + .6) + .6 * Math.sin(5 * a + 2.1) + .4 * Math.sin(8 * a + 1.3);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -460,6 +461,8 @@ function fbm(x, y) { let s = 0, a = .5, f = 1; for (let k = 0; k < 4; k++) { s +
 const H = new Float32Array(V * V), dirt = new Float32Array(V * V), gvar = new Float32Array(V * V), dvar = new Float32Array(V * V);
 const lock = new Uint8Array(V * V), road = new Uint8Array(N * N);
 let occB = new Array(N * N).fill(null);
+// the Meadow river's centre line
+const meadowRiverX = z => SIZE * .68 + Math.sin(z * .12) * 5 + Math.sin(z * .05 + 1) * 3;
 function genHeight(x, z) {
   let h = 1.6 + fbm(x * .06, z * .06) * 4.2;
   h += Math.max(0, fbm(x * .14 + 9, z * .14 + 3) - .6) * 16;
@@ -467,42 +470,63 @@ function genHeight(x, z) {
   const dk = Math.hypot(x - KX, z - KZ);                         // open meadow around the castle
   if (MAP === 'isle') {
     // a flat island, gentle banks, hills rising again a few metres beyond the far bank
-    const r = isleR(Math.atan2(z - KZ, x - KX)), t = Math.abs(dk - r), flat = 3.0 + (h - 3.0) * .4;
+    const r = isleR(Math.atan2(z - KZ, x - KX)), flat = 3.0 + (h - 3.0) * .4;
+    // the ring, plus two rivers flowing out of it to the map's edge (north-east and south-west), never into the island
+    let t = Math.abs(dk - r);
+    if (dk > r - 1) { if (z < KZ - 3) t = Math.min(t, Math.abs(x - isleOutN(z))); else if (z > KZ + 3) t = Math.min(t, Math.abs(x - isleOutS(z))); }
     let land = dk < r ? flat : lerp(2.6 + (h - 3.0) * .4, h, sstep(r + 4, r + 11, dk));
     land = lerp(1.0, land, sstep(2.3, 6, t));
     return lerp(-1.9, land, sstep(1.3, 2.3, t));
   }
   h = lerp(3.0 + (h - 3.0) * .4, h, sstep(6, 13, dk));
-  const rx = SIZE * .68 + Math.sin(z * .12) * 5 + Math.sin(z * .05 + 1) * 3;
+  const rx = meadowRiverX(z);
   return lerp(-1.4, h, sstep(2.2, 7.5, Math.abs(x - rx)));
 }
 function genTerrain() {
   for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) { const k = idx(i, j); H[k] = genHeight(i, j); gvar[k] = fbm(i * .21 + 40, j * .21); dvar[k] = fbm(i * .09 + 70, j * .09 + 30); }
   dirt.fill(0); lock.fill(0); road.fill(0); occB = new Array(N * N).fill(null);
 }
-// ---------- bridges (River isle): fixed timber footbridges, one cell wide, along a grid axis ----------
-// bridgeCell[n] = bridge index + 1; units on one walk at its deck height (walkY), and only bridges cross the river
+// ---------- bridges: fixed timber footbridges straight across a river, at any angle ----------
+// A bridge runs from (x0, z0) along the unit direction (dx, dz) for L metres; its deck is DECK_W wide. bridgeCell[n] = bridge
+// index + 1 for every cell the deck touches (nothing is built there, everyone may path there); units stand on the deck
+// (walkY) only inside its strip. Paths step onto and off a bridge only through its end cells, and waypoints on a bridge
+// are pulled onto the deck's centre line (bridgeWaypoint), so units walk down the middle.
 let bridges = [];
-const bridgeCell = new Uint8Array(N * N), BRIDGE_RISE = .45;
+const bridgeCell = new Uint8Array(N * N), BRIDGE_RISE = .45, DECK_W = 1.9;
+// where each map's bridges cross: a start point and a direction, marched along until the river is crossed
+function bridgeRays() {
+  if (MAP === 'isle') return ISLE_BRIDGES.map(deg => { const a = deg * Math.PI / 180, r = isleR(a); return { ox: KX + Math.cos(a) * (r - 7), oz: KZ + Math.sin(a) * (r - 7), dx: Math.cos(a), dz: Math.sin(a) }; });
+  // Meadow: square across its river where it passes the castle's row
+  const zc = KZ, drx = .6 * Math.cos(zc * .12) + .15 * Math.cos(zc * .05 + 1), m = Math.hypot(1, drx), dx = 1 / m, dz = -drx / m;
+  return [{ ox: meadowRiverX(zc) - dx * 10, oz: zc - dz * 10, dx, dz }];
+}
 function genBridges() {
   bridges.forEach(b => b.g && scene.remove(b.g)); bridges = []; bridgeCell.fill(0);
-  for (const deg of MAP === 'isle' ? ISLE_BRIDGES : MEADOW_BRIDGES) {
-    const a = deg * Math.PI / 180, alongZ = Math.abs(Math.sin(a)) > .7, r = MAP === 'isle' ? isleR(a) : 0;
-    const fixed = Math.floor((alongZ ? KX + Math.cos(a) * r : KZ + Math.sin(a) * r) / CELL), dir = Math.sign(alongZ ? Math.sin(a) : Math.cos(a));
-    const cellOf = k => alongZ ? k * N + fixed : fixed * N + k, wet = k => { const n = cellOf(k); return cellStats(n % N, (n / N) | 0).mn < 0; };
-    let k = Math.floor((alongZ ? KZ : KX) / CELL); while (!wet(k)) k += dir;
-    const kIn = k - dir; while (wet(k)) k += dir;
-    const k0 = Math.min(kIn, k), k1 = Math.max(kIn, k), u0 = (k0 + .5) * CELL, u1 = (k1 + .5) * CELL, c = (fixed + .5) * CELL;   // the deck lands half-way into each bank cell
-    const at = u => alongZ ? hAt(c, u) : hAt(u, c);
-    const b = { alongZ, c, u0, u1, L: u1 - u0, h0: at(u0) + .05, h1: at(u1) + .05 };
+  for (const ray of bridgeRays()) {
+    let sA = -1, sB = -1;
+    for (let q = 0; q < 24; q += .2) { const wet = hAt(ray.ox + ray.dx * q, ray.oz + ray.dz * q) < 0; if (wet && sA < 0) sA = q; if (sA >= 0) { if (wet) sB = q; else if (q - sB > 1) break; } }
+    if (sA < 0) continue;
+    const a = sA - 1.4, c = sB + 1.4, b = { x0: ray.ox + ray.dx * a, z0: ray.oz + ray.dz * a, dx: ray.dx, dz: ray.dz, L: c - a, ends: new Set() };
+    b.h0 = hAt(b.x0, b.z0) + .05; b.h1 = hAt(b.x0 + b.dx * b.L, b.z0 + b.dz * b.L) + .05;
+    b.mx = b.x0 + b.dx * b.L / 2; b.mz = b.z0 + b.dz * b.L / 2;
     bridges.push(b);
-    for (let q = k0; q <= k1; q++) bridgeCell[cellOf(q)] = bridges.length;
+    for (let u = 0; u <= b.L + 1e-6; u += .2) for (let w = -1.05; w <= 1.06; w += .35) {
+      const x = b.x0 + b.dx * u - b.dz * w, z = b.z0 + b.dz * u + b.dx * w; if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) continue;
+      const n = cellAt(x, z); bridgeCell[n] = bridges.length; if (u < 1.3 || u > b.L - 1.3) b.ends.add(n);
+    }
   }
 }
-function deckY(b, u) { const t = clamp((u - b.u0) / b.L, 0, 1); return lerp(b.h0, b.h1, t) + BRIDGE_RISE * Math.sin(Math.PI * t); }
-// ground height for a unit: the deck on a bridge, else the terrain
-function walkY(x, z) { const i = bridgeCell[cellAt(x, z)], h = hAt(x, z); if (!i) return h; const b = bridges[i - 1]; return Math.max(h, deckY(b, b.alongZ ? z : x)); }
-const nearBridge = (x, z, d) => bridges.some(b => { const u = b.alongZ ? z : x, w = b.alongZ ? x : z; return Math.abs(w - b.c) < d && u > b.u0 - d && u < b.u1 + d; });
+const bridgeT = (b, x, z) => ((x - b.x0) * b.dx + (z - b.z0) * b.dz) / b.L, bridgeW = (b, x, z) => (z - b.z0) * b.dx - (x - b.x0) * b.dz;
+const onDeck = (b, x, z) => { const t = bridgeT(b, x, z); return t >= 0 && t <= 1 && Math.abs(bridgeW(b, x, z)) < DECK_W / 2; };
+function deckY(b, t) { t = clamp(t, 0, 1); return lerp(b.h0, b.h1, t) + BRIDGE_RISE * Math.sin(Math.PI * t); }
+// ground height for a unit: the deck where it stands on one, else the terrain
+function walkY(x, z) { const i = bridgeCell[cellAt(x, z)], h = hAt(x, z); if (!i) return h; const b = bridges[i - 1]; return onDeck(b, x, z) ? Math.max(h, deckY(b, bridgeT(b, x, z))) : h; }
+// a path waypoint in a bridge cell, pulled onto the deck's centre line
+function bridgeWaypoint(n) {
+  const x = (n % N + .5) * CELL, z = (((n / N) | 0) + .5) * CELL, i = bridgeCell[n]; if (!i) return { x, z };
+  const b = bridges[i - 1], u = clamp(bridgeT(b, x, z), 0, 1) * b.L; return { x: b.x0 + b.dx * u, z: b.z0 + b.dz * u };
+}
+const nearBridge = (x, z, d) => bridges.some(b => { const t = bridgeT(b, x, z), u = t * b.L; return u > -d && u < b.L + d && Math.abs(bridgeW(b, x, z)) < d + 1; });
 function hAt(x, z) {
   x = clamp(x, 0, SIZE); z = clamp(z, 0, SIZE);
   const i = Math.min(Math.floor(x), V - 2), j = Math.min(Math.floor(z), V - 2), fx = x - i, fz = z - j;
@@ -519,7 +543,7 @@ function cellStats(a, b) {
 const cH = new Float32Array(N * N), cS = new Float32Array(N * N);
 function cacheCells() {
   for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) { const n = b * N + a; cH[n] = hAt((a + .5) * CELL, (b + .5) * CELL); cS[n] = cellStats(a, b).spread; }
-  for (let n = 0; n < N * N; n++) if (bridgeCell[n]) { cH[n] = walkY((n % N + .5) * CELL, (((n / N) | 0) + .5) * CELL); cS[n] = 0; }
+  for (let n = 0; n < N * N; n++) if (bridgeCell[n]) { const p = bridgeWaypoint(n); cH[n] = walkY(p.x, p.z); cS[n] = 0; }
 }
 
 // ---------- three setup ----------
@@ -580,16 +604,19 @@ terrainMat.onBeforeCompile = sh => {
 const terrain = new THREE.Mesh(tGeo, terrainMat);
 terrain.receiveShadow = true; scene.add(terrain);
 const waterMat = new THREE.MeshStandardMaterial({ color: '#3e6e7a', transparent: true, opacity: .85, roughness: .2, metalness: .1 });
-const water = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE).rotateX(-Math.PI / 2).translate(SIZE / 2, 0, SIZE / 2), waterMat);
+const SKIRT = 50;   // scenery beyond the playable map on every side (see genSkirt); the water plane covers it too
+const water = new THREE.Mesh(new THREE.PlaneGeometry(SIZE + 2 * SKIRT, SIZE + 2 * SKIRT).rotateX(-Math.PI / 2).translate(SIZE / 2, 0, SIZE / 2), waterMat);
 water.receiveShadow = true; scene.add(water);
 // flowing water: two layers of soft noise drift with the current (down the Meadow's river, round the isle's ring) and
 // lighten the surface in streaks; where the bed is shallow a band of broken foam laps at the bank. The bed's height comes
 // from a small texture of the heightmap (hTex, refreshed by syncTerrain).
-const hData = new Uint8Array(V * V * 4), hTex = new THREE.DataTexture(hData, V, V, THREE.RGBAFormat);
+const HV = SIZE + 2 * SKIRT + 1, hData = new Uint8Array(HV * HV * 4), hTex = new THREE.DataTexture(hData, HV, HV, THREE.RGBAFormat);   // the bed under the map and its skirt
 hTex.magFilter = hTex.minFilter = THREE.LinearFilter;
 const waterU = { uIsle: { value: 0 }, uC: { value: new THREE.Vector2() } };
+const outH = new Float32Array(HV * HV); let outHKey = '';
 function syncWaterTex() {
-  for (let k = 0; k < V * V; k++) hData[k * 4] = clamp(Math.round((H[k] + 3) / 6 * 255), 0, 255);
+  if (outHKey !== MAP) { outHKey = MAP; for (let j = 0; j < HV; j++) for (let i = 0; i < HV; i++) outH[j * HV + i] = genHeight(i - SKIRT, j - SKIRT); }   // the skirt never changes within a game
+  for (let j = 0; j < HV; j++) for (let i = 0; i < HV; i++) { const x = i - SKIRT, z = j - SKIRT, h = x >= 0 && z >= 0 && x <= SIZE && z <= SIZE ? H[idx(x, z)] : outH[j * HV + i]; hData[(j * HV + i) * 4] = clamp(Math.round((h + 3) / 6 * 255), 0, 255); }
   hTex.needsUpdate = true; waterU.uIsle.value = MAP === 'isle' ? 1 : 0; waterU.uC.value.set(KX, KZ);
 }
 waterMat.onBeforeCompile = sh => {
@@ -600,11 +627,13 @@ waterMat.onBeforeCompile = sh => {
     float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(wh(i), wh(i + vec2(1, 0)), f.x), mix(wh(i + vec2(0, 1)), wh(i + vec2(1, 1)), f.x), f.y); }
     vec2 flowAt(vec2 p, float k) {            // where this point's water was k seconds-ish ago: drift with the current
-      if (uIsle > .5) { vec2 d = p - uC; float a = -uTime * .045 * k; return uC + mat2(cos(a), -sin(a), sin(a), cos(a)) * d; }
+      if (uIsle > .5) { vec2 d = p - uC;
+        if (length(d) > 19.5) return p - vec2(0.0, sign(d.y) * uTime * .55 * k);   // the outflows run away to the map's edge
+        float a = -uTime * .045 * k; return uC + mat2(cos(a), -sin(a), sin(a), cos(a)) * d; }
       return p - vec2(0.0, uTime * .55 * k);
     }
     ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float bed = texture2D(uH, (vWP.xz + .5) / ${V}.0).r * 6.0 - 3.0, depth = -bed;
+    float bed = texture2D(uH, (vWP.xz + ${SKIRT}.5) / ${HV}.0).r * 6.0 - 3.0, depth = -bed;
     vec2 q1 = flowAt(vWP.xz, 1.0), q2 = flowAt(vWP.xz, 1.6);
     float streak = smoothstep(.5, .85, wn(q1 * 1.1) * .55 + wn(q2 * 2.4) * .45), dark = smoothstep(.55, .2, wn(q2 * .7 + 3.1));
     diffuseColor.rgb *= .88 + .12 * dark;
@@ -631,6 +660,45 @@ function recolor() {
     tmpC.multiplyScalar(.94 + .1 * hash(i * 1.7, j * 2.3));
     tCol[k * 3] = tmpC.r; tCol[k * 3 + 1] = tmpC.g; tCol[k * 3 + 2] = tmpC.b;
   }
+}
+// ---------- the scenery skirt: land and forest beyond the playable map, so zooming out never shows the void ----------
+// One more terrain mesh, 1 m vertices from -SKIRT to SIZE + SKIRT, following genHeight (rivers and hills run on out of the
+// map). Its edge vertices take the map's own heights so the two meet without a seam; inside the map it sinks out of sight.
+// Nothing out here is part of the game: no cells, no building, no units.
+const SV = SIZE + 2 * SKIRT + 1, skPos = new Float32Array(SV * SV * 3), skCol = new Float32Array(SV * SV * 3), skIdx = [];
+for (let j = 0; j < SV - 1; j++) for (let i = 0; i < SV - 1; i++) { const a = j * SV + i, b = a + 1, c = a + SV, d = c + 1; skIdx.push(a, c, b, b, c, d); }
+const skGeo = new THREE.BufferGeometry();
+skGeo.setAttribute('position', new THREE.BufferAttribute(skPos, 3)); skGeo.setAttribute('color', new THREE.BufferAttribute(skCol, 3)); skGeo.setIndex(skIdx);
+const skirt = new THREE.Mesh(skGeo, terrainMat); skirt.receiveShadow = true; scene.add(skirt);
+const skTrunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(.13, .18, .9, 5).translate(0, .45, 0), new THREE.MeshStandardMaterial({ color: '#4d3622', flatShading: true }), 3000);
+const skCrowns = new THREE.InstancedMesh(new THREE.ConeGeometry(.85, 2.3, 6).translate(0, 1.9, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), 3000);
+skCrowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(3000 * 3), 3); skTrunks.count = skCrowns.count = 0;
+skTrunks.castShadow = skCrowns.castShadow = false;   // no shadows out here: thousands of shadow-casting trees halve the frame rate skTrunks.frustumCulled = skCrowns.frustumCulled = false; scene.add(skTrunks, skCrowns);   // r128 culls instances by the mesh origin
+function genSkirt() {
+  const inside = (x, z) => x > 0 && z > 0 && x < SIZE && z < SIZE, edge = (x, z) => x >= 0 && z >= 0 && x <= SIZE && z <= SIZE;
+  const hy = (x, z) => edge(x, z) ? H[idx(x, z)] : genHeight(x, z);
+  for (let j = 0; j < SV; j++) for (let i = 0; i < SV; i++) {
+    const k = j * SV + i, x = i - SKIRT, z = j - SKIRT, h = inside(x, z) ? H[idx(x, z)] - 4 : hy(x, z);
+    skPos[k * 3] = x; skPos[k * 3 + 1] = h; skPos[k * 3 + 2] = z;
+    const sl = Math.hypot(hy(x + 1, z) - hy(x - 1, z), hy(x, z + 1) - hy(x, z - 1)) / 2;
+    tmpC.copy(C.grass2).lerp(C.grass, clamp((fbm(x * .21 + 40, z * .21) - .25) * 2, 0, 1));
+    tmpC.lerp(C.dry, sstep(.55, .72, fbm(x * .09 + 70, z * .09 + 30)) * .4);
+    tmpC.lerp(C.sand, sstep(.8, .2, h)); tmpC.lerp(C.bed, sstep(-.1, -.8, h)); tmpC.lerp(C.rock, sstep(.55, 1.1, sl));
+    tmpC.multiplyScalar(.94 + .1 * hash(x * 1.7, z * 2.3));
+    skCol[k * 3] = tmpC.r; skCol[k * 3 + 1] = tmpC.g; skCol[k * 3 + 2] = tmpC.b;
+  }
+  skGeo.attributes.position.needsUpdate = skGeo.attributes.color.needsUpdate = true; skGeo.computeVertexNormals(); skGeo.computeBoundingSphere();
+  // forest beyond the map: denser than inside, thinning far out
+  let n = 0; const tc = new THREE.Color();
+  for (let z = -SKIRT + 1; z < SIZE + SKIRT - 1 && n < 3000; z += 2.5) for (let x = -SKIRT + 1; x < SIZE + SKIRT - 1 && n < 3000; x += 2.5) {
+    if (edge(x, z) || x > -1.5 && z > -1.5 && x < SIZE + 1.5 && z < SIZE + 1.5) continue;
+    const px = x + (hash(x, z) - .5) * 1.6, pz = z + (hash(z, x * 1.3) - .5) * 1.6, h = genHeight(px, pz), mask = fbm(px * .08 + 20, pz * .08 + 11);
+    if (h < 1 || mask < .38 || hash(px * 1.3, pz * .7) > (mask - .3) * 2.6) continue;
+    const s = .8 + hash(pz, px) * .6; dummy.position.set(px, h - .05, pz); dummy.rotation.set(0, hash(px, pz) * 6, 0); dummy.scale.set(s, s, s); dummy.updateMatrix();
+    skTrunks.setMatrixAt(n, dummy.matrix); skCrowns.setMatrixAt(n, dummy.matrix);
+    const r = hash(px * 3.3, pz * 1.1); tc.setHSL(.27 + (r - .5) * .07, .3 + r * .15, .16 + hash(pz, px * 2) * .09); skCrowns.setColorAt(n, tc); n++;
+  }
+  skTrunks.count = skCrowns.count = n; skTrunks.instanceMatrix.needsUpdate = skCrowns.instanceMatrix.needsUpdate = skCrowns.instanceColor.needsUpdate = true;
 }
 const gIdx = [];
 for (let n = 0; n <= N; n++) { const L = n * CELL; for (let s = 0; s < V - 1; s++) { gIdx.push(idx(s, L), idx(s + 1, L)); gIdx.push(idx(L, s), idx(L, s + 1)); } }
@@ -902,9 +970,21 @@ function genRocks() {
         addRock(x, z, .95 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
       }
     }
+    // and odd rocks scattered over the land beyond the river
+    for (let n = 0, k = 0; n < 4000 && k < 16; n++) {
+      const x = 1 + Math.random() * (SIZE - 2), z = 1 + Math.random() * (SIZE - 2), r = isleR(Math.atan2(z - KZ, x - KX));
+      if (Math.hypot(x - KX, z - KZ) < r + 4.5 || hAt(x, z) < 1.2 || nearBridge(x, z, 2) || rocks.some(q => Math.hypot(q.x - x, q.z - z) < 3)) continue;
+      addRock(x, z, .85 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
+    }
     return;
   }
-  for (let n = 0; n < 6000 && rocks.length < 28; n++) {
+  // Meadow: a stony patch between the castle and the river, north of the bridge
+  for (let n = 0, k = 0; n < 400 && k < 8; n++) {
+    const x = 32 + (Math.random() - .5) * 8, z = 17 + (Math.random() - .5) * 8;
+    if (hAt(x, z) < 1 || nearBridge(x, z, 2) || rocks.some(q => Math.hypot(q.x - x, q.z - z) < 1.9)) continue;
+    addRock(x, z, .95 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
+  }
+  for (let n = 0; n < 8000 && rocks.length < 48; n++) {
     const x = 1 + Math.random() * (SIZE - 2), z = 1 + Math.random() * (SIZE - 2);
     if (Math.hypot(x - KX, z - KZ) < 12 || hAt(x, z) < 1.2 || slopeAt(x, z) < .75) continue;
     if (rocks.some(r => Math.hypot(r.x - x, r.z - z) < 2.6) || nearBridge(x, z, 2)) continue;
@@ -1507,8 +1587,8 @@ function makeStatue() {
 // a timber footbridge over the river: planks across a gentle arch, two log stringers, trestles standing in the water,
 // log railings, grey stone landings at both ends. Built along local z, then turned onto its axis.
 function makeBridge(b) {
-  const g = new THREE.Group(), L = b.L, W = 1.9, mid = (b.u0 + b.u1) / 2;
-  const yAt = z => deckY(b, mid + z), wx = z => b.alongZ ? b.c : mid + z, wz = z => b.alongZ ? mid + z : b.c;
+  const g = new THREE.Group(), L = b.L, W = DECK_W;
+  const yAt = z => deckY(b, (z + L / 2) / L), wx = z => b.mx + b.dx * z, wz = z => b.mz + b.dz * z;
   for (const s of [-1, 1]) {                      // stone landings set into each bank
     const z = s * (L / 2 - .5), y = yAt(z);
     g.add(box(W + .6, 1.6, 1.1, M.plainStone, 0, y - .85, z));
@@ -1539,8 +1619,7 @@ function makeBridge(b) {
     for (const z of zs) g.add(cyl(.05, .06, .78, 6, M.log, x, yAt(z) + .4, z));
     for (let i = 0; i < k; i++) { seg(x, zs[i], zs[i + 1], .78, .045, M.log); seg(x, zs[i], zs[i + 1], .4, .035, M.log); }
   }
-  g.position.set(b.alongZ ? b.c : mid, 0, b.alongZ ? mid : b.c); if (!b.alongZ) g.rotation.y = Math.PI / 2;
-  // turned onto x, local x flips to -z: harmless, the bridge is symmetric across its width
+  g.position.set(b.mx, 0, b.mz); g.rotation.y = Math.atan2(b.dx, b.dz);   // local z onto the bridge's direction
   return g;
 }
 function buildBridges() { for (const b of bridges) { b.g = makeBridge(b); scene.add(b.g); } }
@@ -1814,6 +1893,8 @@ function evaluate(type, ci, cj, free) {
   // solid buildings can't sit on another building's door cell, or villagers coming out get trapped there
   if (!WALK[type] && type !== 'gate' && buildings.some(B => !B.dead && B.door && B.door.a >= ci && B.door.a < ci + s && B.door.b >= cj && B.door.b < cj + s))
     return { ...r, ok: false, reason: type === 'wall' ? 'Blocks a door · use a gate' : 'Blocks a door' };
+  // rocks stay: building over one would bury stone the masons can't mine any more
+  if (rocks.some(q => q.amount > 0 && q.x > x0 - .5 && q.x < x1 + .5 && q.z > z0 - .5 && q.z < z1 + .5)) return { ...r, ok: false, reason: 'Rocks' };
   let mn = 1e9, mx = -1e9, sum = 0, n = 0;
   for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) { const h = H[idx(i, j)]; mn = Math.min(mn, h); mx = Math.max(mx, h); sum += h; n++; }
   r.dh = mx - mn; r.target = sum / n; r.center = hAt((x0 + x1) / 2, (z0 + z1) / 2);
@@ -2062,7 +2143,7 @@ const FARM_OBST = { 1: [[-1.0, -1.2, .55, .4], [.9, -1.2, .3, .3]], 2: [[1.1, -.
 function farmBlocked(B, x, z) { const c = center(B), [lx, lz] = unrot(B.face || 0, x - c.x, z - c.z); return FARM_OBST[B.tier].some(([ox, oz, hx, hz]) => Math.abs(lx - ox) < hx + .18 && Math.abs(lz - oz) < hz + .18); }
 function canStand(x, z, mode) {   // mode 0 villager, 1 worker, 2 enemy
   if (x < .5 || z < .5 || x > SIZE - .5 || z > SIZE - .5) return false;
-  if (bridgeCell[cellAt(x, z)]) return true;
+  { const i = bridgeCell[cellAt(x, z)]; if (i && onDeck(bridges[i - 1], x, z)) return true; }
   const h = hAt(x, z);
   if (h < (mode === 2 || mode === 1 ? .3 : .5)) return false;   // nobody wades: rivers are crossed by bridge
   const b = occB[cellAt(x, z)];
@@ -2253,7 +2334,7 @@ function genShore() {
   for (let z = .5; z < SIZE; z += .5) for (let x = .5; x < SIZE; x += .5) { const h = hAt(x, z); if (h > -.12 && h < .02 && !bridgeCell[cellAt(x, z)]) shore.push([x, z]); }
 }
 // the water's drift at a point, matching the shader's: down the Meadow's river, round the isle's ring
-function flowVel(x, z) { return MAP === 'isle' ? [.045 * (z - KZ), -.045 * (x - KX)] : [0, .55]; }
+function flowVel(x, z) { return MAP !== 'isle' ? [0, .55] : Math.hypot(x - KX, z - KZ) > 19.5 ? [0, Math.sign(z - KZ) * .55] : [.045 * (z - KZ), -.045 * (x - KX)]; }
 let sprayT = 0;
 function sprayAt(x, z) {
   if (puffs.length > 170) return;
@@ -2401,15 +2482,15 @@ function findPath(sx, sz, tx, tz, mode) {
     let bi = 0; for (let q = 1; q < open.length; q++) if (f[open[q]] < f[open[bi]]) bi = q;
     const c = open[bi]; open[bi] = open[open.length - 1]; open.pop();
     if (closed[c]) continue; closed[c] = 1;
-    if (c === t) { const out = []; for (let p = came[c]; p !== -1 && p !== s; p = came[p]) out.unshift({ x: (p % N + .5) * CELL, z: (((p / N) | 0) + .5) * CELL }); return out; }
+    if (c === t) { const out = []; for (let p = came[c]; p !== -1 && p !== s; p = came[p]) out.unshift(bridgeWaypoint(p)); return out; }
     const a = c % N, b = (c / N) | 0;
     for (const [da, db, w] of ND) {
       const na = a + da, nb = b + db; if (na < 0 || nb < 0 || na >= N || nb >= N) continue;
       const nn = nb * N + na; if (closed[nn]) continue;
       if (nn !== t && !cellPass(nn, mode)) continue;
       if (da && db && (!cellPass(b * N + na, mode) || !cellPass(nb * N + a, mode))) continue;
-      const bi = bridgeCell[c] || bridgeCell[nn];                // bridges are only walked on and off at their ends, along the deck
-      if (bi && (bridges[bi - 1].alongZ ? da !== 0 : db !== 0)) continue;
+      const bc = bridgeCell[c], bn = bridgeCell[nn];              // bridges are only walked on and off through their end cells
+      if (bc !== bn && ((bc && !bridges[bc - 1].ends.has(c)) || (bn && !bridges[bn - 1].ends.has(nn)))) continue;
       const ng = g[c] + w * (1 + cS[nn] * .3) * (road[nn] ? .7 : 1);
       if (ng < g[nn]) { g[nn] = ng; came[nn] = c; f[nn] = ng + hh(nn); open.push(nn); }
     }
@@ -3685,7 +3766,7 @@ function startGame() {
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
   if (MAP === 'isle') { KX = 27; KZ = 27; } else { KX = 19; KZ = 27; }
-  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); buildBridges(); genShore(); hideGhost(); deselect();
+  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); genSkirt(); buildBridges(); genShore(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
   stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
   $('#summary').hidden = true; $('#log').innerHTML = '';
