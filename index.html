@@ -167,7 +167,8 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .card .row{gap:5px;flex-wrap:nowrap} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
 .card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
 .card .row button.primary{background:#3d3520;flex:1 0 auto}
-.card .row button.danger,.card .row button.ib{flex:0 0 auto} .card .row button.ib{width:34px;padding:0}
+.card .row button.danger,.card .row button.ib{flex:0 0 auto} .card .row button.danger.armed{background:#8f3326;border-color:var(--bad);color:#fff}
+.mini{display:inline-block;width:38px;height:5px;border-radius:3px;background:#3a3a30;overflow:hidden;margin-right:2px} .mini i{display:block;height:100%;background:#e6c46a} .card .row button.ib{width:34px;padding:0}
 .card .row .bIco{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #pauseBtn{position:absolute;top:8px;right:max(8px,env(safe-area-inset-right,0px));width:38px;height:38px;min-height:38px;background:var(--panel);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .pausedTag{position:absolute;inset:0;transform:none;top:0;left:0;display:flex;align-items:flex-start;justify-content:center;padding-top:18vh;background:rgba(10,12,10,.35);pointer-events:none;font-family:inherit;font-size:inherit;text-shadow:none}
@@ -341,6 +342,10 @@ const ICON = {
   sword: '<svg viewBox="0 0 16 16"><path d="M13.8 2.2 L12.9 4.9 L6.4 11.4 L4.6 9.6 L11.1 3.1 Z" fill="#cfd4da" stroke="#5d646c" stroke-width=".9" stroke-linejoin="round"/><path d="M3.3 8.3 L7.7 12.7" stroke="#c9a03e" stroke-width="1.8" stroke-linecap="round"/><path d="M5.5 10.5 L2.6 13.4" stroke="#6b4423" stroke-width="1.7" stroke-linecap="round"/><circle cx="2.2" cy="13.8" r="1" fill="#c9a03e"/></svg>',
   home: '<svg viewBox="0 0 16 16"><path d="M3.2 7.5 V14 H12.8 V7.5" fill="#e2cfa8" stroke="#6b5a3e" stroke-width="1"/><path d="M1.5 8 L8 2.3 L14.5 8 Z" fill="#b5532f" stroke="#6b2d18" stroke-width="1" stroke-linejoin="round"/><path d="M6.6 14 V10.4 H9.4 V14" fill="#6b4423" stroke="#4a2e16" stroke-width=".8"/></svg>',
   hammer: '<svg viewBox="0 0 16 16"><path d="M7.4 6.9 L2.4 13.5" stroke="#8b5a2b" stroke-width="1.9" stroke-linecap="round"/><path d="M4.6 3.9 L9.3 1.4 L13.6 5.7 L12.2 7.1 L9.3 5.4 L7.6 7.1 Z" fill="#a9afb6" stroke="#4f555c" stroke-width=".9" stroke-linejoin="round"/></svg>',
+  bow: '<svg viewBox="0 0 16 16"><path d="M4.2 1.8 C11 3.2 13 9 11.6 14.2" fill="none" stroke="#8b5a2b" stroke-width="1.7" stroke-linecap="round"/><path d="M4.2 1.8 L11.6 14.2" stroke="#e8e0cc" stroke-width=".7"/><path d="M2 9.5 L12.5 5.2" stroke="#6b4423" stroke-width="1"/><path d="M12.5 5.2 L10.6 4.9 L11.4 6.6 Z" fill="#a9afb6" stroke="#4f555c" stroke-width=".5"/><path d="M2 9.5 L3.4 10.4 M2 9.5 L2.6 8.1" stroke="#d9503f" stroke-width="1"/></svg>',
+  shield: '<svg viewBox="0 0 16 16"><path d="M2.8 2.4 H13.2 V7.6 C13.2 11 10.4 13.2 8 14.4 C5.6 13.2 2.8 11 2.8 7.6 Z" fill="#3f63b8" stroke="#cfd4da" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 3.2 V13.4 M3.6 7 H12.4" stroke="#9fb6e6" stroke-width=".8"/></svg>',
+  charm: '<svg viewBox="0 0 16 16"><g fill="#e98aa6" stroke="#9c3d5c" stroke-width=".7"><circle cx="8" cy="4" r="2.4"/><circle cx="11.8" cy="6.8" r="2.4"/><circle cx="10.4" cy="11.3" r="2.4"/><circle cx="5.6" cy="11.3" r="2.4"/><circle cx="4.2" cy="6.8" r="2.4"/></g><circle cx="8" cy="7.9" r="2" fill="#f2c95e" stroke="#a07a2a" stroke-width=".7"/></svg>',
+  bowl: '<svg viewBox="0 0 16 16"><path d="M1.8 7.2 H14.2 C14.2 10.8 11.6 13 8 13 C4.4 13 1.8 10.8 1.8 7.2 Z" fill="#8b5a2b" stroke="#4e3015" stroke-width="1" stroke-linejoin="round"/><ellipse cx="8" cy="7.2" rx="6.2" ry="1.3" fill="#3a2414" stroke="#4e3015" stroke-width=".8"/><path d="M5.6 14.2 H10.4" stroke="#4e3015" stroke-width="1.2" stroke-linecap="round"/></svg>',
 };
 document.querySelectorAll('[data-ico]').forEach(el => el.innerHTML = ICON[el.dataset.ico]);
 const RES_KEYS = ['gold', 'wood', 'stone', 'food'];
@@ -3009,42 +3014,43 @@ function refreshCard() {
   const st = [];
   if (B.site) {
     const crew = villagers.filter(v => v.build === B).length;
-    st.push(STAT('', `${{ new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]} ${Math.floor(B.site.progress * 100)}%`, 'warn'));
-    st.push(STAT('pop', crew ? `${crew}` : PH.kind === 'night' ? 'At dawn' : 'Waiting', crew ? '' : 'bad'));
+    const pc = Math.floor(B.site.progress * 100);
+    st.push(STAT('', `<span class="mini" title="${{ new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]}"><i style="width:${pc}%"></i></span>${pc}%`, 'warn'));
+    st.push(STAT('hammer', `${crew}`, crew ? '' : 'bad'));
   }
   st.push(STAT('hp', B.hp < B.max ? `${Math.ceil(B.hp)}/${B.max}` : `${B.max}`, hpf < .35 ? 'bad' : ''));
   if (B.type === 'castle') { st.push(STAT('gold', `+${T.gold[k]}`)); st.push(STAT('food', `+${T.food[k]}`)); }
   if (B.type === 'house') {
     st.push(STAT('gold', `+${T.gold[k]}`));
-    const ch = Math.round(charmOf(B) * 100); if (ch) st.push(STAT('gold', `+${ch}%`, 'good'));
-    const hg = villagers.filter(v => v.home === B && v.hungry).length; if (hg) st.push(STAT('', `${hg} hungry`, 'bad'));
+    const ch = Math.round(charmOf(B) * 100); if (ch) st.push(STAT('charm', `+${ch}%`, 'good'));
+    const hg = villagers.filter(v => v.home === B && v.hungry).length; if (hg) st.push(STAT('bowl', `${hg}`, 'bad'));
   }
   if (B.type === 'farm') st.push(STAT('food', `+${T.food[k]}`));
   if (T.residents) st.push(STAT('home', `${villagers.filter(v => v.home === B).length}`));
   if (T.workers && B.built) { const w = villagers.filter(v => v.job === B).length; st.push(STAT('hammer', `${w}/${T.workers[k]}`, w < T.workers[k] ? 'warn' : '')); }
   if (T.range) {
     const m = (B.manned || []).filter(Boolean).length;
-    st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.archers[k]}` : `${T.archers[k]}`));
+    st.push(STAT('bow', PH.kind === 'night' ? `${m}/${T.archers[k]}` : `${T.archers[k]}`));
     st.push(STAT('sword', `${T.dmg[k]}`));
   }
   if (T.soldiers) {
     const m = villagers.filter(v => v.soldier && v.post && v.post.B === B).length;
-    st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.soldiers[k]}` : `${T.soldiers[k]}`));
+    st.push(STAT('shield', PH.kind === 'night' ? `${m}/${T.soldiers[k]}` : `${T.soldiers[k]}`));
     st.push(STAT('sword', `${SOLDIER.dmg[k]}`));
   }
-  if (T.decor) st.push(STAT('gold', `+${Math.round(T.charm * 100)}%`, 'good'));
+  if (T.decor) st.push(STAT('charm', `+${Math.round(T.charm * 100)}%`, 'good'));
   $('#cardStats').innerHTML = st.join('');
   $('#rallyBtn').hidden = $('#recallBtn').hidden = !T.soldiers || !B.built;
   $('#rallyBtn').setAttribute('aria-pressed', String(rallyFor === B)); $('#recallBtn').disabled = !B.rally;
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
-  else if (B.tier >= 3) up.hidden = true;
+  else if (B.tier >= 3 || B.site) up.hidden = true;
   else { const c = T.up[k]; up.hidden = false; up.innerHTML = B.site ? '…' : `<svg class="bIco" viewBox="0 0 24 24"><path d="M5 14 L12 7 L19 14"/><path d="M5 19 L12 12 L19 19"/></svg>${costHTML(c)}`; up.disabled = !!B.site || !canAfford(c); up.title = `Upgrade to ${T.tiers[k + 1]}`; }
   $('#cardRotBtn').hidden = !canRotate(B);
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle';
   $('#cardActs').hidden = [...$('#cardActs').children].every(b => b.hidden);
-  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); dem.innerHTML = `<svg class="bIco" viewBox="0 0 24 24"><path d="M5 7 H19 M10 7 V4.5 H14 V7 M7 7 L8 20 H16 L17 7 M10.5 10.5 V16.5 M13.5 10.5 V16.5"/></svg>${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
+  if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? 'Tap again' : `<svg class="bIco" viewBox="0 0 24 24"><path d="M5 7 H19 M10 7 V4.5 H14 V7 M7 7 L8 20 H16 L17 7 M10.5 10.5 V16.5 M13.5 10.5 V16.5"/></svg>${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
 }
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
@@ -3052,7 +3058,13 @@ $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused
 $('#rotBtn').addEventListener('click', rotatePlacement);
 $('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); rotateBuilding(selected); });
 addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !e.target.closest('input')) { if (ROTATES[tool] || FACING[tool]) rotatePlacement(); else if (selected) rotateBuilding(selected); } });
-$('#demBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && removeBuilding(selected, false); });
+// demolish takes two taps within 3 s, like Restart
+var demArmed = { B: null, t: 0 };
+$('#demBtn').addEventListener('click', () => {
+  if (paused) return setHint('Paused', 'bad'); if (!selected) return;
+  if (demArmed.B === selected && performance.now() - demArmed.t < 3000) { demArmed = { B: null, t: 0 }; removeBuilding(selected, false); return; }
+  demArmed = { B: selected, t: performance.now() }; refreshCard(); setTimeout(refreshCard, 3050);
+});
 $('#closeCard').addEventListener('click', deselect);
 $('#nightBtn').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
 
