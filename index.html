@@ -670,6 +670,23 @@ for (let j = 0; j < SV - 1; j++) for (let i = 0; i < SV - 1; i++) { const a = j 
 const skGeo = new THREE.BufferGeometry();
 skGeo.setAttribute('position', new THREE.BufferAttribute(skPos, 3)); skGeo.setAttribute('color', new THREE.BufferAttribute(skCol, 3)); skGeo.setIndex(skIdx);
 const skirt = new THREE.Mesh(skGeo, terrainMat); skirt.receiveShadow = true; scene.add(skirt);
+// the edge of the buildable map: a pale band laid on the ground all round it (the land beyond is shaded darker too)
+const boundMat = new THREE.MeshBasicMaterial({ color: '#f3e3b0', transparent: true, opacity: .6, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+const boundary = new THREE.Mesh(new THREE.BufferGeometry(), boundMat); boundary.renderOrder = 2; scene.add(boundary);
+function buildBoundary() {
+  const pos = [], w = .28, y = (x, z) => Math.max(hAt(x, z), 0) + .07;
+  const strip = (ax, az, bx, bz, nx, nz) => {        // a band along one edge, nx/nz pointing inward
+    const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / .5);
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n, t1 = (i + 1) / n, x0 = lerp(ax, bx, t0), z0 = lerp(az, bz, t0), x1 = lerp(ax, bx, t1), z1 = lerp(az, bz, t1);
+      const p = [[x0, z0], [x1, z1], [x1 + nx * w, z1 + nz * w], [x0 + nx * w, z0 + nz * w]].map(([x, z]) => [x, y(x, z), z]);
+      pos.push(...p[0], ...p[2], ...p[1], ...p[0], ...p[3], ...p[2]);
+    }
+  };
+  const e = .05, S = SIZE - .05;
+  strip(e, e, S, e, 0, 1); strip(S, e, S, S, -1, 0); strip(S, S, e, S, 0, -1); strip(e, S, e, e, 1, 0);
+  boundary.geometry.dispose(); boundary.geometry = new THREE.BufferGeometry(); boundary.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+}
 const skTrunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(.13, .18, .9, 5).translate(0, .45, 0), new THREE.MeshStandardMaterial({ color: '#4d3622', flatShading: true }), 3000);
 const skCrowns = new THREE.InstancedMesh(new THREE.ConeGeometry(.85, 2.3, 6).translate(0, 1.9, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), 3000);
 skCrowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(3000 * 3), 3); skTrunks.count = skCrowns.count = 0;
@@ -684,7 +701,7 @@ function genSkirt() {
     tmpC.copy(C.grass2).lerp(C.grass, clamp((fbm(x * .21 + 40, z * .21) - .25) * 2, 0, 1));
     tmpC.lerp(C.dry, sstep(.55, .72, fbm(x * .09 + 70, z * .09 + 30)) * .4);
     tmpC.lerp(C.sand, sstep(.8, .2, h)); tmpC.lerp(C.bed, sstep(-.1, -.8, h)); tmpC.lerp(C.rock, sstep(.55, 1.1, sl));
-    tmpC.multiplyScalar(.94 + .1 * hash(x * 1.7, z * 2.3));
+    tmpC.multiplyScalar((.94 + .1 * hash(x * 1.7, z * 2.3)) * .72);   // shaded: not part of the game
     skCol[k * 3] = tmpC.r; skCol[k * 3 + 1] = tmpC.g; skCol[k * 3 + 2] = tmpC.b;
   }
   skGeo.attributes.position.needsUpdate = skGeo.attributes.color.needsUpdate = true; skGeo.computeVertexNormals(); skGeo.computeBoundingSphere();
@@ -3766,7 +3783,7 @@ function startGame() {
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
   if (MAP === 'isle') { KX = 27; KZ = 27; } else { KX = 19; KZ = 27; }
-  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); genSkirt(); buildBridges(); genShore(); hideGhost(); deselect();
+  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); genSkirt(); buildBoundary(); buildBridges(); genShore(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
   stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
   $('#summary').hidden = true; $('#log').innerHTML = '';
