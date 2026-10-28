@@ -1282,20 +1282,29 @@ const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1 }, SLAB_TOP = .08;
 const plinthTop = (type, tier) => tier === 1 ? (SLAB[type] ? SLAB_TOP : null) : PLINTH_TOP[type];
 // a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
 // so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
-function snapToNeighbours(type, ev) {
-  const mine = plinthTop(type, 1); if (mine == null) return;
+function snapToNeighbours(type, ev) { const t = flushHeight(type, 1, ev, ev.target, .8); if (t !== null) ev.target = t; }
+// the height for a building of this type and tier whose base top lines up with an edge-sharing neighbour's, if one is within reach of ref
+function flushHeight(type, tier, ev, ref, reach, self) {
+  const mine = plinthTop(type, tier); if (mine == null) return null;
   let best = null;
   for (const B of buildings) {
     const top = plinthTop(B.type, B.tier);
-    if (B.dead || !B.plinth || top == null) continue;
+    if (B === self || B.dead || !B.plinth || top == null) continue;
     const e = B.ev;
     const touch = ((e.x1 === ev.x0 || ev.x1 === e.x0) && Math.min(e.z1, ev.z1) > Math.max(e.z0, ev.z0)) ||
                   ((e.z1 === ev.z0 || ev.z1 === e.z0) && Math.min(e.x1, ev.x1) > Math.max(e.x0, ev.x0));
     if (!touch) continue;
     const t = B.group.position.y + top - mine;
-    if (Math.abs(t - ev.target) < .8 && (best === null || Math.abs(t - ev.target) < Math.abs(best - ev.target))) best = t;
+    if (Math.abs(t - ref) < reach && (best === null || Math.abs(t - ref) < Math.abs(best - ref))) best = t;
   }
-  if (best !== null) ev.target = best;
+  return best;
+}
+// after an upgrade the base's top height changes (earth slab, plain stone, masonry); shift the building a little so it stays
+// flush with its neighbours; a neighbour on much higher or lower ground stays as it is (the bases run deep enough for this)
+function settleBase(B) {
+  if (!B.plinth) return;
+  const t = flushHeight(B.type, B.tier, B.ev, B.group.position.y, .3, B);
+  if (t !== null) B.group.position.y = t;
 }
 
 // ---------- ghosts + outlines ----------
@@ -1658,7 +1667,7 @@ function completeSite(B) {
     B.built = true; B.group.scale.y = 1; stats.built++; if (B.type !== 'castle' || stats.built > 1) sfx('build', c);
     if (B.type !== 'wall') log(`<b>${T.tiers[0]}</b> built${T.residents ? ` · +${T.residents[0]}` : ''}`, 'good');
   } else {
-    B.tier++; stats.upgrades++; swapModel(B); rebuildRoads(); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
+    B.tier++; stats.upgrades++; swapModel(B); settleBase(B); rebuildRoads(); B.group.scale.y = 1; B.max = T.hp[B.tier - 1]; B.hp = B.max;
     if (B.tier === 2) rebuildRoads();   // the new stone base: paths now stop at its edge
     if (B.figs && B.figs.length) { hideDefenders(B); (B.manned || []).forEach((on, a) => on && showDefender(B, a)); }
     floatText(`${T.tiers[B.tier - 1]}!`, '#f2c95e', c.x, B.group.position.y + 4, c.z); sfx('build', c);
