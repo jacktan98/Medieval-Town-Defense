@@ -3088,7 +3088,7 @@ let yaw = .65, pitch = .9, dist = 46;
 function updateCam() {
   camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
   camera.lookAt(target);
-  scene.fog.near = dist + 35; scene.fog.far = dist + 130;   // haze starts beyond the town, so the top of a tall phone screen stays crisp
+  scene.fog.near = dist + 100; scene.fog.far = dist + 240;   // haze starts beyond the town, so the top of a tall phone screen stays crisp
 }
 var CAM_LIM = { lo: 0, hi: SIZE, near: 14 };      // the gallery widens these
 function pan(dx, dy) {
