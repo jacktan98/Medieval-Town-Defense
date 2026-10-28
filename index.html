@@ -2328,7 +2328,7 @@ function updateVillagers(dt, now) {
     else if (v.working && TOOL_POSE[kind]) ({ w, R: Rt, L, tilt, lean } = TOOL_POSE[kind](now / 1000 + v.seed)); else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
     if (v.soldier) {                                                  // weapon carried upright; a thrust or a cut when striking
       const at = v.attackT || 0; L = -.55 - swing * .2; lean = 0;
-      if (v.toolKind === 'spear') { Rt = at > 0 ? -1.55 : -.5 + swing * .2; tilt = at > 0 ? 0 : -2.6; }
+      if (v.toolKind === 'spear') { const u = spearThrust(at); Rt = -1.0 - .45 * u + swing * .08; tilt = -.57 + .45 * u - swing * .08; v.pivot.position.y = -.33 - .3 * u; }   // see spearPose
       else { Rt = at > 0 ? -.6 - at * 5.7 : -.45 + swing * .3; tilt = -.4; }
     }
     if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
@@ -2336,6 +2336,7 @@ function updateVillagers(dt, now) {
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
     v.arms[0].rotation.x = ease(v.arms[0].rotation.x, L); v.arms[1].rotation.x = ease(v.arms[1].rotation.x, Rt); v.body.rotation.x = ease(v.body.rotation.x, lean);
+    if (v.soldier && v.toolKind === 'spear') { v.arms[1].rotation.x = Rt; v.pivot.rotation.x = tilt; }   // exact, or the shaft tips mid-thrust
     smoothPos(v, dt, now); v.g.position.set(v.rx, hAt(v.rx, v.rz), v.rz);
     if (v.sbar) { const on = v.soldier && v.hp < v.maxHp; v.sbar.grp.visible = on; if (on) { v.sbar.set(v.hp / v.maxHp); v.sbar.grp.position.set(v.rx, v.g.position.y + 1.5 * UNIT_K, v.rz); } }
   }
@@ -2392,6 +2393,13 @@ function roundShield(r, faceM) {
   return g;
 }
 function armShield(p, sh) { sh.position.set(-.09, -.2, .02); p.arms[0].add(sh); return sh; }
+// spears are held level at the hip, point forward; a strike (attackT .35 → 0) pushes the spear straight out and draws it back:
+// the arm lifts as the tool tilts back by the same angle (the shaft stays level) and the grip slides down the shaft
+const spearThrust = at => at > 0 ? Math.sin(Math.PI * (1 - at / .35)) : 0;
+function spearPose(p, at, sw) {
+  const u = spearThrust(at);
+  p.arms[1].rotation.x = -1.0 - .45 * u + sw * .08; p.pivot.rotation.x = -.57 + .45 * u - sw * .08; p.pivot.position.y = -.33 - .3 * u;
+}
 function makeRaider(kind) {
   const p = makePerson({ tunic: enemyTunic[kind], helm: kind === 'archer' ? 'hood' : kind === 'captain' ? 'captain' : 'raider', tool: kind === 'archer' ? 'bow' : kind === 'spear' ? 'spear' : 'sword' });
   if (kind === 'sword') armShield(p, roundShield(.19, M.wood));                                 // spearmen carry none; archers need both hands
@@ -2505,7 +2513,7 @@ function updateEnemies(dt) {
     if (e.horse) e.horseLegs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw * .8; });   // diagonal pairs move together
     else { e.legs[0].rotation.x = sw; e.legs[1].rotation.x = -sw; }
     if (e.kind === 'archer') bowPose(e, e.aiming && !(e.attackT > 0) && e.cool < DRAW, e.attackT > 0, -.35 - sw * .3, -sw * .6);
-    else if (e.kind === 'spear') { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -1.55 : -.5 + sw * .2; e.pivot.rotation.x = e.attackT > 0 ? 0 : -2.6; }   // carried upright, levelled to thrust
+    else if (e.kind === 'spear') { e.arms[0].rotation.x = -.55 - sw * .2; spearPose(e, e.attackT, sw); }   // level at the hip, thrust out
     else { e.arms[0].rotation.x = -.55 - sw * .2; e.arms[1].rotation.x = e.attackT > 0 ? -.6 - e.attackT * 5.7 : -.45 + sw * .3; }
     smoothPos(e, dt, performance.now()); const y = hAt(e.rx, e.rz);
     e.g.position.set(e.rx, y < 0 ? y * .4 - .2 : y, e.rz);
@@ -3163,7 +3171,7 @@ function galPose(p, t, dt) {
     const at = gWalk ? 0 : Math.max(0, .35 - (t + p.seed) % 1.2);
     p.arms[0].rotation.x = -.55 - sw * .2;
     if (p.kit === 3) { p.arms[1].rotation.x = at > 0 ? -.6 - at * 5.7 : -.45 + sw * .3; p.pivot.rotation.x = -.4; }
-    else if (p.raider === 'spear' || p.kit) { p.arms[1].rotation.x = at > 0 ? -1.55 : -.5 + sw * .2; p.pivot.rotation.x = at > 0 ? 0 : -2.6; }
+    else if (p.raider === 'spear' || p.kit) spearPose(p, at, sw);
     else p.arms[1].rotation.x = at > 0 ? -.6 - at * 5.7 : -.45 + sw * .3;
     return;
   }
