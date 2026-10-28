@@ -2350,7 +2350,7 @@ function updateVillagers(dt, now) {
           if (v.hideT > 0 || v.inside) { v.inside = false; exitDoor(v); }
           const P = v.post;
           if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.noProg > 6 || distRect(P.B, v.x, v.z) < .9) {
-            v.posted = true; v.doorWalk = null; dropLoad(v); P.B.manned[P.a] = true;
+            v.posted = true; v.doorWalk = null; deliver(v); dropLoad(v); P.B.manned[P.a] = true;   // a log or stone in hand is put down first
             if (DEF[P.B.type].soldiers) { soldierKit(v, P.B.tier); v.sbar = v.sbar || makeBar(.6); v.prog = null; }   // gears up and stays out to fight
             else { v.g.visible = false; showDefender(P.B, P.a); }
           }
@@ -2607,7 +2607,9 @@ function postPoint(B, v) {
 }
 function assignPosts() {
   const slots = [];
-  const order = buildings.filter(B => (DEF[B.type].archers || DEF[B.type].soldiers) && B.built).sort((a, b) => (b.type === 'castle') - (a.type === 'castle'));
+  // manned in priority order: the castle, then archer towers, then barracks with whoever is left (a barracks may go short)
+  const rank = B => B.type === 'castle' ? 0 : DEF[B.type].archers ? 1 : 2;
+  const order = buildings.filter(B => (DEF[B.type].archers || DEF[B.type].soldiers) && B.built).sort((a, b) => rank(a) - rank(b));
   for (const B of order) { const T = DEF[B.type]; B.manned = B.manned || []; for (let a = 0; a < (T.archers || T.soldiers)[B.tier - 1]; a++) if (!villagers.some(v => v.post && v.post.B === B && v.post.a === a)) slots.push({ B, a }); }
   let posted = 0;
   for (const S of slots) {
@@ -2637,6 +2639,7 @@ function soldierKit(v, tier) {
   const tunic = tier === 3 ? mailM : guardTunic;
   v.torso.material = tunic; v.arms.forEach(a => a.userData.sleeve.material = tunic);
   if (v.hatG) v.hatG.visible = false; if (v.apron) v.apron.visible = false;
+  if (v.carryLog) v.carryLog.visible = v.carryStone.visible = false;    // nobody marches out with a log
   if (tier === 1) { const c = put(new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 5, 0, Math.PI * 2, 0, Math.PI * .5), leatherM)); c.scale.y = .8; c.position.y = 1.06; }
   else put(makeHelm(tier === 2 ? 'kettle' : 'soldier'));
   if (tier === 2) put(cyl(.152, .212, .34, 8, leatherM, 0, .66, 0));
