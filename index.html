@@ -118,7 +118,11 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .sheet{background:#1c1d18;border:1px solid var(--gold);border-radius:8px;padding:20px 22px;width:min(420px,100%);display:flex;flex-direction:column;gap:12px}
 .sheet h2{margin:0;font-family:var(--display);font-weight:400;font-size:34px;color:var(--gold);text-wrap:balance}
 .sheet h2.lost{color:var(--bad)}
-.mapSheet{align-items:center;text-align:center}
+.mapSheet{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;width:min(420px,100%)}
+/* the title screen: dark over everything, the game isn't shown until a map is picked */
+#mapPick{z-index:50;background:radial-gradient(ellipse at 50% 35%, #23271f 0%, #121410 70%, #0b0c09 100%)}
+.gameTitle{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(34px,10vw,52px);line-height:1.05;color:var(--gold);text-shadow:0 2px 18px rgba(0,0,0,.6);text-wrap:balance}
+.mapSub{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .maps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .mapBtn{display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:6px 6px 8px;border-radius:12px;background:#24261f;border-color:#4a4838;width:min(170px,38vw)}
 .mapBtn img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#2e3a2c}
@@ -315,9 +319,10 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
     </div>
   </div>
   <div class="galBar" id="galBar" hidden><b>Gallery</b><button id="galTurn">Turn</button><button id="galDoors">Doors</button><button id="galWalk">Walk</button><button class="primary" id="galBack">Back</button></div>
-  <div class="modal" id="mapPick" hidden>
-    <div class="sheet mapSheet">
-      <h2>Choose map</h2>
+  <div class="modal" id="mapPick">
+    <div class="mapSheet">
+      <h1 class="gameTitle">Medieval Town Defense</h1>
+      <div class="mapSub">Choose map</div>
       <div class="maps">
         <button class="mapBtn" data-map="meadow"><img src="maps/meadow.jpg" alt=""><b>Meadow</b></button>
         <button class="mapBtn" data-map="isle"><img src="maps/isle.jpg" alt=""><b>River isle</b></button>
@@ -3588,7 +3593,7 @@ function startGame() {
 
 // ---------- loop ----------
 resize(); startGame();
-if (!/[?&](gallery|debug|map=)/.test(location.search)) showMapPick();
+if (!/[?&](gallery|debug|map=)/.test(location.search)) showMapPick(); else $('#mapPick').hidden = true;   // shown from the first paint, so the game never flashes up behind it
 const easeOut = t => 1 - Math.pow(1 - t, 3);
 const BAR_TOP = { barracks: 3.4, house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
 let last = performance.now(), hudT = 0, buildT = 0;
