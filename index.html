@@ -277,6 +277,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
       <div class="row"><button class="primary" id="upBtn"></button><button id="cardRotBtn" hidden title="Rotate"><svg style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round" viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg>Rotate</button><button class="danger" id="demBtn"></button></div>
+      <div class="row" id="rallyRow" hidden><button id="rallyBtn" title="Tap Rally, then a spot">Rally</button><button id="recallBtn" title="Back to the barracks">Recall</button></div>
     </div>
     <div class="guideCard" id="guide" hidden><span class="gStep" id="gStep"></span><b id="gText"></b><button id="gSkip">Skip</button></div>
     <div class="pill" id="hint">Pick a building</div>
@@ -356,6 +357,9 @@ const DEF = {
   tower:  { size: 1, name: 'Archer tower', maxdh: 1.8, hp: [180, 280, 400], cost: { wood: 15, gold: 10 }, noRoad: true,
             up: [{ wood: 30, gold: 30 }, { stone: 40, gold: 60 }], range: [11, 13, 15], dmg: [7, 9, 12], rate: [1.2, 1.0, .8],
             archers: [2, 2, 2], shootY: [3.4, 3.8, 5.4], tiers: ['Lookout', 'Watchtower', 'Stone tower'], key: '5' },
+  barracks: { size: 2, name: 'Barracks', maxdh: 1.8, hp: [220, 320, 450], cost: { wood: 25, gold: 20 },
+            up: [{ wood: 30, gold: 35, stone: 10 }, { stone: 40, gold: 60 }], soldiers: [3, 3, 3],
+            tiers: ['Muster hut', 'Barracks', 'Garrison'], key: '8' },
   wall:   { size: 1, name: 'Wall', maxdh: 1.8, falloff: 1.5, hp: [200, 350, 500], cost: { wood: 5, gold: 2 }, noRoad: true, paint: true,
             up: [{ stone: 6, gold: 3 }, { stone: 10, gold: 10 }], tiers: ['Palisade', 'Stone wall', 'Battlement'], key: '6' },
   gate:   { size: 1, name: 'Gate', maxdh: 1.6, falloff: 1.5, hp: [250, 400, 600], cost: { wood: 15, gold: 10 }, noRoad: true,
@@ -371,11 +375,11 @@ const DEF = {
 const MEAL = 20, LUMBER_LOAD = 2;
 DEF.castle.food = [3, 4, 5];
 DEF.tower.shootY = DEF.tower.shootY.map((y, i) => y * TOWER_K[i]);
-const BUILD_T = { house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
+const BUILD_T = { house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, barracks: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
 for (const t in BUILD_T) DEF[t].build = BUILD_T[t];
 DEF.well.charm = .25; DEF.torch.charm = .1; DEF.flowers.charm = .15; DEF.statue.charm = .35;
 const PATH_COST = { gold: 1 }, PATH_CHARM = .02, CHARM_R = 8, WALK = { farm: 1, torch: 1, flowers: 1 };
-const CATS = { eco: ['house', 'farm', 'lodge', 'quarry'], def: ['tower', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
+const CATS = { eco: ['house', 'farm', 'lodge', 'quarry'], def: ['tower', 'barracks', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
 const WALLY = { wall: 1, gate: 1 };   // walls join only walls and gates
 // spearmen are the basic raider and come first; swordsmen join from wave 2, captains from wave 3
 const WAVES = [
@@ -886,9 +890,10 @@ const DOOR = {
   lodge: [[-1, .52], [-.6, 1.14], [-.6, 1.14]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
+  barracks: [[-1, .42], [-1, .42], [-1, .42]],
 };
 // buildings the player can turn (walls and gates have their own E–W / N–S rotation); face 0 = +z, 1 = +x, 2 = -z, 3 = -x
-const FACING = { house: 1, lodge: 1, quarry: 1, farm: 1, tower: 1, castle: 1, well: 1, torch: 1, flowers: 1, statue: 1 };
+const FACING = { house: 1, lodge: 1, quarry: 1, barracks: 1, farm: 1, tower: 1, castle: 1, well: 1, torch: 1, flowers: 1, statue: 1 };
 const unrot = (f, x, z) => faceRot((4 - f) % 4, x, z);
 const faceRot = (f, x, z) => { const a = f * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a)); return [x * c + z * s, -x * s + z * c]; };
 // the tile in front of the door when the building faces f, lined up with the door so villagers walk straight in
@@ -1110,6 +1115,56 @@ function makeLodge(tier, plinth) {
   }
   return g;
 }
+// barracks: a hall on the left (door at x -1) and a drill yard on the right with a weapon rack and a practice dummy
+function makeBarracks(tier, plinth) {
+  const g = new THREE.Group(), X = -.65, F = .3;           // hall centre x, front face z
+  if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
+  const rack = (weapon, shield) => {                        // a rack along x at the front right; three weapons leaning on the bar
+    for (const x of [.85, 1.75]) g.add(box(.07, .85, .07, tier === 1 ? M.rough : M.timber, x, .42, 1.15));
+    g.add(box(1.0, .06, .06, tier === 1 ? M.rough : M.timber, 1.3, .8, 1.15));
+    for (const [n, x] of [[0, 1.0], [1, 1.3], [2, 1.6]]) {
+      if (weapon === 'spear') { const sp = box(.03, 1.5, .03, M.timber, x, .75, 1.26); sp.rotation.x = -.16; g.add(sp); const tip = cone(.035, .15, 4, M.iron, x, 1.55, 1.13); tip.rotation.x = -.16; g.add(tip); }
+      else { const sw = box(.03, .62, .06, M.iron, x, .55, 1.24); sw.rotation.x = -.12; g.add(sw); g.add(box(.13, .03, .04, M.iron, x, .87, 1.2)); g.add(box(.035, .12, .035, M.timber, x, .94, 1.19)); }
+      if (shield && n !== 1) {
+        const sh = shield === 'round' ? cyl(.19, .19, .04, 12, M.wood, x + .05, .3, 1.42) : box(.3, .42, .04, M.flag, x + .05, .3, 1.42);
+        if (shield === 'round') sh.rotation.x = Math.PI / 2 - .25; else sh.rotation.x = -.25;
+        g.add(sh); const boss = cyl(.05, .05, .04, 8, M.iron, x + .05, .31, 1.45); boss.rotation.x = Math.PI / 2; g.add(boss);
+      }
+    }
+  };
+  const dummy = shield => {                                 // practice dummy: a post with a straw body, arms bar and sack head
+    g.add(box(.08, 1.15, .08, M.rough, 1.3, .57, -.7)); g.add(box(.62, .06, .06, M.rough, 1.3, .9, -.7));
+    g.add(cyl(.14, .17, .46, 8, M.hay, 1.3, .78, -.7));
+    const hd = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), M.canvas); hd.position.set(1.3, 1.15, -.7); hd.castShadow = true; g.add(hd);
+    if (shield) { const sh = cyl(.17, .17, .035, 12, M.wood, 1.3, .8, -.52); sh.rotation.x = Math.PI / 2; g.add(sh); }
+  };
+  if (tier === 1) {            // muster hut: plank hall with a thatched roof, a spear rack, a straw dummy
+    g.add(box(2.3, 1.0, 1.9, M.wood, X, .55, -.65));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.05, .1, M.rough, X + sx * 1.13, .53, -.65 + sz * .93));
+    g.add(pyramid(1.9, 1.0, .86, M.thatchOld, 1.55, X, -.65));
+    g.add(box(.46, .7, .05, M.timber, -1, .4, F + .02)); g.add(box(.22, .18, .04, M.glow, -.1, .72, F + .02));
+    rack('spear'); dummy(false);
+  } else if (tier === 2) {     // barracks: daub hall in a timber frame, log roof, spears and round shields, a blue banner
+    g.add(box(2.3, 1.1, 1.9, M.daub, X, .6, -.65));
+    for (const x of [-1.78, -.55, .48]) g.add(box(.1, 1.12, .1, M.timber, x, .6, F + .01));
+    for (const sx of [-1, 1]) g.add(box(.1, 1.12, .1, M.timber, X + sx * 1.13, .6, -1.6));
+    g.add(box(2.34, .08, .08, M.timber, X, 1.13, F + .01));
+    g.add(pyramid(1.95, 1.05, .86, M.thatch, 1.68, X, -.65));
+    g.add(box(.5, .8, .05, M.wood, -1, .45, F + .03)); for (const x of [-.25, .2]) g.add(box(.2, .2, .04, M.glow, x, .78, F + .03));
+    g.add(box(.05, 1.7, .05, M.timber, .62, .85, F + .3)); g.add(flagBox(.42, .3, .03, M.flag, .85, 1.52, F + .3));
+    rack('spear', 'round'); dummy(true);
+  } else {                     // garrison: stone hall, blue tiled roof, swords and blue shields, a hanging banner
+    g.add(box(2.3, 1.3, 1.9, M.stone2, X, .7, -.65));
+    g.add(box(2.42, .12, 2.02, M.stone2, X, 1.38, -.65));
+    g.add(pyramid(1.95, 1.15, .86, M.roofBlue, 2.0, X, -.65));
+    g.add(box(.55, .9, .06, M.timber, -1, .5, F + .02));
+    for (const y of [.25, .7]) g.add(box(.56, .04, .07, M.iron, -1, y, F + .04));
+    for (const x of [-.4, .2]) g.add(box(.18, .26, .04, M.glow, x, .95, F + .02));
+    g.add(drapeBox(.34, .6, .03, M.drape, -.1, .55 + .45, F + .04));
+    rack('sword', 'kite'); dummy(true);
+  }
+  return g;
+}
 function makeQuarry(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
@@ -1262,7 +1317,7 @@ function makeStatue() {
   g.add(box(.05, .8, .05, M.stone2, .38, 2.5, 0));
   return g;
 }
-const MODELS = { house: makeHouse, tower: makeTower, castle: makeCastle, lodge: makeLodge, quarry: makeQuarry, farm: makeFarm,
+const MODELS = { barracks: makeBarracks, house: makeHouse, tower: makeTower, castle: makeCastle, lodge: makeLodge, quarry: makeQuarry, farm: makeFarm,
   wall: makeWall, gate: makeGate, well: makeWell, torch: makeTorch, flowers: makeFlowers, statue: makeStatue };
 // grit: every mesh gets a slightly different, weathered copy of its material; tier 1 is dirtier and duller
 const aoTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -1293,9 +1348,9 @@ const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
 };
 
 // stone bases fill their tiles exactly; this is how far each one's top sits above the building's ground level
-const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2 };
+const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, barracks: .2 };
 // tier 1 stands on a packed-earth slab like the palisade fort's yard, filling its tiles so neighbours meet edge to edge
-const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1 }, SLAB_TOP = .08;
+const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1, barracks: 1 }, SLAB_TOP = .08;
 const plinthTop = (type, tier) => tier === 1 ? (SLAB[type] ? SLAB_TOP : null) : PLINTH_TOP[type];
 // a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
 // so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
@@ -1490,7 +1545,7 @@ function emitSmoke(dt) {
 let adapt = true, tool = 'house', cat = 'eco', cur = null, selected = null, gameOver = false;
 const anims = [], buildings = [], villagers = [], enemies = [], arrows = [];
 const res = { gold: 0, wood: 0, stone: 0, food: 0 };
-let stats = { slain: 0, lost: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: 0 };
+let stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: 0 };
 let PH = { kind: 'day', wave: 1, t: DAYLEN[0] }, econT = TICK, spawnQueue = [], spawnT = 0, light = 1, nextId = 1;
 const canAfford = c => RES_KEYS.every(k => (res[k] || 0) >= (c[k] || 0));
 const shortfall = c => RES_KEYS.filter(k => (c[k] || 0) > res[k]).map(k => `${c[k] - Math.floor(res[k])} more ${k}`).join(', ');
@@ -1713,7 +1768,8 @@ function removeBuilding(B, raid) {
   scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B);
   for (let n = 0; n < N * N; n++) if (occB[n] === B) occB[n] = null;
   buildings.splice(buildings.indexOf(B), 1);
-  for (const v of villagers.slice()) if (v.home === B || (v.post && v.post.B === B && v.posted)) killVillager(v);
+  for (const v of villagers.slice()) if (v.home === B || (v.post && v.post.B === B && v.posted && !v.soldier)) killVillager(v);
+  if (B.rallyFlag) setRally(B, null);
   for (const v of villagers) {
     if (v.post && v.post.B === B) v.post = null;
     if (v.job === B) { v.job = null; v.state = 'find'; release(v); if (!v.build) giveTool(v, null); }
@@ -1931,7 +1987,7 @@ function makeVillager(home) {
 // houses (and the castle) are where villagers come from; each tier houses more people
 function syncResidents(B) {
   const R = DEF[B.type].residents; if (!R || !B.built) return;
-  let have = villagers.filter(v => v.home === B).length;
+  let have = villagers.filter(v => v.home === B).length + respawns.filter(r => r.home === B).length;   // the fallen come back on their own
   for (; have < R[B.tier - 1]; have++) makeVillager(B);
   assignJobs();
 }
@@ -2230,9 +2286,11 @@ function updateVillagers(dt, now) {
           if (v.hideT > 0 || v.inside) { v.inside = false; exitDoor(v); }
           const P = v.post;
           if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.noProg > 6 || distRect(P.B, v.x, v.z) < .9) {
-            v.posted = true; v.doorWalk = null; dropLoad(v); v.g.visible = false; P.B.manned[P.a] = true; showDefender(P.B, P.a);
+            v.posted = true; v.doorWalk = null; dropLoad(v); P.B.manned[P.a] = true;
+            if (DEF[P.B.type].soldiers) { soldierKit(v, P.B.tier); v.sbar = v.sbar || makeBar(.6); v.prog = null; }   // gears up and stays out to fight
+            else { v.g.visible = false; showDefender(P.B, P.a); }
           }
-        }
+        } else if (v.soldier) updateSoldier(v, dt);
       } else if (!v.inside) {                       // everyone else shelters in the castle
         release(v); v.visit = null; if (v.state === 'building') v.state = 'tobuild';
         const K = keep || v.home;
@@ -2251,7 +2309,7 @@ function updateVillagers(dt, now) {
         if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
       }
     }
-    if (!v.doorWalk && (v.inside || v.hideT > 0 || v.posted || v.sleeping || !v.g.visible)) continue;
+    if (!v.doorWalk && (v.inside || v.hideT > 0 || (v.posted && !v.soldier) || v.sleeping || !v.g.visible)) continue;
     const amp = stride(v, dt, 9), swing = Math.sin(v.phase) * .6 * amp;
     v.legs[0].rotation.x = swing; v.legs[1].rotation.x = -swing;
     v.body.position.y = Math.abs(Math.sin(v.phase)) * .05 * amp;
@@ -2265,12 +2323,18 @@ function updateVillagers(dt, now) {
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
     else if (v.working && TOOL_POSE[kind]) ({ w, R: Rt, L, tilt, lean } = TOOL_POSE[kind](now / 1000 + v.seed)); else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
+    if (v.soldier) {                                                  // weapon carried upright; a thrust or a cut when striking
+      const at = v.attackT || 0; L = -.55 - swing * .2; lean = 0;
+      if (v.toolKind === 'spear') { Rt = at > 0 ? -1.55 : -.5 + swing * .2; tilt = at > 0 ? 0 : -2.6; }
+      else { Rt = at > 0 ? -.6 - at * 5.7 : -.45 + swing * .3; tilt = -.4; }
+    }
     if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
     const ease = (o, t) => o + (t - o) * Math.min(1, dt * 14);    // poses blend over ~0.1 s, so switching task never snaps
     if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
     v.arms[0].rotation.x = ease(v.arms[0].rotation.x, L); v.arms[1].rotation.x = ease(v.arms[1].rotation.x, Rt); v.body.rotation.x = ease(v.body.rotation.x, lean);
     smoothPos(v, dt, now); v.g.position.set(v.rx, hAt(v.rx, v.rz), v.rz);
+    if (v.sbar) { const on = v.soldier && v.hp < v.maxHp; v.sbar.grp.visible = on; if (on) { v.sbar.set(v.hp / v.maxHp); v.sbar.grp.position.set(v.rx, v.g.position.y + 1.5 * UNIT_K, v.rz); } }
   }
 }
 function updateTrees(now) {
@@ -2378,8 +2442,13 @@ function updateEnemies(dt) {
     }
     e.walking = false; e.aiming = false; e.running = false;
     if (!e.target || e.target.dead || (e.retarget -= dt) < 0) { const t = pickTarget(e); if (t !== e.target) e.lob = false; e.target = t; e.retarget = 3; }
-    const B = e.target;
-    if (B) {
+    const B = e.target, foe = e.kind !== 'archer' ? nearestSoldier(e.x, e.z, e.horse ? 2.6 : 2.2) : null;
+    if (foe) {                                               // a soldier in the way: fight them first
+      const d = Math.hypot(foe.x - e.x, foe.z - e.z), reach = Math.max(.75, e.range) + (e.horse ? .3 : 0);
+      e.running = !e.horse && d > reach;
+      if (d > reach) steer(e, foe.x, foe.z, dt, 2, reach * .9, e.running ? 1.3 : 1);
+      else { e.g.rotation.y = Math.atan2(foe.x - e.x, foe.z - e.z); if ((e.cool -= dt) <= 0) { e.cool = e.rate; e.attackT = .35; sfx('attack', e); hurtSoldier(foe, e.dmg); } }
+    } else if (B) {
       const d = distRect(B, e.x, e.z);
       if (e.detour) { steer(e, e.detour.x, e.detour.z, dt, 2); if ((e.detour.t -= dt) < 0) e.detour = null; }
       else if (d > e.range + (e.lob ? 3.5 : 0)) {
@@ -2447,8 +2516,8 @@ function postPoint(B, v) {
 }
 function assignPosts() {
   const slots = [];
-  const order = buildings.filter(B => DEF[B.type].archers && B.built).sort((a, b) => (b.type === 'castle') - (a.type === 'castle'));
-  for (const B of order) { const T = DEF[B.type]; B.manned = B.manned || []; for (let a = 0; a < T.archers[B.tier - 1]; a++) if (!villagers.some(v => v.post && v.post.B === B && v.post.a === a)) slots.push({ B, a }); }
+  const order = buildings.filter(B => (DEF[B.type].archers || DEF[B.type].soldiers) && B.built).sort((a, b) => (b.type === 'castle') - (a.type === 'castle'));
+  for (const B of order) { const T = DEF[B.type]; B.manned = B.manned || []; for (let a = 0; a < (T.archers || T.soldiers)[B.tier - 1]; a++) if (!villagers.some(v => v.post && v.post.B === B && v.post.a === a)) slots.push({ B, a }); }
   let posted = 0;
   for (const S of slots) {
     const c = center(S.B); let best = null, bd = 1e9;
@@ -2464,6 +2533,85 @@ function killVillager(v) {
   release(v); scene.remove(v.g); villagers.splice(villagers.indexOf(v), 1);
 }
 
+// ---------- barracks soldiers: villagers who muster at a barracks at night, gear up by its tier and fight raiders hand to hand ----------
+const SOLDIER = { hp: [70, 100, 140], dmg: [7, 10, 14], rate: .9, names: ['Militia', 'Guard', 'Man-at-arms'] };
+const mailM = mat('#8d939a'), kiteM = mat('#3466b0');
+const SQUAD = [[0, 0], [-.8, -.5], [.8, -.5]];      // where the three stand round their spot
+var respawns = [], fallen = [];                     // fallen soldiers come back as villagers after 60 s of daylight
+// tier 1 militia: blue tunic, padded cap, spear; tier 2 guard: leather jerkin, kettle hat, spear, round wooden shield;
+// tier 3 man-at-arms: mail under a blue surcoat, steel helm, sword, blue kite shield
+function soldierKit(v, tier) {
+  if (v.kit) v.kit.forEach(o => v.body.remove(o));
+  v.kit = []; v.kitTier = tier;
+  const put = o => { o.castShadow = true; v.body.add(o); v.kit.push(o); return o; };
+  const tunic = tier === 3 ? mailM : guardTunic;
+  v.torso.material = tunic; v.arms.forEach(a => a.userData.sleeve.material = tunic);
+  if (v.hatG) v.hatG.visible = false; if (v.apron) v.apron.visible = false;
+  if (tier === 1) { const c = put(new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 5, 0, Math.PI * 2, 0, Math.PI * .5), leatherM)); c.scale.y = .8; c.position.y = 1.06; }
+  else put(makeHelm(tier === 2 ? 'kettle' : 'soldier'));
+  if (tier === 2) put(cyl(.152, .212, .34, 8, leatherM, 0, .66, 0));
+  if (tier === 3) { put(cyl(.15, .214, .42, 8, M.flag, 0, .62, 0)); put(cyl(.17, .17, .05, 8, leatherM, 0, .55, 0)); }
+  if (tier === 2) { const sh = put(cyl(.19, .19, .035, 12, M.wood, -.23, .68, .06)); sh.rotation.z = Math.PI / 2; put(new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 5), M.iron)).position.set(-.255, .68, .06); }
+  if (tier === 3) { put(box(.04, .44, .3, kiteM, -.23, .68, .07)); put(box(.046, .46, .04, M.iron, -.232, .68, .07)); put(new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 5), M.iron)).position.set(-.258, .72, .07); }
+  if (v.pivot) v.pivot.parent.remove(v.pivot);
+  v.toolKind = tier === 3 ? 'sword' : 'spear'; v.pivot = makeTool(v.toolKind); v.arms[1].add(v.pivot);
+  v.soldier = true; v.maxHp = v.hp = SOLDIER.hp[tier - 1];
+}
+function stripKit(v) {
+  if (v.kit) { v.kit.forEach(o => v.body.remove(o)); v.kit = null; }
+  v.soldier = false; v.foe = null; giveTool(v, toolFor(v));
+  if (v.sbar) v.sbar.grp.visible = false;
+}
+function nearestSoldier(x, z, r) { let best = null, bd = r; for (const v of villagers) if (v.soldier && v.g.visible) { const d = Math.hypot(v.x - x, v.z - z); if (d < bd) { bd = d; best = v; } } return best; }
+// hold the barracks door (or the rally flag); go for raiders that come within 6 m of it, give up on any that lead them 9 m away
+function updateSoldier(v, dt) {
+  const B = v.post.B, k = v.kitTier - 1;
+  v.attackT = Math.max(0, (v.attackT || 0) - dt); v.cool = (v.cool || 0) - dt;
+  const base = B.rally || doorPoint(B), [ox, oz] = SQUAD[v.post.a % 3], hx = base.x + ox, hz = base.z + oz;
+  if (v.skip && (v.skip.t -= dt) <= 0) v.skip = null;
+  let foe = v.foe && !v.foe.dead && Math.hypot(v.foe.x - hx, v.foe.z - hz) < 9 ? v.foe : null;
+  if (!foe) { let bd = 6; for (const e of enemies) if (!e.dead && (!v.skip || v.skip.e !== e)) { const d = Math.hypot(e.x - hx, e.z - hz); if (d < bd) { bd = d; foe = e; } } }
+  if (foe !== v.foe) v.prog = null;
+  v.foe = foe;
+  if (foe) {
+    const reach = (v.toolKind === 'spear' ? 1.15 : .9) + (foe.horse ? .3 : 0), d = Math.hypot(foe.x - v.x, foe.z - v.z);
+    if (d > reach) { walkTo(v, foe.x, foe.z, dt, 1, reach * .9, 1.25); if (v.noProg > 4) { v.skip = { e: foe, t: 4 }; v.foe = null; } }    // can't reach that one
+    else { turnTo(v, Math.atan2(foe.x - v.x, foe.z - v.z), dt); if (v.cool <= 0) { v.cool = SOLDIER.rate; v.attackT = .35; hurtEnemy(foe, SOLDIER.dmg[k]); sfx('attack', v); } }
+  } else if (Math.hypot(hx - v.x, hz - v.z) > .35) walkTo(v, hx, hz, dt, 1, .3, 1.3);
+}
+function hurtSoldier(v, d) {
+  if (!v.soldier) return;
+  v.hp -= d;
+  if (v.hp > 0) return;
+  // fallen: out of the town's count; a villager comes back to the same home after 60 s of daylight
+  log(`<b>${SOLDIER.names[v.kitTier - 1]}</b> fallen`, 'warn'); stats.fallen++;
+  if (v.post && v.post.B.manned) v.post.B.manned[v.post.a] = false;
+  release(v); villagers.splice(villagers.indexOf(v), 1); if (v.sbar) scene.remove(v.sbar.grp);
+  respawns.push({ home: v.home, t: 60 }); fallen.push({ v, t: 0 });
+}
+function updateFallen(dt) {
+  for (let n = fallen.length - 1; n >= 0; n--) {
+    const f = fallen[n], v = f.v; f.t += dt;
+    v.body.rotation.x = -Math.min(1.5, f.t * 4); v.g.position.y = hAt(v.x, v.z) - Math.max(0, f.t - 1.2) * .6;
+    if (f.t > 2.4) { scene.remove(v.g); fallen.splice(n, 1); }
+  }
+  if (PH.kind !== 'day') return;
+  for (let n = respawns.length - 1; n >= 0; n--) {
+    const r = respawns[n]; if ((r.t -= dt) > 0) continue;
+    respawns.splice(n, 1);
+    const H = r.home && !r.home.dead && buildings.includes(r.home) ? r.home : castleB();
+    if (H) { makeVillager(H); assignJobs(); log('<b>Villager</b> back', 'good'); }
+  }
+}
+// rally: the barracks card's Rally, then a tap on the ground; a blue flag marks the spot
+var rallyFor = null;
+function setRally(B, pt) {
+  if (B.rallyFlag) scene.remove(B.rallyFlag);
+  if (!pt) { B.rally = null; B.rallyFlag = null; return; }
+  B.rally = { x: pt.x, z: pt.z };
+  const f = new THREE.Group(); f.add(box(.05, 1.5, .05, M.timber, 0, .75, 0)); f.add(flagBox(.46, .3, .03, M.flag, .25, 1.33, 0));
+  f.position.set(pt.x, hAt(pt.x, pt.z), pt.z); scene.add(f); B.rallyFlag = f;
+}
 function updateDefense(dt) {
   for (const B of buildings) {
     const T = DEF[B.type]; if (!T.range) continue;
@@ -2554,11 +2702,15 @@ function startNight() {
   spawnT = 1;
   const ps = assignPosts();
   banner(`Night ${PH.wave}`, `${spawnQueue.length} raiders`, true); setMusic('night');
-  log(`<b>Night ${PH.wave}</b> · ${spawnQueue.length} raiders · ${ps.posted} archers`, 'warn');
+  log(`<b>Night ${PH.wave}</b> · ${spawnQueue.length} raiders · ${ps.posted} on guard`, 'warn');
 }
 function startDay() {
   PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
-  for (const v of villagers) if (v.post) { if (v.posted) { v.posted = false; v.inside = true; } v.post = null; }
+  for (const v of villagers) if (v.post) {
+    if (v.soldier) { stripKit(v); v.posted = false; v.state = v.build ? 'tobuild' : v.job ? 'commute' : 'find'; v.path = null; }   // soldiers stand down where they are
+    else if (v.posted) { v.posted = false; v.inside = true; }
+    v.post = null;
+  }
   for (const B of buildings) { B.manned = []; hideDefenders(B); }
   const hurt = startRepairs();
   banner(`Day ${PH.wave}`, hurt ? `${hurt} to repair` : 'Wave held'); setMusic('day');
@@ -2572,7 +2724,7 @@ function endGame(won) {
   $('#sumTitle').className = won ? '' : 'lost';
   $('#sumText').textContent = won ? `All ${NIGHTS} waves held.` : `Fell on night ${PH.wave}.`;
   const rows = [['Waves defended', `${won ? NIGHTS : PH.wave - 1} of ${NIGHTS}`], ['Raiders slain', stats.slain], ['Buildings built', stats.built], ['Upgrades', stats.upgrades],
-    ['Buildings lost', stats.lost], ['Buildings standing', buildings.length], ['Gold earned', stats.gold], ['Wood gathered', stats.wood],
+    ['Buildings lost', stats.lost], ['Soldiers lost', stats.fallen], ['Buildings standing', buildings.length], ['Gold earned', stats.gold], ['Wood gathered', stats.wood],
     ['Stone quarried', stats.stone], ['Food harvested', stats.food], ['Time played', fmt(el)]];
   $('#sumStats').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
   $('#summary').hidden = false;
@@ -2610,6 +2762,7 @@ const TOOL_ICON = {
   farm: '<svg viewBox="0 0 24 24"><path d="M3 20 H21"/><path d="M7 20 V10 M12 20 V8 M17 20 V10"/><path d="M7 12 l-2.2-2.2 M7 12 l2.2-2.2 M12 10 l-2.2-2.2 M12 10 l2.2-2.2 M17 12 l-2.2-2.2 M17 12 l2.2-2.2"/></svg>',
   lodge: '<svg viewBox="0 0 24 24"><path d="M5 20 L15 8"/><path d="M13 5.5 C17 3.5 21 6.5 20 11 L15.5 8 Z"/><path d="M4 20 H11"/></svg>',
   quarry: '<svg viewBox="0 0 24 24"><path d="M8 20 L14.5 10"/><path d="M5 9 C9 5 15 4.5 19.5 8"/><path d="M14 20 L16 16 L20 16 L21 20 Z"/></svg>',
+  barracks: '<svg viewBox="0 0 24 24"><path d="M5 20 L17 4 M19 20 L7 4"/><path d="M15.5 3 L18 3.5 L17.5 6 M8.5 3 L6 3.5 L6.5 6"/><path d="M8.5 12 H15.5 V16 C15.5 18.5 12 20.5 12 20.5 C12 20.5 8.5 18.5 8.5 16 Z"/></svg>',
   tower: '<svg viewBox="0 0 24 24"><path d="M8 20 V10 H16 V20"/><path d="M7 10 V6 H9 V8 H11 V6 H13 V8 H15 V6 H17 V10"/><path d="M11 20 V16 H13 V20 M5 20 H19"/></svg>',
   wall: '<svg viewBox="0 0 24 24"><path d="M3 20 V11 H21 V20 Z"/><path d="M3 11 V8 H6 V11 M9 11 V8 H12 V11 M15 11 V8 H18 V11 M21 11 V8"/><path d="M3 15.5 H21 M8 11 V15.5 M15 11 V15.5 M11.5 15.5 V20"/></svg>',
   gate: '<svg viewBox="0 0 24 24"><path d="M4 20 V8 H20 V20"/><path d="M8 20 V13.5 A4 4 0 0 1 16 13.5 V20"/><path d="M4 8 V5 H7 V8 M17 8 V5 H20 V8"/></svg>',
@@ -2688,8 +2841,15 @@ function refreshCard() {
     st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.archers[k]}` : `${T.archers[k]}`));
     st.push(STAT('', `${T.dmg[k]} dmg`));
   }
+  if (T.soldiers) {
+    const m = villagers.filter(v => v.soldier && v.post && v.post.B === B).length;
+    st.push(STAT('pop', PH.kind === 'night' ? `${m}/${T.soldiers[k]}` : `${T.soldiers[k]}`));
+    st.push(STAT('', `${SOLDIER.dmg[k]} dmg`));
+  }
   if (T.decor) st.push(STAT('gold', `+${Math.round(T.charm * 100)}%`, 'good'));
   $('#cardStats').innerHTML = st.join('');
+  $('#rallyRow').hidden = !T.soldiers || !B.built;
+  $('#rallyBtn').setAttribute('aria-pressed', String(rallyFor === B)); $('#recallBtn').disabled = !B.rally;
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
   else if (B.tier >= 3) { up.hidden = false; up.innerHTML = 'Max'; up.disabled = true; }
@@ -2819,6 +2979,11 @@ canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e => { e.preventDefault(); dist = clamp(dist * Math.exp(e.deltaY * .001), CAM_LIM.near, 95); updateCam(); }, { passive: false });
 function tap(e) {
   if (galleryOn) { galleryTap(e); return; }
+  if (rallyFor) {                                     // placing a barracks' rally flag
+    const pt = pick(e), B = rallyFor;
+    if (!pt || !canStand(pt.x, pt.z, 1)) { setHint('Blocked', 'bad'); return; }
+    rallyFor = null; setRally(B, pt); sfx('click'); setHint('Rallied'); refreshCard(); return;
+  }
   if (gameOver) return;
   if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused', 'bad'); return; }
   if (PAINT[tool]) { paintAt(e); return; }
@@ -2881,7 +3046,7 @@ $('#reset').addEventListener('click', () => {
 $('#again').addEventListener('click', startGame);
 addEventListener('keydown', e => {
   if (/^(w|a|s|d|q|e|arrow)/i.test(e.key)) { heldKeys.add(e.key.toLowerCase()); return; }
-  const map = { v: 'select', V: 'select', 1: 'house', 2: 'farm', 3: 'lodge', 4: 'quarry', 5: 'tower', 6: 'wall', 7: 'gate', r: 'road', R: 'road' };
+  const map = { v: 'select', V: 'select', 1: 'house', 2: 'farm', 3: 'lodge', 4: 'quarry', 5: 'tower', 6: 'wall', 7: 'gate', 8: 'barracks', r: 'road', R: 'road' };
   if (map[e.key]) setTool(map[e.key]);
   else if (e.key === 'g' || e.key === 'G') $('#gridBtn').click();
   else if (e.key === 'Escape') { deselect(); setTool('select'); }
@@ -2920,7 +3085,7 @@ function buildGallery() {
   let z = 3;
   const row = (title, depth, fill) => { const zc = z + depth / 2; galLabel(title, '#f2c95e', 1.5, zc, true); fill(zc, depth); gRows.push({ title, z: zc, depth }); z += depth + 3.4; };
   const add = (g, x, zc, turns) => { g.position.set(x, 0, zc); g.userData.turn = 0; gScene.add(g); gItems.push({ g, turns }); return g; };
-  for (const type of ['castle', 'house', 'lodge', 'quarry', 'farm', 'tower']) {
+  for (const type of ['castle', 'house', 'lodge', 'quarry', 'farm', 'tower', 'barracks']) {
     const T = DEF[type], d = T.size * CELL;
     row(T.name, d, zc => T.tiers.forEach((nm, i) => { add(makeModel(type, i + 1, true, 0, 0), GAL_X[i], zc, true); galLabel(nm, '#fff', GAL_X[i], zc + d / 2 + 1.1); }));
   }
@@ -2932,12 +3097,14 @@ function buildGallery() {
   row('Decor', 2, zc => ['well', 'torch', 'flowers', 'statue'].forEach((t, i) => { add(makeModel(t, 1, true, 0, 0), 8 + i * 9, zc, true); galLabel(DEF[t].name, '#fff', 8 + i * 9, zc + 2.1); }));
   const people = (title, list) => (row(title, 1.2, zc => list.forEach((P, i) => {
     const x = 6 + i * 3.3, p = P.raider ? makeRaider(P.raider) : P.guard ? makePerson({ tunic: guardTunic, helm: 'soldier', tool: 'bow' }) : makePerson({});
-    if (!P.raider && !P.guard) { p.plainHat = !P.tool; addLoads(p); giveTool(p, P.tool || null); dress(p, P.tool || null); if (P.carry === 'log') p.carryLog.visible = true; if (P.carry === 'stone') p.carryStone.visible = true; }
+    if (P.kit) soldierKit(p, P.kit);
+    else if (!P.raider && !P.guard) { p.plainHat = !P.tool; addLoads(p); giveTool(p, P.tool || null); dress(p, P.tool || null); if (P.carry === 'log') p.carryLog.visible = true; if (P.carry === 'stone') p.carryStone.visible = true; }
     p.g.position.set(x, 0, zc); p.g.rotation.y = .5; gScene.add(p.g); Object.assign(p, P, { seed: i * .7 }); gPeople.push(p);
     galLabel(P.name, P.raider ? '#ff9a8a' : '#fff', x, zc + 1.2, false, .75);
   })), gRows[gRows.length - 1].n = list.length);     // how many people: tools/render takes two shots of a long row
   people('Villagers', [{ name: 'Villager' }, { name: 'Farmer', tool: 'hoe', work: 1 }, { name: 'Lumberjack', tool: 'axe', work: 1 }, { name: 'Log carrier', tool: 'axe', carry: 'log' },
     { name: 'Mason', tool: 'pick', work: 1 }, { name: 'Stone carrier', tool: 'pick', carry: 'stone' }, { name: 'Builder', tool: 'hammer', work: 1 }, { name: 'Archer', guard: 1 }]);
+  people('Soldiers', [{ name: 'Militia', kit: 1 }, { name: 'Guard', kit: 2 }, { name: 'Man-at-arms', kit: 3 }]);
   people('Raiders', [{ name: 'Spearman', raider: 'spear' }, { name: 'Swordsman', raider: 'sword' }, { name: 'Archer', raider: 'archer' }, { name: 'Captain', raider: 'captain' }]);
 }
 function openGallery() {
@@ -2963,19 +3130,20 @@ function galleryTap(e) {
   if (it && it.turns) it.g.userData.turn++;
 }
 function galPose(p, t, dt) {
-  const ease = (o, v) => o + (v - o) * Math.min(1, dt * 14), walking = gWalk || p.carry || (!p.work && !p.guard && !p.raider);
+  const ease = (o, v) => o + (v - o) * Math.min(1, dt * 14), walking = gWalk || p.carry || (!p.work && !p.guard && !p.raider && !p.kit);
   const ph = t * 9 + p.seed, sw = walking ? Math.sin(ph) * .6 : 0;
   if (p.horseLegs) p.horseLegs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw * .8; });
   else { p.legs[0].rotation.x = sw; p.legs[1].rotation.x = -sw; }
-  p.body.position.y = walking && !p.horseLegs ? Math.abs(Math.sin(ph)) * .05 : 0;
+  p.body.position.y = p.horseLegs ? SADDLE : walking ? Math.abs(Math.sin(ph)) * .05 : 0;   // a rider stays in the saddle
   let L = -sw * .8, R = sw * .8, tilt = -.2, lean = 0;
   if (p.guard || p.raider === 'archer') {                        // loose a shot every 1.8 s: idle, draw with both hands, loose
     const c = (t + p.seed) % 1.8; bowPose(p, c > .6 && c < 1.05, c >= 1.05 && c < 1.4, p.guard ? -.9 : -.35, p.guard ? -.6 : 0); return;
   }
-  if (p.raider) {                                                 // a strike every 1.2 s, as in a raid
+  if (p.raider || p.kit) {                                        // a strike every 1.2 s, as in a fight
     const at = gWalk ? 0 : Math.max(0, .35 - (t + p.seed) % 1.2);
     p.arms[0].rotation.x = -.55 - sw * .2;
-    if (p.raider === 'spear') { p.arms[1].rotation.x = at > 0 ? -1.55 : -.5 + sw * .2; p.pivot.rotation.x = at > 0 ? 0 : -2.6; }
+    if (p.kit === 3) { p.arms[1].rotation.x = at > 0 ? -.6 - at * 5.7 : -.45 + sw * .3; p.pivot.rotation.x = -.4; }
+    else if (p.raider === 'spear' || p.kit) { p.arms[1].rotation.x = at > 0 ? -1.55 : -.5 + sw * .2; p.pivot.rotation.x = at > 0 ? 0 : -2.6; }
     else p.arms[1].rotation.x = at > 0 ? -.6 - at * 5.7 : -.45 + sw * .3;
     return;
   }
@@ -2997,6 +3165,8 @@ function updateGallery(dt, now) {
   for (const p of gPeople) galPose(p, t, dt);
 }
 $('#adGallery').addEventListener('click', openGallery);
+$('#rallyBtn').addEventListener('click', () => { if (!selected) return; rallyFor = rallyFor === selected ? null : selected; setHint(rallyFor ? 'Tap a spot' : 'Select a building'); refreshCard(); });
+$('#recallBtn').addEventListener('click', () => { if (selected) { setRally(selected, null); rallyFor = null; setHint('Recalled'); refreshCard(); } });
 $('#galBack').addEventListener('click', closeGallery);
 $('#galTurn').addEventListener('click', () => { for (const it of gItems) if (it.turns) it.g.userData.turn++; });
 $('#galDoors').addEventListener('click', () => { gDoors = gDoors ? 0 : 1; $('#galDoors').setAttribute('aria-pressed', String(!!gDoors)); });
@@ -3014,7 +3184,8 @@ function findValid(type, ci0, cj0, opts = {}) {
 function startGame() {
   anims.length = 0; spawnQueue = [];
   for (const B of buildings) { scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B); hideDefenders(B); } buildings.length = 0;
-  for (const v of villagers) scene.remove(v.g); villagers.length = 0;
+  for (const v of villagers) { scene.remove(v.g); if (v.sbar) scene.remove(v.sbar.grp); } villagers.length = 0;
+  for (const f of fallen) scene.remove(f.v.g); fallen.length = 0; respawns.length = 0; rallyFor = null;
   for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0;
   for (const a of arrows) scene.remove(a.m); arrows.length = 0;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
@@ -3022,7 +3193,7 @@ function startGame() {
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
   genTerrain(); genTrees(); genRocks(); genClutter(); syncTerrain(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
-  stats = { slain: 0, lost: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
+  stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
   $('#summary').hidden = true; $('#log').innerHTML = '';
   const ev = findValid('castle', 8, 12, { free: true });
   if (ev) { const B = place('castle', ev.ci, ev.cj, { instant: true, free: true, quiet: true }); const c = center(B); target.set(c.x, 2, c.z); }
@@ -3037,7 +3208,7 @@ function startGame() {
 // ---------- loop ----------
 resize(); startGame();
 const easeOut = t => 1 - Math.pow(1 - t, 3);
-const BAR_TOP = { house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
+const BAR_TOP = { barracks: 3.4, house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
 let last = performance.now(), hudT = 0, buildT = 0;
 var paused = false, gameSpeed = 1, instantBuild = false;
 function setPaused(on) {
@@ -3216,7 +3387,7 @@ function updateDoors(dt) {
 }
 function separateUnits(dt) {
   sepUnits.length = 0;
-  for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1, w: v.working ? .1 : v.walking ? 1 : .35 });
+  for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && (!v.posted || v.soldier) && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1, w: v.working ? .1 : v.walking ? 1 : .35 });
   for (const e of enemies) sepUnits.push({ u: e, r: e.horse ? .55 : .26, fixed: e.dead, mode: 2, w: e.walking ? 1 : .35 });
   const k = Math.min(1, dt * 10);
   for (let i = 0; i < sepUnits.length; i++) for (let j = i + 1; j < sepUnits.length; j++) {
@@ -3321,7 +3492,7 @@ function frame(now) {
   if (galleryOn) { updateGallery(dt, now); renderer.render(gScene, camera); requestAnimationFrame(frame); return; } updateLamps(dt, now); updateLight(dt, now);
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
-  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); }
+  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); updateFallen(gdt); }
   updateArrows(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
   if (anims.length) {
     for (let n = anims.length - 1; n >= 0; n--) { const a = anims[n], t = clamp((now - a.t0) / a.dur, 0, 1); applyPlan(a.plan, easeOut(t)); if (t >= 1) anims.splice(n, 1); }

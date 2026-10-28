@@ -10,7 +10,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - Live build: https://jacktan98.github.io/Medieval-Town-Defense/ (GitHub Pages from `main` root; push to `main` to deploy).
 - First real-WebGL playtest done 2026-10-27 (desktop, phone portrait/landscape): all building tiers, villager tools/poses, night waves, end screen render correctly.
 - Debug: open `index.html?debug` and `window.G('code')` evaluates inside the game closure (e.g. `G('res.gold=9999')`, `G('PH.t=0')` to skip the day).
-- Design gallery: Admin → Gallery, or open `index.html?gallery` (live: https://jacktan98.github.io/Medieval-Town-Defense/?gallery). Its own scene (`gScene`, the game paused underneath; Back restores it): rows of every building at tiers 1–3 (`GAL_X` columns), walls running into a gate, decor, villagers working/carrying and raiders attacking, animated with the game's own poses (`TOOL_POSE`, `bowPose`, `makeRaider`, `addLoads`). Bar: Turn (all buildings a quarter turn; tapping one turns just it), Doors, Walk. `gRows` lists rows for the render script.
+- Design gallery: Admin → Gallery, or open `index.html?gallery` (live: https://jacktan98.github.io/Medieval-Town-Defense/?gallery). Its own scene (`gScene`, the game paused underneath; Back restores it): rows of every building at tiers 1–3 (`GAL_X` columns), walls running into a gate, decor, villagers working/carrying, soldiers by tier and raiders attacking, animated with the game's own poses (`TOOL_POSE`, `bowPose`, `makeRaider`, `addLoads`). Bar: Turn (all buildings a quarter turn; tapping one turns just it), Doors, Walk. `gRows` lists rows for the render script.
 - Render checks: `node tools/render/gallery.js --back` writes `design/gallery/sheet.png` / `sheet-back.png` (run after art changes and commit them); `node tools/render/motion.js` counts villager shaking and checks sites get built. In the cloud, cdnjs is blocked: pass `--three` a local three r128 (`npm pack three@0.128.0`). See `tools/render/README.md`.
 
 ## Suggested next steps (not yet done)
@@ -52,6 +52,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - **Day/night**: 5 waves (`NIGHTS = WAVES.length`). Day 1 lasts 300 s, days 2–5 last 120 s (`DAYLEN`). Night ends when all enemies are dead. Summary screen at the end.
 - **Waves** (`WAVES`): spearmen are the basic raider and come first. 1 = 7 spears + 2 archers; 2 = 9/4 swords/3 archers (hp ×1.15); 3 = 10/6/5 + captain (×1.3); 4 = 12/9/7 + captain (×1.45); 5 = 14/12/10 + 2 captains (×1.6). Targets (`pickTarget`): spearmen the nearest building; swordsmen the nearest archer tower (else nearest building); the mounted captain the castle; archers the nearest non-wall building, shooting over walls (`lob` adds 3.5 m reach when a wall blocks them).
 - **Economy**: payouts every `TICK=20` s (ring in top panel). Each villager eats 1 food every `MEAL=20` s of daylight; hungry villagers go home and sleep.
+- **Barracks soldiers**: at nightfall `assignPosts` gives each built barracks 3 slots (after the castle's). The villager walks to its door, gears up (`soldierKit`: T1 Militia blue tunic + padded cap + spear; T2 Guard leather jerkin + kettle hat + spear + round wooden shield; T3 Man-at-arms mail + blue surcoat + steel helm + sword + blue kite shield) and stays out (`v.soldier`, `updateSoldier`): holds the door or the rally flag (`SQUAD` offsets), engages raiders within 6 m of that spot, drops ones 9 m away or unreachable (4 s without progress). Melee raiders fight any soldier within 2.2 m (horse 2.6) before their building target (`nearestSoldier`, `hurtSoldier`). A fallen soldier falls over (`fallen`), leaves the town and is queued in `respawns`; after 60 s of daylight a villager returns to that home (or the castle); `syncResidents` counts pending respawns. At dawn soldiers stand down where they are (`stripKit`). Rally: barracks card → Rally, then tap the ground (`rallyFor`, `setRally`, blue flag); Recall clears it. A destroyed barracks keeps its soldiers.
 - **Villagers**: live in houses/castle, take jobs, commute, walk to construction sites and build them before they work (`assignBuilders` every 0.5 s). At night they man the castle (priority) and towers; the rest hide in the castle.
 - **Decor charm** boosts house gold within `CHARM_R=8`. Paths add `PATH_CHARM=.02` each (path bonus capped at +20%). Paths make everyone (including raiders) move ×1.6.
 
@@ -64,6 +65,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 | lodge ("Lumber camp") | 2×2 | gold 20 | gold 45 stone 10 / gold 75 stone 25 | reach 14, workers 2/3/4, `LUMBER_LOAD=2` wood/trip, chop 2.6 s | Lumber shack / Lumber camp / Lumber yard |
 | quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4 | Stone pit / Quarry / Masons' yard |
 | tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15; shaft drawn at `TOWER_K` (.8/.8/.72, T2 also .74), roof held a fixed 1.55 m (`HEAD`) above the platform so archers fit; posts and shootY scale with `TOWER_K`; T3 is an open platform with a low parapet and a blue roof on stone columns | Lookout / Watchtower / Stone tower |
+| barracks | 2×2 | wood 25 gold 20 | wood 30 gold 35 stone 10 / stone 40 gold 60 | 3 soldiers (all tiers), hp 220/320/450; soldiers hp 70/100/140, dmg 7/10/14 every 0.9 s; hall on the left (door x −1), drill yard with weapon rack and practice dummy on the right | Muster hut / Barracks / Garrison |
 | wall | 1×1 | wood 5 gold 2 | stone 6 gold 3 / stone 10 gold 10 | drag-paint, auto-tiles, no plinth | Palisade / Stone wall / Battlement |
 | gate | 1×1 | wood 15 gold 10 | stone 15 gold 20 / stone 25 gold 35 | auto-tiles with walls, no plinth | Timber gate / Stone gate / Gatehouse |
 | well | 1×1 | stone 5 | — | charm 0.25 | — |
@@ -72,7 +74,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 | statue | 1×1 | stone 12 gold 10 | — | charm 0.35 | — |
 | path | ⅓-tile strip | gold 1 | — | player-built only, auto-connects, speed ×1.6 | — |
 
-Build times (`BUILD_T`, builder-seconds): house 10, farm 10, lodge 12, quarry 14, tower 14, wall 3, gate 8, castle 24, well 5, torch 3, flowers 3, statue 8. Upgrades ×1.3.
+Build times (`BUILD_T`, builder-seconds): house 10, farm 10, lodge 12, quarry 14, tower 14, barracks 14, wall 3, gate 8, castle 24, well 5, torch 3, flowers 3, statue 8. Upgrades ×1.3.
 
 Castle night posts: T1 = 4 small corner lookout platforms (y 2.55); T2 = wooden corner tower tops (y 3.55); T3 = keep top + a timber wall-walk inside the curtain walls (archers stand behind the battlements).
 
