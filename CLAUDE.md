@@ -114,7 +114,7 @@ Roof colours: tier 3 roofs use `M.roofBlue` (blue is the town's colour, red the 
 
 ## UI
 - **Top panel**: sun/moon + phase, 20 s payout ring, "Skip day", resource chips (green idle badge on villagers), collapsible short "Town log".
-- **Bottom dock**: Economy / Defences / Decor tabs, Select + Grid buttons, tool tiles with SVG icons (`TOOL_ICON`), building card, compact: header with icon, tier name, type + tier pips (`#cardPips`), Rotate and Close icon buttons; thin HP bar; one line of borderless `STAT()` items; one action row (Upgrade with cost, hidden at tier 3; Demolish = bin icon + refund) hidden when empty; barracks add a Rally/Recall row. Barracks tool icon: two crossed swords.
+- **Bottom dock**: Economy / Defences / Decor tabs, Select + Grid buttons, tool tiles with SVG icons (`TOOL_ICON`), building card, compact: header with icon, tier name, type + tier pips (`#cardPips`), Rotate and Close icon buttons; thin HP bar; one line of borderless `STAT()` items, icon + number only (`ICON.hp` heart, `home` house = residents, `hammer` = workers, `sword` = damage, `pop` = archers/soldiers); one icon-only action row (Upgrade = double chevron + cost, hidden at tier 3; barracks Rally flag / Recall return arrow; Demolish = bin + refund), hidden when empty. Barracks tool icon: two crossed swords.
 - **Pause** (top right): Resume, Full screen (fallback "Not available here"), Restart (tap twice within 3 s). No building while paused.
 - **Admin** (bottom right; under Pause on phone): resource inputs (+100/+1k, Fill all 9,999), Finish all building, Instant build, +5 villagers, Skip to night; speed 1×/2× (scales game-logic dt).
 - Landscape layout under `@media (max-height:520px)`. Two-finger twist rotates (`yaw += da`), drag pans, pinch zooms.
