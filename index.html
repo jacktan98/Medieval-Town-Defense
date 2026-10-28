@@ -1955,9 +1955,13 @@ function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   if (step < .002) return false;
   // commit to one side when walking around an obstacle, instead of flipping sides every frame
   if ((v.sideT = (v.sideT || 0) - dt) <= 0) v.side = 0;
-  for (const off of (v.side < 0 ? OFFS_R : OFFS_L)) {
-    const a = base + off, nx = v.x + Math.sin(a) * step, nz = v.z + Math.cos(a) * step;
+  // look ahead too: a direction that is open for this step but blocked just beyond it walks the unit into the edge,
+  // and it bounces off it next frame; first pass wants clear ground ahead, the second takes any open step
+  const look = Math.min(d, .65);
+  for (let pass = 0; pass < 2; pass++) for (const off of (v.side < 0 ? OFFS_R : OFFS_L)) {
+    const a = base + off, sa = Math.sin(a), ca = Math.cos(a), nx = v.x + sa * step, nz = v.z + ca * step;
     if (!canStand(nx, nz, mode)) continue;
+    if (!pass && look > step && !canStand(v.x + sa * look, v.z + ca * look, mode)) continue;
     v.x = nx; v.z = nz; turnTo(v, a, dt); v.walking = true;
     if (off === 0) v.stuck = Math.max(0, v.stuck - dt);
     else { v.stuck += dt * .4; if (!v.side) v.side = Math.sign(off); v.sideT = .8; }
@@ -2000,7 +2004,13 @@ function findPath(sx, sz, tx, tz, mode) {
   }
   return null;
 }
-function clearLine(x0, z0, x1, z1, mode) { const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / .4); for (let i = 1; i <= n; i++) if (!canStand(lerp(x0, x1, i / n), lerp(z0, z1, i / n), mode)) return false; return true; }
+// a shortcut has to be clear a body's width either side, or units cut corners, clip them and grind along the edge
+function clearLine(x0, z0, x1, z1, mode) {
+  const L = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(L / .4); if (L < 1e-3) return true;
+  const px = -(z1 - z0) / L * .22, pz = (x1 - x0) / L * .22;
+  for (let i = 1; i <= n; i++) { const x = lerp(x0, x1, i / n), z = lerp(z0, z1, i / n); if (!canStand(x, z, mode) || !canStand(x + px, z + pz, mode) || !canStand(x - px, z - pz, mode)) return false; }
+  return true;
+}
 function unstick(v, mode) {
   // nearest open cell centre the villager can stand on; a small hop beats walking into a wall forever
   const a0 = Math.floor(v.x / CELL), b0 = Math.floor(v.z / CELL);
@@ -2011,7 +2021,17 @@ function unstick(v, mode) {
     if (canStand(x, z, mode) && (r > 0 || Math.hypot(x - v.x, z - v.z) > .4)) { v.x = x; v.z = z; return; }
   }
 }
+// v.noProg: seconds since the unit last got 0.25 m closer to this target (unstick resets v.stuck, never this),
+// so callers can give up or settle for "near enough" instead of pushing at a spot forever
+function trackProgress(v, tx, tz, dt) {
+  const d = Math.hypot(tx - v.x, tz - v.z), now = performance.now(), P = v.prog;
+  if (!P || now - P.seen > 300 || Math.hypot(P.x - tx, P.z - tz) > .6) v.prog = { x: tx, z: tz, best: d, t: 0, seen: now };
+  else { P.seen = now; if (d < P.best - .25) { P.best = d; P.t = 0; } else P.t += dt; }
+  v.noProg = v.prog.t; return d;
+}
 function walkTo(v, tx, tz, dt, mode, stop = .2, mult = 1) {
+  const d0 = trackProgress(v, tx, tz, dt);
+  if (d0 < stop + .7 && v.noProg > .8) return true;     // someone is standing on the spot: this is close enough
   if (v.stuck > 2) { unstick(v, mode); v.stuck = 0; v.path = null; }
   v.repathT = (v.repathT || 0) - dt;
   if (!v.path || Math.hypot(v.pathX - tx, v.pathZ - tz) > .6 || (v.stuck > 1.2 && v.repathT <= 0)) {
@@ -2050,7 +2070,7 @@ function doorStep(v, dt) {
   if (W.hide) { v.g.visible = false; dropLoad(v); }
   return false;
 }
-function nearDoor(v, B, dp) { return Math.hypot(dp.x - v.x, dp.z - v.z) < .6 || (v.stuck > 1 && distRect(B, v.x, v.z) < 1.4); }
+function nearDoor(v, B, dp) { return Math.hypot(dp.x - v.x, dp.z - v.z) < .6 || (v.noProg > 1 && distRect(B, v.x, v.z) < 1.6); }
 function claimResource(v, now) {
   const hb = center(v.job), R = DEF[v.job.type].reach;
   let best = null, bd = 1e9;
@@ -2067,12 +2087,27 @@ function deliver(v) {
   if (!v.doorWalk) dropLoad(v);           // otherwise it is carried in through the door
 }
 function dropLoad(v) { if (v.dropLoad) { v.carryLog.visible = v.carryStone.visible = false; v.dropLoad = false; } }
+// each builder gets a spot of their own just outside the site, nearest to them, clear of the other builders' spots
+function workSpot(S, v, avoid) {
+  const e = S.ev, o = .6, pts = [];
+  for (let t = e.x0 + .4; t <= e.x1 - .4 + 1e-6; t += .7) pts.push({ x: t, z: e.z0 - o }, { x: t, z: e.z1 + o });
+  for (let t = e.z0 + .4; t <= e.z1 - .4 + 1e-6; t += .7) pts.push({ x: e.x0 - o, z: t }, { x: e.x1 + o, z: t });
+  let best = null, bd = 1e9;
+  for (const p of pts) {
+    if (!canStand(p.x, p.z, 1) || (avoid && Math.hypot(p.x - avoid.x, p.z - avoid.z) < .5)) continue;
+    if (villagers.some(w => w !== v && w.build === S && w.spot && Math.hypot(w.spot.x - p.x, w.spot.z - p.z) < .8)) continue;
+    const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
 function updateBuilder(v, dt) {
   const S = v.build;
   if (S.dead || !S.site) { v.build = null; v.state = v.job ? 'commute' : 'find'; giveTool(v, toolFor(v)); return; }
-  if (!S.site.p) S.site.p = postPoint(S, v);
+  if (v.spotS !== S || !v.spot) { v.spot = workSpot(S, v); v.spotS = S; }
   if (v.state !== 'building') {
-    if (walkTo(v, S.site.p.x, S.site.p.z, dt, 1, .4) || distRect(S, v.x, v.z) < 1.0 || v.stuck > 6) v.state = 'building';
+    const sp = v.spot || center(S), near = distRect(S, v.x, v.z);
+    if (walkTo(v, sp.x, sp.z, dt, 1, .3) || (near < 1.3 && v.noProg > 1)) v.state = 'building';
+    else if (v.noProg > 5) { if (near < 2.5) v.state = 'building'; else { v.spot = workSpot(S, v, sp); v.prog = null; } }   // that spot can't be reached: try another
   } else {
     v.working = true; const c = center(S); turnTo(v, Math.atan2(c.x - v.x, c.z - v.z), dt);
     S.site.progress += dt / S.site.time;
@@ -2081,12 +2116,12 @@ function updateBuilder(v, dt) {
 }
 function updateWorker(v, dt, now) {
   const W = v.job, dp = doorPoint(W), mult = 1, workMul = W.tier === 3 ? .7 : 1;
-  if (v.state === 'commute') { if (walkTo(v, dp.x, dp.z, dt, 1, .4) || nearDoor(v, W, dp) || v.stuck > 6) v.state = 'find'; return; }
+  if (v.state === 'commute') { if (walkTo(v, dp.x, dp.z, dt, 1, .4) || nearDoor(v, W, dp) || v.noProg > 6) v.state = 'find'; return; }
   if (W.type === 'farm') {
     const e = W.ev;
     if (v.state === 'work') { v.working = true; if ((v.wait -= dt) <= 0) v.state = 'find'; return; }
     if (v.state !== 'go') { for (let n = 0; n < 12; n++) { v.tx = lerp(e.x0 + .4, e.x1 - .4, Math.random()); v.tz = lerp(e.z0 + .4, e.z1 - .4, Math.random()); if (canStand(v.tx, v.tz, 1)) break; } v.state = 'go'; v.stuck = 0; }
-    if (walkTo(v, v.tx, v.tz, dt, 1, .2, .7) || v.stuck > 3) { v.state = 'work'; v.wait = 2 + Math.random() * 2; }
+    if (walkTo(v, v.tx, v.tz, dt, 1, .2, .7) || v.noProg > 3) { v.state = 'work'; v.wait = 2 + Math.random() * 2; }
     return;
   }
   const lumber = W.type === 'lodge';
@@ -2102,7 +2137,7 @@ function updateWorker(v, dt, now) {
       const t = v.target;
       if (!t || (lumber ? (t.dead || t.cut) : t.amount <= 0)) { release(v); v.state = 'find'; break; }
       if (walkTo(v, t.x, t.z, dt, 1, lumber ? .75 : 1.15, mult)) { v.state = 'work'; v.wait = (lumber ? 2.6 : 3.8) * workMul; v.g.rotation.y = Math.atan2(t.x - v.x, t.z - v.z); }
-      else if (v.stuck > 4) { t.blocked = now + 20000; release(v); v.state = 'find'; v.stuck = 0; }
+      else if (v.noProg > 5) { t.blocked = now + 20000; release(v); v.state = 'find'; v.stuck = 0; v.prog = null; }
       break;
     }
     case 'work': {
@@ -2117,7 +2152,7 @@ function updateWorker(v, dt, now) {
       break;
     }
     case 'home':
-      if (walkTo(v, dp.x, dp.z, dt, 1, .35, mult) || nearDoor(v, W, dp) || v.stuck > 5) { enter(v, W, 1.5 + Math.random() * 2); deliver(v); v.state = 'drop'; }
+      if (walkTo(v, dp.x, dp.z, dt, 1, .35, mult) || nearDoor(v, W, dp) || v.noProg > 6) { enter(v, W, 1.5 + Math.random() * 2); deliver(v); v.state = 'drop'; }
       break;
     case 'drop': if ((v.hideT -= dt) <= 0) { exitDoor(v); v.state = 'find'; v.wait = .2; } break;
     default: v.state = 'find';
@@ -2131,10 +2166,10 @@ function updateWander(v, dt) {
     if (v.visit.dead) { v.visit = null; return; }
     const dp = doorPoint(v.visit);
     if (walkTo(v, dp.x, dp.z, dt, 1, .3) || nearDoor(v, v.visit, dp)) { enter(v, v.visit, 3 + Math.random() * 7); v.visit = null; }
-    else if (v.stuck > 3) { v.visit = null; v.stuck = 0; v.wait = 1; }
+    else if (v.noProg > 5) { v.visit = null; v.stuck = 0; v.prog = null; v.wait = 1; }
     return;
   }
-  if (Math.hypot(v.tx - v.x, v.tz - v.z) < .2 || v.stuck > 1.5) {
+  if (Math.hypot(v.tx - v.x, v.tz - v.z) < .3 || (v.noProg > 2 && v.prog && Math.hypot(v.prog.x - v.tx, v.prog.z - v.tz) < .1)) {
     v.wait = v.fresh ? 0 : .5 + Math.random() * 2.5; v.stuck = 0; const wasFresh = v.fresh; v.fresh = false; if (wasFresh) v.wait = 0;
     if (!v.fresh && Math.random() < .45) { const doors = buildings.filter(B => B.door && B.built); v.visit = Math.random() < .6 || !doors.length ? v.home : doors[Math.floor(Math.random() * doors.length)]; }
     else { const s = randomNear(v.home, 1.5, 8) || randomNear(v.home, 1, 12); if (s) { v.tx = s.x; v.tz = s.z; } else v.wait = .3; }
@@ -2155,7 +2190,7 @@ function updateVillagers(dt, now) {
           release(v); v.visit = null;
           if (v.hideT > 0 || v.inside) { v.inside = false; exitDoor(v); }
           const P = v.post;
-          if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.stuck > 6 || distRect(P.B, v.x, v.z) < .9) {
+          if (walkTo(v, P.p.x, P.p.z, dt, 1, .4, 1.5) || v.noProg > 6 || distRect(P.B, v.x, v.z) < .9) {
             v.posted = true; v.doorWalk = null; dropLoad(v); v.g.visible = false; P.B.manned[P.a] = true; showDefender(P.B, P.a);
           }
         }
@@ -2165,7 +2200,7 @@ function updateVillagers(dt, now) {
         if (v.hideT > 0) { v.hideT = 0; v.indoor = K; v.inside = true; v.g.visible = false; }
         else {
           const dp = doorPoint(K);
-          if (walkTo(v, dp.x, dp.z, dt, 1, .4, 1.4) || nearDoor(v, K, dp) || v.stuck > 4) { v.inside = true; v.indoor = K; goIn(v, K); deliver(v); }
+          if (walkTo(v, dp.x, dp.z, dt, 1, .4, 1.4) || nearDoor(v, K, dp) || v.noProg > 5) { v.inside = true; v.indoor = K; goIn(v, K); deliver(v); }
         }
       }
     } else {
@@ -2460,7 +2495,7 @@ function updateHungry(v, dt) {
   if (v.hideT > 0) { v.hideT = 0; }
   if (!v.g.visible && !v.hideT) exitDoor(v);
   const dp = doorPoint(H0);
-  if (walkTo(v, dp.x, dp.z, dt, 1, .4, .8) || nearDoor(v, H0, dp) || v.stuck > 5) {
+  if (walkTo(v, dp.x, dp.z, dt, 1, .4, .8) || nearDoor(v, H0, dp) || v.noProg > 6) {
     v.sleeping = true; v.indoor = H0; goIn(v, H0); floatText('Zzz', '#bcd0ff', dp.x, hAt(dp.x, dp.z) + 1.8, dp.z);
   }
 }
@@ -3021,17 +3056,17 @@ setMuted(muted);
 const sepUnits = [];
 function separateUnits(dt) {
   sepUnits.length = 0;
-  for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1 });
-  for (const e of enemies) sepUnits.push({ u: e, r: e.horse ? .55 : .26, fixed: e.dead, mode: 2 });
+  for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1, w: v.working ? .1 : v.walking ? 1 : .35 });
+  for (const e of enemies) sepUnits.push({ u: e, r: e.horse ? .55 : .26, fixed: e.dead, mode: 2, w: e.walking ? 1 : .35 });
   const k = Math.min(1, dt * 10);
   for (let i = 0; i < sepUnits.length; i++) for (let j = i + 1; j < sepUnits.length; j++) {
     const A = sepUnits[i], B = sepUnits[j]; if (A.fixed && B.fixed) continue;
     let dx = B.u.x - A.u.x, dz = B.u.z - A.u.z; const min = A.r + B.r, d2 = dx * dx + dz * dz;
     if (d2 >= min * min) continue;
     let d = Math.sqrt(d2); if (d < 1e-4) { const a = Math.random() * 6.283; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
-    const push = (min - d) * k, nx = dx / d, nz = dz / d, share = A.fixed || B.fixed ? 1 : .5;
-    if (!A.fixed) { const x = A.u.x - nx * push * share, z = A.u.z - nz * push * share; if (canStand(x, z, A.mode)) { A.u.x = x; A.u.z = z; } }
-    if (!B.fixed) { const x = B.u.x + nx * push * share, z = B.u.z + nz * push * share; if (canStand(x, z, B.mode)) { B.u.x = x; B.u.z = z; } }
+    const push = (min - d) * k, nx = dx / d, nz = dz / d, wa = A.fixed ? 0 : A.w, wb = B.fixed ? 0 : B.w, sa = wa / (wa + wb), sb = 1 - sa;
+    if (!A.fixed) { const x = A.u.x - nx * push * sa, z = A.u.z - nz * push * sa; if (canStand(x, z, A.mode)) { A.u.x = x; A.u.z = z; } }
+    if (!B.fixed) { const x = B.u.x + nx * push * sb, z = B.u.z + nz * push * sb; if (canStand(x, z, B.mode)) { B.u.x = x; B.u.z = z; } }
   }
 }
 
