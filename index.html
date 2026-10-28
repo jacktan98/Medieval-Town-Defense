@@ -1062,7 +1062,7 @@ function makeCastle(tier, plinth) {
       if (Math.abs(s) > 1) g.add(box(.35, .4, .55, M.stone2, s, 2.6, W));
     }
     g.add(box(.7, 3.0, .9, M.stone2, -.75, 1.7, W)); g.add(box(.7, 3.0, .9, M.stone2, .75, 1.7, W));
-    g.add(box(2.2, .7, .9, M.stone2, 0, 3.0, W)); for (const s of [-.8, 0, .8]) g.add(box(.36, .34, .3, M.stone2, s, 3.52, W + .3));   // merlons over the gate
+    g.add(box(2.2, .7, .9, M.stone2, 0, 3.0, W)); for (const s of [-.8, 0, .8]) g.add(box(.36, .34, .9, M.stone2, s, 3.52, W));   // merlons over the gate, the full depth as at tier 2
     for (const sx of [-1, 1]) g.add(leaf(.425, 1.7, .08, M.timber, sx * .425, 1.15, W + .42, -sx, -sx * 1.4));
     g.add(drapeBox(.5, .9, .04, M.drape, -.75, 2.2, W + .47)); g.add(drapeBox(.5, .9, .04, M.drape, .75, 2.2, W + .47));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
