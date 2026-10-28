@@ -885,13 +885,14 @@ function seatTrees() {
 const treeFree = (t, now) => !t.dead && !t.cut && t.k >= 1 && !t.claim && !((t.blocked || 0) > now);
 
 // ---------- rocks ----------
+const ROCK_STONE = 10;   // stone in each rock, one per mason trip; mined-out rocks don't come back
 let rocks = [];
 const rockGeo = new THREE.DodecahedronGeometry(.75, 0), rockMat = mat('#958f84'); addGrit(rockMat, 'rock');
 // River isle: three outcrops just beyond the far bank, between the bridges
 const isleRockSite = (x, z, d) => MAP === 'isle' && ISLE_ROCKS.some(g => { const a = g * Math.PI / 180, R = isleR(a) + 6.5; return Math.hypot(x - KX - Math.cos(a) * R, z - KZ - Math.sin(a) * R) < d; });
 function genRocks() {
   rocks.forEach(r => scene.remove(r.mesh)); rocks = [];
-  const addRock = (x, z, s0, rot) => { const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true; mesh.rotation.set(...rot); rocks.push({ x, z, amount: 5, s0, mesh }); scene.add(mesh); };
+  const addRock = (x, z, s0, rot) => { const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true; mesh.rotation.set(...rot); rocks.push({ x, z, amount: ROCK_STONE, s0, mesh }); scene.add(mesh); };
   if (MAP === 'isle') {
     for (const g of ISLE_ROCKS) {
       const a = g * Math.PI / 180, R = isleR(a) + 6.5, cx = KX + Math.cos(a) * R, cz = KZ + Math.sin(a) * R;
@@ -909,12 +910,12 @@ function genRocks() {
     if (rocks.some(r => Math.hypot(r.x - x, r.z - z) < 2.6) || nearBridge(x, z, 2)) continue;
     const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true;
     mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
-    rocks.push({ x, z, amount: 5, s0: .9 + Math.random() * .6, mesh }); scene.add(mesh);
+    rocks.push({ x, z, amount: ROCK_STONE, s0: .9 + Math.random() * .6, mesh }); scene.add(mesh);
   }
   for (const a of [-2.4, -1.0, 3.6]) {          // a few outcrops just beyond the clearing
     const x = KX + Math.cos(a) * 10.5, z = KZ + Math.sin(a) * 10.5; if (hAt(x, z) < .6) continue;
     const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true; mesh.rotation.set(a, a * 2, 1);
-    rocks.push({ x, z, amount: 5, s0: 1.1, mesh }); scene.add(mesh);
+    rocks.push({ x, z, amount: ROCK_STONE, s0: 1.1, mesh }); scene.add(mesh);
   }
 }
 
@@ -958,7 +959,7 @@ function seatClutter() {
   CL.forEach(c => c.mesh.instanceMatrix.needsUpdate = true);
 }
 function seatRocks() {
-  for (const r of rocks) { r.mesh.visible = r.amount > 0; const s = r.s0 * (.4 + .6 * r.amount / 5); r.mesh.scale.set(s, s * .8, s); r.mesh.position.set(r.x, hAt(r.x, r.z) - .1, r.z); }
+  for (const r of rocks) { r.mesh.visible = r.amount > 0; const s = r.s0 * (.4 + .6 * r.amount / ROCK_STONE); r.mesh.scale.set(s, s * .8, s); r.mesh.position.set(r.x, hAt(r.x, r.z) - .1, r.z); }
 }
 
 // ---------- roads: packed-earth tracks with soft, slightly wavy edges and flat stones set in them ----------

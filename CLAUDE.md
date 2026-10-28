@@ -78,7 +78,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 | house | 1×1 | wood 15 | wood 25 gold 20 / wood 30 stone 20 gold 40 | gold 2/4/6, residents 2/3/4 | Hovel / Cottage / Townhouse |
 | farm | 2×2 | wood 15 | wood 20 gold 20 / wood 30 stone 15 gold 35 | food 3/5/8, workers 1/1/2 | Plot / Croft / Manor farm |
 | lodge ("Lumber") | 2×2 | gold 20 | gold 45 stone 10 / gold 75 stone 25 | reach 14, workers 2/3/4, `LUMBER_LOAD=2` wood/trip, chop 2.6 s | Lumber shack / Lumber camp / Lumber yard |
-| quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4 | Stone pit / Quarry / Masons' yard |
+| quarry | 2×2 | gold 25 wood 10 | gold 45 wood 20 / gold 75 wood 30 | reach 16, workers 2/3/4; each rock holds `ROCK_STONE` 10 stone (1 per trip) and never comes back (trees regrow after 45 s) | Stone pit / Quarry / Masons' yard |
 | tower | 1×1 | wood 15 gold 10 | wood 30 gold 30 / stone 40 gold 60 | 2 archers, dmg 7/9/12, range 11/13/15; shaft drawn at `TOWER_K` (.8/.8/.72, T2 also .74), roof held a fixed 1.55 m (`HEAD`) above the platform so archers fit; posts and shootY scale with `TOWER_K`; T3 is an open platform with a low parapet and a blue roof on stone columns | Lookout / Watchtower / Stone tower |
 | barracks | 2×2 | wood 25 gold 20 | wood 30 gold 35 stone 10 / stone 40 gold 60 | 3 soldiers (all tiers), hp 220/320/450; soldiers hp 70/100/140, dmg 7/10/14 every 0.9 s; hall on the left (door x −1), drill yard with weapon rack and practice dummy on the right | Muster hut / Barracks / Garrison |
 | wall | 1×1 | wood 5 gold 2 | stone 6 gold 3 / stone 10 gold 10 | drag-paint, auto-tiles, no plinth | Palisade / Stone wall / Battlement |
