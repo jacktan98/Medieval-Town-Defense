@@ -168,7 +168,8 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .cardHead .iconBtn{width:30px;min-width:30px;height:30px;min-height:30px}
 .cardIco{width:30px;height:30px;border-radius:7px;background:#24261f;border:1px solid #4a4838;display:inline-flex;align-items:center;justify-content:center;color:var(--gold);flex-shrink:0}
 .cardIco svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.cardName{flex:1;min-width:0}
+.cardName{flex:0 1 auto;min-width:0}
+.cardHead .stats{flex:1 1 auto;justify-content:flex-end;min-width:0;gap:2px 9px} .cardHead #demBtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round} .cardHead #demBtn{flex:0 0 auto;min-height:30px;height:30px;border-radius:7px;padding:0 9px;display:inline-flex;align-items:center;gap:5px}
 .card h4{font-size:15px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cardSub{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;line-height:1.2}
 .pips{display:inline-flex;gap:3px} .pips i{width:6px;height:6px;border-radius:50%;background:#3a3a30;border:1px solid #6b5a2e} .pips i.on{background:var(--gold);border-color:var(--gold)}
@@ -293,11 +294,11 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="cardHead">
         <span class="cardIco" id="cardIco"></span>
         <div class="cardName"><h4 id="cardTitle"></h4><div class="cardSub"><span id="cardSub"></span><span class="pips" id="cardPips"></span></div></div>
+        <div class="stats" id="cardStats"></div>
         <button class="iconBtn" id="cardRotBtn" hidden aria-label="Rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button>
         <button class="iconBtn" id="closeCard" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg></button>
       </div>
       <div class="hpbar"><i id="cardHp"></i></div>
-      <div class="stats" id="cardStats"></div>
       <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="ib" id="rallyBtn" title="Rally: tap, then a spot" aria-label="Rally"><svg class="bIco" viewBox="0 0 24 24"><path d="M6 21 V3.5"/><path d="M6 4 H17.5 L15 8 L17.5 12 H6"/></svg></button><button class="ib" id="recallBtn" title="Recall to the barracks" aria-label="Recall"><svg class="bIco" viewBox="0 0 24 24"><path d="M9 14 L4 9 L9 4"/><path d="M4 9 H14 A5.5 5.5 0 0 1 14 20 H9"/></svg></button><button class="danger" id="demBtn" title="Demolish"></button></div>
     </div>
     <div class="guideCard" id="guide" hidden><span class="gStep" id="gStep"></span><b id="gText"></b><button id="gSkip">Skip</button></div>
@@ -2300,6 +2301,7 @@ function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   for (const [offs, loose] of (v.side < 0 ? STEER_R : STEER_L)) for (const off of offs) {
     const a = base + off, sa = Math.sin(a), ca = Math.cos(a), nx = v.x + sa * step, nz = v.z + ca * step;
     if (!canStand(nx, nz, mode)) continue;
+    if (Math.abs(walkY(nx, nz) - walkY(v.x, v.z)) > Math.max(.2, step * 3.6)) continue;   // a ledge: a bridge deck's side
     if (!loose && look > step && !canStand(v.x + sa * look, v.z + ca * look, mode)) continue;
     // face the smoothed direction of travel, not each step's: small corrections along an edge don't swing the body
     const k = Math.min(1, dt * 7); v.hx = lerp(v.hx || sa, sa, k); v.hz = lerp(v.hz || ca, ca, k);
@@ -2321,7 +2323,7 @@ function stride(u, dt, rate) { u.amp = (u.amp || 0) + ((u.walking ? 1 : 0) - (u.
 function cellPass(n, mode) {
   if (bridgeCell[n]) return true;
   const o = occB[n]; if (o && !WALK[o.type] && !(o.type === 'gate' && mode !== 2)) return false;
-  return cH[n] > (mode === 1 ? .2 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);
+  return cH[n] > (mode === 1 ? .2 : mode === 2 && MAP !== 'isle' ? -1.5 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);   // raiders route through the meadow's river (they wade it)
 }
 const ND = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
 function findPath(sx, sz, tx, tz, mode) {
@@ -2340,6 +2342,8 @@ function findPath(sx, sz, tx, tz, mode) {
       const nn = nb * N + na; if (closed[nn]) continue;
       if (nn !== t && !cellPass(nn, mode)) continue;
       if (da && db && (!cellPass(b * N + na, mode) || !cellPass(nb * N + a, mode))) continue;
+      const bi = bridgeCell[c] || bridgeCell[nn];                // bridges are only walked on and off at their ends, along the deck
+      if (bi && (bridges[bi - 1].alongZ ? da !== 0 : db !== 0)) continue;
       const ng = g[c] + w * (1 + cS[nn] * .3) * (road[nn] ? .7 : 1);
       if (ng < g[nn]) { g[nn] = ng; came[nn] = c; f[nn] = ng + hh(nn); open.push(nn); }
     }
@@ -2350,7 +2354,11 @@ function findPath(sx, sz, tx, tz, mode) {
 function clearLine(x0, z0, x1, z1, mode) {
   const L = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(L / .4); if (L < 1e-3) return true;
   const px = -(z1 - z0) / L * .22, pz = (x1 - x0) / L * .22;
-  for (let i = 1; i <= n; i++) { const x = lerp(x0, x1, i / n), z = lerp(z0, z1, i / n); if (!canStand(x, z, mode) || !canStand(x + px, z + pz, mode) || !canStand(x - px, z - pz, mode)) return false; }
+  let py = walkY(x0, z0);
+  for (let i = 1; i <= n; i++) {
+    const x = lerp(x0, x1, i / n), z = lerp(z0, z1, i / n); if (!canStand(x, z, mode) || !canStand(x + px, z + pz, mode) || !canStand(x - px, z - pz, mode)) return false;
+    const y = walkY(x, z); if (Math.abs(y - py) > .35) return false; py = y;   // no shortcut up a ledge (a bridge deck's side)
+  }
   return true;
 }
 function unstick(v, mode) {
@@ -2754,7 +2762,10 @@ function updateEnemies(dt) {
       continue;
     }
     e.walking = false; e.aiming = false; e.running = false;
-    if (!e.target || e.target.dead || (e.retarget -= dt) < 0) { const t = pickTarget(e); if (t !== e.target) e.lob = false; e.target = t; e.retarget = 3; }
+    if (!e.target || e.target.dead || (e.retarget -= dt) < 0) {
+      const t = pickTarget(e); if (t !== e.target) e.lob = false; e.target = t; e.retarget = 3;
+      if (t) e.tp = { x: clamp(e.x, t.ev.x0, t.ev.x1), z: clamp(e.z, t.ev.z0, t.ev.z1) };   // the near side of it, fixed until the next retarget
+    }
     const B = e.target, foe = e.kind !== 'archer' ? nearestSoldier(e.x, e.z, e.horse ? 2.6 : 2.2) : null;
     if (foe) {                                               // a soldier in the way: fight them first
       const d = Math.hypot(foe.x - e.x, foe.z - e.z), reach = Math.max(.75, e.range) + (e.horse ? .3 : 0);
@@ -2766,13 +2777,16 @@ function updateEnemies(dt) {
       if (e.detour) { steer(e, e.detour.x, e.detour.z, dt, 2); if ((e.detour.t -= dt) < 0) e.detour = null; }
       else if (d > e.range + (e.lob ? 3.5 : 0)) {
         e.running = e.kind !== 'archer' && !e.horse && d < 6;
-        steer(e, clamp(e.x, B.ev.x0, B.ev.x1), clamp(e.z, B.ev.z0, B.ev.z1), dt, 2, e.range * .9, e.running ? 1.6 : 1);
-        if (e.stuck > 2) {
+        // route on the cell grid like villagers (round water, over bridges, round walls); straight in once close
+        const tp = e.tp || { x: clamp(e.x, B.ev.x0, B.ev.x1), z: clamp(e.z, B.ev.z0, B.ev.z1) };
+        if (d < 3) steer(e, clamp(e.x, B.ev.x0, B.ev.x1), clamp(e.z, B.ev.z0, B.ev.z1), dt, 2, e.range * .9, e.running ? 1.6 : 1);
+        else walkTo(e, tp.x, tp.z, dt, 2, e.range * .9, e.running ? 1.6 : 1);
+        if (e.stuck > 2 || e.noProg > 3.5) {
           const blk = nearestBuilding(e.x, e.z, 1.6);         // a wall is in the way: attack it
           if (blk && e.kind === 'archer' && !NOT_WALL(blk) && d <= e.range + 3.5) e.lob = true;   // archers loose over it instead
           else if (blk) { e.target = blk; e.retarget = 8; }
           else { const a = Math.random() * 6.283; e.detour = { x: clamp(e.x + Math.cos(a) * 5, 1, SIZE - 1), z: clamp(e.z + Math.sin(a) * 5, 1, SIZE - 1), t: 2 }; }
-          e.stuck = 0;
+          e.stuck = 0; e.prog = null; e.noProg = 0; e.path = null;
         }
       } else {
         const c = center(B); e.g.rotation.y = Math.atan2(c.x - e.x, c.z - e.z); e.aiming = true;
@@ -3148,11 +3162,12 @@ function refreshCard() {
   syncRange();
   if (!selected) { card.hidden = true; return; }
   $('#cardHp').parentElement.hidden = !!selected.path;
+  if (!selected.path && $('#demBtn').parentElement !== $('#cardActs')) $('#cardActs').appendChild($('#demBtn'));
   if (selected.path) {                                 // a path tile: just a name and Demolish (no refund)
     card.hidden = false; $('#cardIco').innerHTML = TOOL_ICON.road; $('#cardTitle').textContent = 'Path'; $('#cardSub').textContent = ''; $('#cardPips').innerHTML = '';
     $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = true;
     const dem = $('#demBtn'), armed = demArmed.B === selected && performance.now() - demArmed.t < 3000;
-    dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick : DEM_ICO; dem.title = 'Remove path'; return;
+    $('.cardHead').insertBefore(dem, $('#closeCard')); dem.hidden = false; $('#cardActs').hidden = true; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick : DEM_ICO; dem.title = 'Remove path'; return;
   }
   const B = selected, T = DEF[B.type], k = B.tier - 1, c0 = center(B);
   card.hidden = false;
@@ -3783,8 +3798,8 @@ function separateUnits(dt) {
     if (d2 >= min * min) continue;
     let d = Math.sqrt(d2); if (d < 1e-4) { const a = Math.random() * 6.283; dx = Math.cos(a); dz = Math.sin(a); d = 1; }
     const push = (min - d) * k, nx = dx / d, nz = dz / d, wa = A.fixed ? 0 : A.w, wb = B.fixed ? 0 : B.w, sa = wa / (wa + wb), sb = 1 - sa;
-    if (!A.fixed) { const x = A.u.x - nx * push * sa, z = A.u.z - nz * push * sa; if (canStand(x, z, A.mode)) { A.u.x = x; A.u.z = z; } }
-    if (!B.fixed) { const x = B.u.x + nx * push * sb, z = B.u.z + nz * push * sb; if (canStand(x, z, B.mode)) { B.u.x = x; B.u.z = z; } }
+    if (!A.fixed) { const x = A.u.x - nx * push * sa, z = A.u.z - nz * push * sa; if (canStand(x, z, A.mode) && Math.abs(walkY(x, z) - walkY(A.u.x, A.u.z)) < .3) { A.u.x = x; A.u.z = z; } }
+    if (!B.fixed) { const x = B.u.x + nx * push * sb, z = B.u.z + nz * push * sb; if (canStand(x, z, B.mode) && Math.abs(walkY(x, z) - walkY(B.u.x, B.u.z)) < .3) { B.u.x = x; B.u.z = z; } }
   }
 }
 
