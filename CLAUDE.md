@@ -11,6 +11,7 @@ The whole game is currently one self-contained file: `index.html` (~165 KB, thre
 - First real-WebGL playtest done 2026-10-27 (desktop, phone portrait/landscape): all building tiers, villager tools/poses, night waves, end screen render correctly.
 - Debug: open `index.html?debug` and `window.G('code')` evaluates inside the game closure (e.g. `G('res.gold=9999')`, `G('PH.t=0')` to skip the day).
 - Design gallery: Admin → Gallery, or open `index.html?gallery` (live: https://jacktan98.github.io/Medieval-Town-Defense/?gallery). Its own scene (`gScene`, the game paused underneath; Back restores it): rows of every building at tiers 1–3 (`GAL_X` columns), walls running into a gate, decor, villagers working/carrying, soldiers by tier and raiders attacking, animated with the game's own poses (`TOOL_POSE`, `bowPose`, `makeRaider`, `addLoads`). Bar: Turn (all buildings a quarter turn; tapping one turns just it), Doors, Walk. `gRows` lists rows for the render script.
+- Before every push: `node tools/check.js` (syntax check of the inline game script; a single syntax error stops the whole game loading on the live site).
 - Render checks: `node tools/render/gallery.js --back` writes `design/gallery/sheet.png` / `sheet-back.png` (run after art changes and commit them); `node tools/render/motion.js` counts villager shaking and checks sites get built. In the cloud, cdnjs is blocked: pass `--three` a local three r128 (`npm pack three@0.128.0`). See `tools/render/README.md`.
 
 ## Suggested next steps (not yet done)
