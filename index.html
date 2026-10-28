@@ -167,7 +167,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .card .row{gap:5px;flex-wrap:nowrap} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
 .card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
 .card .row button.primary{background:#3d3520;flex:1 0 auto}
-.card .row button.danger,.card .row button.ib{flex:0 0 auto} #reset{min-width:84px;justify-content:center} button.danger.armed{background:#8f3326;border-color:var(--bad);color:#fff} .card .row button.danger.armed{min-width:46px;justify-content:center}
+.card .row button.danger,.card .row button.ib{flex:0 0 auto} button.danger.armed{background:#8f3326;border-color:var(--bad);color:#fff} .card .row button.danger.armed{min-width:46px;justify-content:center}
 button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .mini{display:inline-block;width:38px;height:5px;border-radius:3px;background:#3a3a30;overflow:hidden;margin-right:2px} .mini i{display:block;height:100%;background:#e6c46a} .card .row button.ib{width:34px;padding:0}
 .card .row .bIco{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -176,7 +176,9 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
 .pauseCard{pointer-events:auto;background:var(--panel);border:1px solid #6b5a2e;border-radius:12px;padding:14px 22px;display:flex;flex-direction:column;align-items:center;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
 .pauseT{font-family:var(--display);font-size:30px;color:var(--parch);line-height:1}
 .pauseS{font-size:12px;color:var(--muted)}
-.pauseBtns{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;justify-content:center}
+.pauseBtns{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.pauseBtns .pIco{width:56px;min-width:56px;height:46px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.pIco svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round} .pIco svg .solid{fill:currentColor}
 .pauseCard button{min-height:34px;padding:4px 16px;border-radius:7px;background:#24261f;flex-direction:row}
 .pauseCard button.primary{background:#3d3520}
 @media (max-width:640px){ .tools button{min-width:60px;min-height:52px;padding:3px 5px 2px} }
@@ -272,7 +274,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <button class="iconBtn" id="adminBtn" aria-pressed="false" aria-label="Admin" title="Admin tools"><svg viewBox="0 0 24 24"><path d="M14.5 5.5 a4 4 0 0 0 4.9 5 l-8.6 8.6 a2.1 2.1 0 0 1-3-3 l8.6-8.6 a4 4 0 0 0-1.9-2z"/><path d="M5 5 L9 9"/></svg></button>
     </div>
   </div>
-  <div class="pausedTag" id="pausedTag" hidden><div class="pauseCard"><div class="pauseT">Paused</div><div class="pauseBtns"><button class="primary" id="resumeBtn">Resume</button><button id="fsBtn">Full screen</button><button class="danger" id="reset">Restart</button></div></div></div>
+  <div class="pausedTag" id="pausedTag" hidden><div class="pauseCard"><div class="pauseT">Paused</div><div class="pauseBtns"><button class="primary pIco" id="resumeBtn" title="Resume" aria-label="Resume"></button><button class="pIco" id="fsBtn" title="Full screen" aria-label="Full screen"></button><button class="danger pIco" id="reset" title="Restart" aria-label="Restart"></button></div></div></div>
   <div class="dock">
     <div class="card" id="card" hidden>
       <div class="cardHead">
@@ -3229,20 +3231,31 @@ function setTool(t) {
 document.querySelector('.util .tool').addEventListener('click', () => setTool('select'));
 $('#gridBtn').addEventListener('click', e => { grid.visible = !grid.visible; e.currentTarget.setAttribute('aria-pressed', String(grid.visible)); });
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-function syncFs() { $('#fsBtn').textContent = fsEl() ? 'Exit full screen' : 'Full screen'; }
+// pause menu icons
+const PICO = {
+  play: '<svg viewBox="0 0 24 24"><path class="solid" d="M7.5 4.5 L19.5 12 L7.5 19.5 Z"/></svg>',
+  fs: '<svg viewBox="0 0 24 24"><path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"/></svg>',
+  fsOff: '<svg viewBox="0 0 24 24"><path d="M9 4 V9 H4 M20 9 H15 V4 M15 20 V15 H20 M4 15 H9 V20"/></svg>',
+  restart: '<svg viewBox="0 0 24 24"><path d="M4.5 12 a7.5 7.5 0 1 0 2.2-5.3"/><path d="M6.5 3 V6.9 H10.4"/></svg>',
+  tick: '<svg viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>',
+  no: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.3 17.7 L17.7 6.3"/></svg>',
+};
+$('#resumeBtn').innerHTML = PICO.play; $('#reset').innerHTML = PICO.restart;
+function syncFs() { const on = fsEl(); $('#fsBtn').innerHTML = on ? PICO.fsOff : PICO.fs; $('#fsBtn').title = on ? 'Exit full screen' : 'Full screen'; }
 $('#fsBtn').addEventListener('click', async () => {
   try {
     if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     else { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen; if (!rq) throw 0; await rq.call(el); }
-  } catch (e) { $('#fsBtn').textContent = 'Unavailable'; setTimeout(syncFs, 2000); }
+  } catch (e) { $('#fsBtn').innerHTML = PICO.no; $('#fsBtn').title = 'Not available here'; setTimeout(syncFs, 2000); }
 });
 document.addEventListener('fullscreenchange', () => { syncFs(); resize(); });
 document.addEventListener('webkitfullscreenchange', () => { syncFs(); resize(); });
+syncFs();
 let resetArmed = 0;
 $('#reset').addEventListener('click', () => {
-  if (resetArmed && performance.now() - resetArmed < 3000) { resetArmed = 0; $('#reset').textContent = 'Restart'; $('#reset').classList.remove('armed'); startGame(); return; }
-  resetArmed = performance.now(); $('#reset').innerHTML = '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>'; $('#reset').classList.add('armed');
-  setTimeout(() => { if (resetArmed && performance.now() - resetArmed >= 2900) { resetArmed = 0; $('#reset').textContent = 'Restart'; $('#reset').classList.remove('armed'); } }, 3000);
+  if (resetArmed && performance.now() - resetArmed < 3000) { resetArmed = 0; $('#reset').innerHTML = PICO.restart; $('#reset').classList.remove('armed'); startGame(); return; }
+  resetArmed = performance.now(); $('#reset').innerHTML = PICO.tick; $('#reset').classList.add('armed');
+  setTimeout(() => { if (resetArmed && performance.now() - resetArmed >= 2900) { resetArmed = 0; $('#reset').innerHTML = PICO.restart; $('#reset').classList.remove('armed'); } }, 3000);
 });
 $('#again').addEventListener('click', startGame);
 addEventListener('keydown', e => {
