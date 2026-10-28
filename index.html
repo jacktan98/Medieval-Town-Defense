@@ -264,7 +264,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="chip" id="cWood" title="Wood"><span class="ico" data-ico="wood"></span><b>0</b></div>
       <div class="chip" id="cStone" title="Stone"><span class="ico" data-ico="stone"></span><b>0</b></div>
       <div class="chip" id="cFood" title="Food"><span class="ico" data-ico="food"></span><b>0</b></div>
-      <div class="chip" id="cPop" title="Working / villagers"><span class="ico" data-ico="hammer"></span><b>0</b></div>
+      <div class="chip" id="cPop" title="Idle / villagers"><span class="ico" data-ico="pop"></span><b>0</b></div>
     </div>
     <details id="ledger">
       <summary>Town log</summary>
@@ -3214,7 +3214,7 @@ function updateHud() {
   else { const left = spawnQueue.length + enemies.filter(e => !e.dead).length; pt.textContent = `Night ${PH.wave} of ${NIGHTS}`; pt.className = 'night'; sub.textContent = `${left} raider${left === 1 ? '' : 's'} left`; $('#nightBtn').hidden = true; }
   const kind = PH.kind === 'day' ? 'sun' : 'moon'; if (phIcoKind !== kind) { phIcoKind = kind; $('#phIco').innerHTML = PH_ICON[kind]; }
   $('#tickRing').style.strokeDashoffset = (94.25 * (1 - econT / TICK)).toFixed(1); $('#tickN').textContent = Math.ceil(econT);
-  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; $('#cPop b').textContent = `${pop.total - pop.idle}/${pop.total}`;
+  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; $('#cPop b').textContent = `${pop.idle}/${pop.total}`;
   $('#cPop').title = `${pop.total} villagers · ${pop.idle} idle${hungry ? ` · ${hungry} hungry` : ''}`;
   const eaters = hungry ? 1e9 : 1;
   for (const k of RES_KEYS) { const el = $('#c' + k[0].toUpperCase() + k.slice(1)); el.querySelector('b').textContent = Math.floor(res[k]); el.classList.toggle('low', k === 'food' && res.food < eaters); }
@@ -3303,7 +3303,7 @@ function showTip(el, name, below) {
 $('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the stats are redrawn every .2 s, which can swallow a click
   const st = e.target.closest('.stat'); if (st && st.dataset.name) showTip(st, st.dataset.name);
 });
-const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cPop: 'Working villagers' };
+const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cPop: 'Idle' };
 for (const id in CHIP_NAME) $('#' + id).addEventListener('pointerdown', e => showTip(e.currentTarget, CHIP_NAME[id], true));
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 // archers' reach round a selected castle or archer tower; redrawn when the tier changes
