@@ -649,6 +649,10 @@ function coneRoof(r, h, seg, m, x, y, z) {
 }
 function cone(r, h, seg, m, x, y, z) { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), m); o.position.set(x, y, z); o.castShadow = true; return o; }
 // a triangular prism lying along x (a gable end seen from the side): base d deep, h high
+// a door leaf hung on a hinge at (hx, y, z), running dir (+1/-1) along x; it swings open by `open` radians (see updateDoors)
+function leaf(w, h, t, m, hx, y, z, dir, open) {
+  const p = new THREE.Group(); p.position.set(hx, y, z); p.add(box(w, h, t, m, dir * w / 2, 0, 0)); p.userData.leaf = open; return p;
+}
 function prism(w, d, h, m, x, y, z) {
   const sh = new THREE.Shape(); sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(0, h); sh.lineTo(-d / 2, 0);
   const geo = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); geo.rotateY(Math.PI / 2); geo.translate(-w / 2, 0, 0);
@@ -988,7 +992,7 @@ function makeCastle(tier, plinth) {
     }
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(2.1, 1.45, .86, M.thatchOld, 3.42, 0, -.6));   // eaves stick out past the hall walls
-    g.add(box(.5, .8, .06, M.timber, 0, .7, .42));
+    g.add(box(.46, .76, .01, M.dark, 0, .7, .405)); g.add(leaf(.5, .8, .06, M.timber, -.25, .7, .42, 1, -1.4));   // hall door swings out
     for (const sx of [-1, 1]) {      // two small framed windows with a cross bar and one shutter swung open, either side above the door
       const x = sx * .52, y = 1.72;
       g.add(box(.34, .36, .05, M.timber, x, y, .42)); g.add(box(.24, .26, .05, M.glow, x, y, .43));
@@ -1017,7 +1021,7 @@ function makeCastle(tier, plinth) {
     for (const sx of [-1, 1]) g.add(box(.62, 2.9, .9, M.stone2, sx * .75, 1.65, W));
     g.add(box(2.1, .6, .9, M.stone2, 0, 3.0, W));
     for (const s2 of [-.75, 0, .75]) g.add(box(.3, .3, .9, M.stone2, s2, 3.45, W));
-    g.add(box(.85, 1.7, .08, M.timber, 0, 1.15, W + .42));
+    for (const sx of [-1, 1]) g.add(leaf(.425, 1.7, .08, M.timber, sx * .425, 1.15, W + .42, -sx, -sx * 1.4));   // gatehouse doors swing in
     g.add(box(2.4, 3.6, 2.4, M.stone2, 0, 2.0, -.4));
     g.add(box(.3, .42, .06, M.glow, -.45, 2.6, .82)); g.add(box(.3, .42, .06, M.glow, .45, 2.6, .82));
     g.add(box(.5, .9, .06, M.timber, 0, .95, .82));
@@ -1031,7 +1035,7 @@ function makeCastle(tier, plinth) {
       if (Math.abs(s) > 1) g.add(box(.35, .4, .55, M.stone2, s, 2.6, W));
     }
     g.add(box(.7, 3.0, .9, M.stone2, -.75, 1.7, W)); g.add(box(.7, 3.0, .9, M.stone2, .75, 1.7, W));
-    g.add(box(2.2, .7, .9, M.stone2, 0, 3.0, W)); g.add(box(.85, 1.7, .08, M.timber, 0, 1.15, W + .42));
+    g.add(box(2.2, .7, .9, M.stone2, 0, 3.0, W)); for (const sx of [-1, 1]) g.add(leaf(.425, 1.7, .08, M.timber, sx * .425, 1.15, W + .42, -sx, -sx * 1.4));
     g.add(drapeBox(.5, .9, .04, M.drape, -.75, 2.2, W + .47)); g.add(drapeBox(.5, .9, .04, M.drape, .75, 2.2, W + .47));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       g.add(cyl(.75, .85, 3.6, 8, M.stone2, sx * W, 2.0, sz * W)); g.add(cyl(.95, .95, .25, 8, M.stone, sx * W, 3.9, sz * W));
@@ -1196,15 +1200,15 @@ function makeGate(tier, plinth, mask = 0, rot = 0, fixed = false) {
   const ns = (mask & 5) && !(mask & 10), ew = (mask & 10) && !(mask & 5);
   if (fixed ? rot : ns ? 1 : ew ? 0 : rot) g.rotation.y = Math.PI / 2;
   if (tier === 1) {
-    for (const sx of [-1, 1]) { g.add(cyl(.2, .22, 2.5, 6, M.rough, sx * .8, 1.25, 0)); const leaf = box(.07, 1.6, .62, M.wood, sx * .66, .85, .36); g.add(leaf); }
+    for (const sx of [-1, 1]) { g.add(cyl(.2, .22, 2.5, 6, M.rough, sx * .8, 1.25, 0)); g.add(leaf(.6, 1.6, .07, M.wood, sx * .6, .85, 0, -sx, sx * 1.5)); }
     const lt = cyl(.12, .12, 2.0, 6, M.rough, 0, 2.35, 0); lt.rotation.z = Math.PI / 2; g.add(lt);
   } else if (tier === 2) {
-    for (const sx of [-1, 1]) { g.add(box(.45, 2.5, .7, M.stone, sx * .78, 1.25, 0)); g.add(box(.06, 1.5, .55, M.wood, sx * .5, .78, .45)); }
+    for (const sx of [-1, 1]) { g.add(box(.45, 2.5, .7, M.stone, sx * .78, 1.25, 0)); g.add(leaf(.55, 1.5, .06, M.wood, sx * .555, .78, 0, -sx, sx * 1.5)); }
     g.add(box(2.0, .55, .7, M.stone, 0, 2.6, 0));
     for (const s of [-.7, 0, .7]) g.add(box(.3, .3, .7, M.stone, s, 3.0, 0));
     g.add(box(1.1, .35, .06, M.iron, 0, 2.1, 0));
   } else {
-    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(coneRoof(.58, .9, 8, M.roofBlue, sx * .8, 3.65, 0)); }
+    for (const sx of [-1, 1]) { g.add(cyl(.42, .48, 3.2, 8, M.stone2, sx * .8, 1.6, 0)); g.add(coneRoof(.58, .9, 8, M.roofBlue, sx * .8, 3.65, 0)); g.add(leaf(.37, 1.7, .07, M.wood, sx * .37, .9, 0, -sx, sx * 1.5)); }
     g.add(box(1.2, .7, .65, M.stone2, 0, 2.55, 0));
     g.add(drapeBox(.4, .7, .04, M.drape, 0, 1.95, .34)); g.add(box(1.0, .3, .06, M.iron, 0, 2.05, 0));
   }
@@ -1508,7 +1512,13 @@ function evaluate(type, ci, cj, free) {
     if (type === 'lodge' && r.resCount < 3) return { ...r, ok: false, reason: 'No forest nearby' };
     if (type === 'quarry' && r.resCount < 1) return { ...r, ok: false, reason: 'No rock nearby' };
   }
-  if (!T.noRoad && !doorOk(doorCell(r, type, placeFace))) return { ...r, ok: false, reason: 'Door blocked' };
+  // smart rotate: keep the player's facing if its door tile is open, else the nearest turn whose door is
+  r.face = FACING[type] ? placeFace : 0;
+  if (!T.noRoad) {
+    const f = [0, 3, 1, 2].map(k => (placeFace + k) % 4).find(f => doorOk(doorCell(r, type, f)));
+    if (f === undefined) return { ...r, ok: false, reason: 'Door blocked' };
+    r.face = f;
+  }
   if (!free && !canAfford(T.cost)) return { ...r, ok: false, reason: `Need ${shortfall(T.cost)}` };
   if (adapt) snapToNeighbours(type, r);
   return r;
@@ -1590,7 +1600,7 @@ function place(type, ci, cj, opts = {}) {
     if (opts.instant) applyPlan(plan, 1); else anims.push({ plan, t0: now, dur: 450 });
     g.position.set(c.x, ev.target, c.z);
   } else g.position.set(c.x, ev.center, c.z);
-  B.face = FACING[type] ? placeFace : 0; g.rotation.y = B.face * Math.PI / 2;
+  B.face = FACING[type] ? ev.face : 0; g.rotation.y = B.face * Math.PI / 2;
   B.door = T.noRoad ? null : doorCell(ev, type, B.face);     // paths are the player's to lay
   scene.add(g); buildings.push(B);
   const bw = type === 'castle' ? 2.6 : T.size === 1 ? 1.2 : 1.8;
@@ -2695,7 +2705,7 @@ function showGhostAt(point) {
   for (const t in ghosts) ghosts[t].visible = t === tool;
   const g = ghosts[tool], cx = (ev.x0 + ev.x1) / 2, cz = (ev.z0 + ev.z1) / 2;
   g.position.set(cx, adapt && tool !== 'wall' && ev.target != null ? ev.target : hAt(cx, cz), cz);
-  g.rotation.y = FACING[tool] ? placeFace * Math.PI / 2 : 0;
+  g.rotation.y = FACING[tool] ? (ev.face ?? placeFace) * Math.PI / 2 : 0;
   const col = ev.ok ? '#8cc46e' : '#e2715b';
   ghostMat.color.set(col); footLine.material.color.set(col);
   drape(footLine, ev.x0, ev.z0, ev.x1, ev.z1);
@@ -3061,6 +3071,24 @@ setMuted(muted);
 // villagers and live raiders push each other apart; a raider who has just fallen stays put as an obstacle,
 // so a live one never stands in the same spot and looks like he got back up. Nobody is pushed into a building or water.
 const sepUnits = [];
+// castle and gate doors open while a villager is passing through, then swing shut
+function updateDoors(dt) {
+  for (const B of buildings) {
+    if (B.type !== 'castle' && B.type !== 'gate') continue;
+    const g = B.group;
+    if (!g.userData.leaves) { const L = []; g.traverse(o => { if (o.userData.leaf !== undefined) L.push(o); }); g.userData.leaves = L; }
+    if (!g.userData.leaves.length) continue;
+    const p = B.type === 'gate' ? center(B) : innerDoor(B);
+    let want = 0;
+    if (p && B.built && !B.dead) for (const v of villagers) {
+      if (!v.g.visible) continue;
+      const d = Math.hypot((v.rx ?? v.x) - p.x, (v.rz ?? v.z) - p.z);
+      if (d < 1.7) { want = 1; break; }
+    }
+    B.doorK = (B.doorK || 0) + (want - (B.doorK || 0)) * Math.min(1, dt * (want ? 6 : 2.5));
+    for (const l of g.userData.leaves) l.rotation.y = l.userData.leaf * B.doorK;
+  }
+}
 function separateUnits(dt) {
   sepUnits.length = 0;
   for (const v of villagers) if (v.g.visible && !v.doorWalk && !v.inside && !(v.hideT > 0) && !v.posted && !v.sleeping) sepUnits.push({ u: v, r: .24, fixed: false, mode: 1, w: v.working ? .1 : v.walking ? 1 : .35 });
@@ -3167,7 +3195,7 @@ function frame(now) {
   keyCamera(dt); updateLamps(dt, now); updateLight(dt, now);
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
-  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); }
+  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); }
   updateArrows(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
   if (anims.length) {
     for (let n = anims.length - 1; n >= 0; n--) { const a = anims[n], t = clamp((now - a.t0) / a.dur, 0, 1); applyPlan(a.plan, easeOut(t)); if (t >= 1) anims.splice(n, 1); }
