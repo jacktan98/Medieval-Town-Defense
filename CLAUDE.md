@@ -121,7 +121,7 @@ Roof colours: tier 3 roofs use `M.roofBlue` (blue is the town's colour, red the 
 - Tap selection is strict while a build tool is active (`pickBuilding(e, strict)`: hit must be 0.35 m inside the footprint, ignores AO planes) so you don't keep selecting the castle.
 
 ## App icon
-- Home-screen icon: `apple-touch-icon.png` (180), `icon-512.png`, `favicon.png` (32) at the root, linked from `index.html` (home-screen title "Town Defense"). Source `design/icon/icon.svg` (the game's castle tool icon filled in: grey stone, blue flag, brown door, lit windows; dusk sky, crescent moon, stars, green hill); regenerate with `node design/icon/render.js`.
+- Home-screen icon: `apple-touch-icon.png` (180), `icon-512.png`, `favicon.png` (32) at the root, linked from `index.html` (home-screen title "Town Defense"). Source `design/icon/icon.svg` (the game's castle tool icon filled in: grey stone with block courses, blue flag on a pole standing on the keep, brown door, lit windows; dusk sky, crescent moon, stars, green hill); regenerate with `node design/icon/render.js`.
 
 ## Gotchas fixed before (don't reintroduce)
 - `var paused` (not `let`) — TDZ crash on startup.

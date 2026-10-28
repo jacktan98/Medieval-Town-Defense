@@ -14,8 +14,11 @@
   <!-- the game's castle icon (TOOL_ICON.castle), filled in -->
   <g transform="translate(64 84) scale(16)" stroke="#3d3a33" stroke-width=".42" stroke-linejoin="round" stroke-linecap="round">
     <path d="M4 20.6 V6.5 H5.4 V8 H6.6 V6.5 H8 V12 H10 V5.5 H11.3 V7 H12.7 V5.5 H14 V12 H16 V6.5 H17.4 V8 H18.6 V6.5 H20 V20.6 Z" fill="url(#wall)"/>
+    <defs><clipPath id="castle"><path d="M4 20.6 V6.5 H5.4 V8 H6.6 V6.5 H8 V12 H10 V5.5 H11.3 V7 H12.7 V5.5 H14 V12 H16 V6.5 H17.4 V8 H18.6 V6.5 H20 V20.6 Z"/></clipPath></defs>
+    <path d="M3 9.5 H21 M6 9.5 V11.0 M8.5 9.5 V11.0 M10 9.5 V11.0 M12 9.5 V11.0 M14 9.5 V11.0 M16.5 9.5 V11.0 M18 9.5 V11.0 M3 11.0 H21 M5 11.0 V12.5 M7.5 11.0 V12.5 M9 11.0 V12.5 M11 11.0 V12.5 M13 11.0 V12.5 M15 11.0 V12.5 M17 11.0 V12.5 M19 11.0 V12.5 M3 12.5 H21 M6 12.5 V14.0 M8.5 12.5 V14.0 M10 12.5 V14.0 M12 12.5 V14.0 M14 12.5 V14.0 M16.5 12.5 V14.0 M18 12.5 V14.0 M3 14.0 H21 M5 14.0 V15.5 M7.5 14.0 V15.5 M9 14.0 V15.5 M11 14.0 V15.5 M13 14.0 V15.5 M15 14.0 V15.5 M17 14.0 V15.5 M19 14.0 V15.5 M3 15.5 H21 M6 15.5 V17.0 M8.5 15.5 V17.0 M10 15.5 V17.0 M12 15.5 V17.0 M14 15.5 V17.0 M16.5 15.5 V17.0 M18 15.5 V17.0 M3 17.0 H21 M5 17.0 V18.5 M7.5 17.0 V18.5 M9 17.0 V18.5 M11 17.0 V18.5 M13 17.0 V18.5 M15 17.0 V18.5 M17 17.0 V18.5 M19 17.0 V18.5 M3 18.5 H21 M6 18.5 V20.0 M8.5 18.5 V20.0 M10 18.5 V20.0 M12 18.5 V20.0 M14 18.5 V20.0 M16.5 18.5 V20.0 M18 18.5 V20.0 M3 20.0 H21 M5 20.0 V20.6 M7.5 20.0 V20.6 M9 20.0 V20.6 M11 20.0 V20.6 M13 20.0 V20.6 M15 20.0 V20.6 M17 20.0 V20.6 M19 20.0 V20.6" fill="none" stroke="#8a8478" stroke-width=".22" clip-path="url(#castle)"/>
+    <path d="M4 20.6 V6.5 H5.4 V8 H6.6 V6.5 H8 V12 H10 V5.5 H11.3 V7 H12.7 V5.5 H14 V12 H16 V6.5 H17.4 V8 H18.6 V6.5 H20 V20.6 Z" fill="none"/>
     <path d="M8 12 V20.6 M16 12 V20.6" fill="none"/>
-    <path d="M12 5.5 V2" fill="none" stroke="#3a2a1a"/>
+    <path d="M12 7 V2" fill="none" stroke="#3a2a1a"/>
     <path d="M12.2 2 C13.4 1.6 14.2 2.6 15.6 2.2 V4.2 C14.2 4.6 13.4 3.6 12.2 4 Z" fill="#3f6fd6" stroke="#1d3270" stroke-width=".3"/>
     <path d="M10.4 20.6 V17 A1.6 1.6 0 0 1 13.6 17 V20.6 Z" fill="#6b4423"/>
     <rect x="5.5" y="11" width="1" height="2" rx=".5" fill="#f2b24a" stroke="none"/>
