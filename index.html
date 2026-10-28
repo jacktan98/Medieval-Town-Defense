@@ -175,7 +175,8 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .hpbar{height:4px}
 .stats{display:flex;flex-wrap:wrap;gap:2px 11px}
 .stat{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--parch);font-variant-numeric:tabular-nums}
-.stat .ico{width:12px;height:12px}
+.stat .ico{width:12px;height:12px} .stat{cursor:pointer}
+.statTip{position:fixed;z-index:200;transform:translate(-50%,-100%);margin-top:-6px;padding:3px 8px;border-radius:6px;background:#1c1d18;border:1px solid #6b5a2e;color:var(--parch);font-size:12px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .stat.good{color:var(--ok)} .stat.warn{color:#e6c46a} .stat.bad{color:var(--bad)}
 .card .row{gap:5px;flex-wrap:nowrap;justify-content:flex-end} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
 .card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
@@ -289,6 +290,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
   </div>
   <div class="pausedTag" id="pausedTag" hidden><div class="pauseCard"><div class="pauseT">Paused</div><div class="pauseBtns"><button class="primary pIco" id="resumeBtn" title="Resume" aria-label="Resume"></button><button class="pIco" id="fsBtn" title="Full screen" aria-label="Full screen"></button><button class="danger pIco" id="reset" title="Restart" aria-label="Restart"></button></div></div></div>
   <div class="dock">
+    <div class="statTip" id="statTip" hidden></div>
     <div class="card" id="card" hidden>
       <div class="cardHead">
         <span class="cardIco" id="cardIco"></span>
@@ -3220,7 +3222,9 @@ function updateHud() {
   if (!$('#admin').hidden) syncAdmin(false);
 }
 const DEM_ICO = '<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>';
-const STAT = (ico, txt, cls = '') => `<span class="stat ${cls}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
+// card stats: icon + number; tapping one shows its name (statTip)
+const STAT_NAME = { hp: 'Health', gold: 'Gold', food: 'Food', pop: 'Villagers', hammer: 'Workers', guard: 'Archers', bow: 'Damage', sword: 'Damage', charm: 'Charm', bowl: 'Hungry' };
+const STAT = (ico, txt, cls = '', name = STAT_NAME[ico]) => `<span class="stat ${cls}" data-name="${name || ''}" title="${name || ''}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
 function refreshCard() {
   const card = $('#card');
   syncRange();
@@ -3244,8 +3248,8 @@ function refreshCard() {
   if (B.site) {
     const crew = villagers.filter(v => v.build === B).length;
     const pc = Math.floor(B.site.progress * 100);
-    st.push(STAT('', `<span class="mini" title="${{ new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]}"><i style="width:${pc}%"></i></span>${pc}%`, 'warn'));
-    st.push(STAT('hammer', `${crew}`, crew ? '' : 'bad'));
+    st.push(STAT('', `<span class="mini"><i style="width:${pc}%"></i></span>${pc}%`, 'warn', { new: 'Building', up: 'Upgrading', repair: 'Repairing' }[B.site.kind]));
+    st.push(STAT('hammer', `${crew}`, crew ? '' : 'bad', 'Builders'));
   }
   st.push(STAT('hp', B.hp < B.max ? `${Math.ceil(B.hp)}/${B.max}` : `${B.max}`, hpf < .35 ? 'bad' : ''));
   if (B.type === 'castle') { st.push(STAT('gold', `+${T.gold[k]}`)); st.push(STAT('food', `+${T.food[k]}`)); }
@@ -3264,7 +3268,7 @@ function refreshCard() {
   }
   if (T.soldiers) {
     const m = villagers.filter(v => v.soldier && v.post && v.post.B === B).length;
-    st.push(STAT('guard', PH.kind === 'night' ? `${m}/${T.soldiers[k]}` : `${T.soldiers[k]}`));
+    st.push(STAT('guard', PH.kind === 'night' ? `${m}/${T.soldiers[k]}` : `${T.soldiers[k]}`, '', 'Soldiers'));
     st.push(STAT('sword', `${SOLDIER.dmg[k]}`));
   }
   if (T.decor) st.push(STAT('charm', `+${Math.round(T.charm * 100)}%`, 'good'));
@@ -3287,6 +3291,14 @@ function selectPath(a, b) {
   drape(selLine, x0 - .1, z0 - .1, x0 + CELL + .1, z0 + CELL + .1); refreshCard();
 }
 function removePath(P) { road[P.b * N + P.a] = 0; rebuildRoads(); villagers.forEach(v => v.path = null); sfx('click'); deselect(); }
+let statTipT = 0;
+document.body.appendChild($('#statTip'));   // out of the dock: its transform would offset a fixed tooltip
+$('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the stats are redrawn every .2 s, which can swallow a click
+  const st = e.target.closest('.stat'); if (!st || !st.dataset.name) return;
+  const r = st.getBoundingClientRect(), tip = $('#statTip');
+  tip.textContent = st.dataset.name; tip.style.left = (r.left + r.width / 2) + 'px'; tip.style.top = r.top + 'px'; tip.hidden = false;
+  clearTimeout(statTipT); statTipT = setTimeout(() => { tip.hidden = true; }, 1600);
+});
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 // archers' reach round a selected castle or archer tower; redrawn when the tier changes
 let rangeKey = '';
@@ -3296,7 +3308,7 @@ function syncRange() {
   if (!k) { rangeLine.visible = false; return; }
   const c = center(B); drapeCircle(rangeLine, c.x, c.z, T.range[B.tier - 1]);
 }
-function deselect() { selected = null; selLine.visible = false; refreshCard(); }
+function deselect() { selected = null; selLine.visible = false; $('#statTip').hidden = true; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
 $('#rotBtn').addEventListener('click', rotatePlacement);
 $('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); rotateBuilding(selected); });
