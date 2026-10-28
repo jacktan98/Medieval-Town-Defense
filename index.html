@@ -1944,7 +1944,9 @@ function randomNear(B, rmin, rmax) {
   for (let n = 0; n < 40; n++) { const a = Math.random() * 6.283, r = rmin + Math.random() * (rmax - rmin), x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r; if ([[0, 0], [.7, 0], [-.7, 0], [0, .7], [0, -.7]].every(([a, b]) => canStand(x + a, z + b, 0))) return { x, z }; }
   return null;
 }
-const OFFS_L = [0, .5, 1.0, 1.6, 2.2, -.5, -1.0, -1.6], OFFS_R = OFFS_L.map(o => -o);
+// steering tries: straight, then the committed side, and only then the other side; each group first wants clear ground ahead
+const SIDE_L = [0, .5, 1.0, 1.6, 2.2], SIDE_R = SIDE_L.map(o => -o);
+const STEER_L = [[SIDE_L, 0], [SIDE_L, 1], [SIDE_R, 0], [SIDE_R, 1]], STEER_R = [[SIDE_R, 0], [SIDE_R, 1], [SIDE_L, 0], [SIDE_L, 1]];
 function turnTo(v, a, dt) { let d = a - v.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); v.g.rotation.y += d * Math.min(1, dt * 8); }
 function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz);
@@ -1956,13 +1958,16 @@ function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   // commit to one side when walking around an obstacle, instead of flipping sides every frame
   if ((v.sideT = (v.sideT || 0) - dt) <= 0) v.side = 0;
   // look ahead too: a direction that is open for this step but blocked just beyond it walks the unit into the edge,
-  // and it bounces off it next frame; first pass wants clear ground ahead, the second takes any open step
+  // and it bounces off it next frame; the committed side is used up (with, then without look-ahead) before the other is tried,
+  // or the unit steps one way, then the other, and shakes
   const look = Math.min(d, .65);
-  for (let pass = 0; pass < 2; pass++) for (const off of (v.side < 0 ? OFFS_R : OFFS_L)) {
+  for (const [offs, loose] of (v.side < 0 ? STEER_R : STEER_L)) for (const off of offs) {
     const a = base + off, sa = Math.sin(a), ca = Math.cos(a), nx = v.x + sa * step, nz = v.z + ca * step;
     if (!canStand(nx, nz, mode)) continue;
-    if (!pass && look > step && !canStand(v.x + sa * look, v.z + ca * look, mode)) continue;
-    v.x = nx; v.z = nz; turnTo(v, a, dt); v.walking = true;
+    if (!loose && look > step && !canStand(v.x + sa * look, v.z + ca * look, mode)) continue;
+    // face the smoothed direction of travel, not each step's: small corrections along an edge don't swing the body
+    const k = Math.min(1, dt * 7); v.hx = lerp(v.hx || sa, sa, k); v.hz = lerp(v.hz || ca, ca, k);
+    v.x = nx; v.z = nz; turnTo(v, Math.atan2(v.hx, v.hz), dt); v.walking = true;
     if (off === 0) v.stuck = Math.max(0, v.stuck - dt);
     else { v.stuck += dt * .4; if (!v.side) v.side = Math.sign(off); v.sideT = .8; }
     return false;
@@ -2217,7 +2222,8 @@ function updateVillagers(dt, now) {
     v.legs[0].rotation.x = swing; v.legs[1].rotation.x = -swing;
     v.body.position.y = Math.abs(Math.sin(v.phase)) * .05 * amp;
     const cheer = v.cheerT > 0 && !v.build && !v.working; if (v.cheerT > 0) v.cheerT -= dt;
-    if (cheer) v.body.position.y += Math.abs(Math.sin(now / 1000 * 9 + v.phase)) * .14;
+    if (v.seed === undefined) v.seed = Math.random() * 6.283;    // fixed per villager: v.phase runs on with the stride, which would speed up swings
+    if (cheer) v.body.position.y += Math.abs(Math.sin(now / 1000 * 9 + v.seed)) * .14;
     const carrying = v.carryLog.visible || v.carryStone.visible;
     // arm angle: 0 hangs down, -1.57 points straight ahead, -3 is overhead; tools follow the right hand
     const kind = v.pivot ? v.toolKind : null, logC = v.carryLog.visible, stoneC = v.carryStone.visible;
@@ -2225,16 +2231,17 @@ function updateVillagers(dt, now) {
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
     else if (v.working && kind) {
-      const t = now / 1000 + v.phase;
+      const t = now / 1000 + v.seed;
       if (kind === 'axe') { w = Math.sin(t * 5.8); Rt = -1.75 + w * .95; L = -.35 - w * .15; tilt = -.6; lean = .08 + w * -.06; }   // one-handed chop, free arm steadies
       else if (kind === 'pick') { w = Math.sin(t * 5.2); Rt = -1.5 + w * 1.0; L = -.35 - w * .15; tilt = -.75; lean = .14 - w * .08; }   // one-handed: the rig's hands can't meet on one handle
       else if (kind === 'hoe') { w = Math.sin(t * 4.8); Rt = -.85 + w * .35; L = -.25; tilt = -.32; lean = .32 + w * .05; }   // one-handed, blade pulled through the soil
       else if (kind === 'hammer') { w = Math.sin(t * 8.5); Rt = -1.25 + w * .55; L = -.75; tilt = -.95; lean = .12; }
     } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
     if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
-    if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = tilt; }
+    const ease = (o, t) => o + (t - o) * Math.min(1, dt * 14);    // poses blend over ~0.1 s, so switching task never snaps
+    if (v.pivot) { v.pivot.visible = !logC && !stoneC; v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
-    v.arms[0].rotation.x = L; v.arms[1].rotation.x = Rt; v.body.rotation.x = lean;
+    v.arms[0].rotation.x = ease(v.arms[0].rotation.x, L); v.arms[1].rotation.x = ease(v.arms[1].rotation.x, Rt); v.body.rotation.x = ease(v.body.rotation.x, lean);
     smoothPos(v, dt, now); v.g.position.set(v.rx, hAt(v.rx, v.rz), v.rz);
   }
 }
