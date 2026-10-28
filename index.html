@@ -1086,7 +1086,8 @@ function makeCastle(tier, plinth) {
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
-  const pile = (x, z, n) => { for (let r = 0; r < n; r++) for (let c = 0; c < n - r; c++) { const l = cyl(.17, .17, 1.1, 7, M.log, x + (c - (n - r - 1) / 2) * .36, .3 + r * .3, z); l.rotation.x = Math.PI / 2; g.add(l); } };
+  // a log pile lying across the front (logs along x), stacked in a pyramid
+  const pile = (x, z, n, rad = .17) => { const d = rad * 2.1; for (let r = 0; r < n; r++) for (let c = 0; c < n - r; c++) { const l = cyl(rad, rad, 1.1, 7, M.log, x, rad * 1.8 + r * d * .87, z + (c - (n - r - 1) / 2) * d); l.rotation.z = Math.PI / 2; g.add(l); } };
   const axeStump = (x, z) => { g.add(cyl(.28, .3, .45, 8, M.logEnd, x, .25, z)); const h = box(.05, .6, .05, M.timber, x + .08, .7, z); h.rotation.z = -.4; g.add(h); g.add(box(.05, .16, .22, M.iron, x - .02, .5, z)); };
   if (tier === 1) {            // woodcutter's hut: short log walls, thatched roof, chopping stump
     const X = -.9;              // the door (x -1) lines up with the left column's path tile
@@ -1115,11 +1116,10 @@ function makeLodge(tier, plinth) {
     g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
     g.add(box(.55, 1.0, .06, M.timber, -.6, .7, 1.08));
     g.add(box(.3, .24, .06, M.glow, .6, 1.2, 1.08));
-    pile(.7, 1.55, 3);
+    pile(.7, 1.56, 3, .14);   // between the cabin front and the edge of the base
     axeStump(1.45, -1.45);
     if (tier === 3) {
       g.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
-      pile(-1.6, -.2, 3);
       // sawbuck: two X trestles cradling a log, a frame saw standing in the cut, sawn rounds beside it
       for (const z of [1.35, 1.8]) for (const sx of [-1, 1]) { const l = box(.07, .8, .07, M.timber, -1.5, .38, z); l.rotation.z = sx * .55; g.add(l); }
       const lg = cyl(.13, .13, .75, 7, M.log, -1.5, .62, 1.57); lg.rotation.x = Math.PI / 2; g.add(lg);
