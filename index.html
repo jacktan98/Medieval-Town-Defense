@@ -254,7 +254,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="chip" id="cWood" title="Wood"><span class="ico" data-ico="wood"></span><b>0</b></div>
       <div class="chip" id="cStone" title="Stone"><span class="ico" data-ico="stone"></span><b>0</b></div>
       <div class="chip" id="cFood" title="Food"><span class="ico" data-ico="food"></span><b>0</b></div>
-      <div class="chip" id="cPop" title="Villagers; the green badge is how many are idle"><span class="ico" data-ico="pop"></span><b>0</b><i class="badge">0</i></div>
+      <div class="chip" id="cPop" title="Working / villagers"><span class="ico" data-ico="hammer"></span><b>0</b></div>
     </div>
     <details id="ledger">
       <summary>Town log</summary>
@@ -3000,7 +3000,7 @@ function updateHud() {
   else { const left = spawnQueue.length + enemies.filter(e => !e.dead).length; pt.textContent = `Night ${PH.wave} of ${NIGHTS}`; pt.className = 'night'; sub.textContent = `${left} raider${left === 1 ? '' : 's'} left`; $('#nightBtn').hidden = true; }
   const kind = PH.kind === 'day' ? 'sun' : 'moon'; if (phIcoKind !== kind) { phIcoKind = kind; $('#phIco').innerHTML = PH_ICON[kind]; }
   $('#tickRing').style.strokeDashoffset = (94.25 * (1 - econT / TICK)).toFixed(1); $('#tickN').textContent = Math.ceil(econT);
-  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; $('#cPop b').textContent = pop.total; $('#cPop .badge').textContent = pop.idle;
+  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; $('#cPop b').textContent = `${pop.total - pop.idle}/${pop.total}`;
   $('#cPop').title = `${pop.total} villagers · ${pop.idle} idle${hungry ? ` · ${hungry} hungry` : ''}`;
   const eaters = hungry ? 1e9 : 1;
   for (const k of RES_KEYS) { const el = $('#c' + k[0].toUpperCase() + k.slice(1)); el.querySelector('b').textContent = Math.floor(res[k]); el.classList.toggle('low', k === 'food' && res.food < eaters); }
@@ -3106,7 +3106,7 @@ function showGhostAt(point) {
   const parts = [`<b>${T.name}</b>`, costHTML(T.cost)];
   if (T.reach) parts.push(`${ev.resCount} ${tool === 'lodge' ? 'trees' : 'rocks'}`);
   if (T.charm) parts.push(`+${Math.round(T.charm * 100)}% gold · ${housesNear(cx, cz)} houses`);
-  if (T.workers) { const need = T.workers[0], idle = popStats().idle; parts.push(`<span class="cost${idle < need ? ' short' : ''}" title="Workers needed"><span class="ico">${ICON.pop}</span>${need}${idle < need ? ' · no one idle' : ''}</span>`); }
+  if (T.workers) { const need = T.workers[0], idle = popStats().idle; parts.push(`<span class="cost${idle < need ? ' short' : ''}" title="Workers needed"><span class="ico">${ICON.hammer}</span>${need}${idle < need ? ' · no one idle' : ''}</span>`); }
   if (isTouch) parts.push(T.paint ? 'tap or drag' : 'tap again');
   else if (T.paint) parts.push('drag to paint');
   if (ROTATES[tool]) parts.push(placeRot ? 'N–S' : 'E–W');
