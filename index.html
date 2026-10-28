@@ -1390,7 +1390,7 @@ function tinted(m, tier, n) {
 }
 const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
   const g = MODELS[type](tier, plinth && tier >= 2 && type !== 'farm' && !DEF[type].decor, mask, rot, fixed), tt = DEF[type].decor ? 2 : tier;
-  if (plinth && tier === 1 && SLAB[type]) { const w = DEF[type].size * CELL; g.add(box(w, .7, w, M.court, 0, SLAB_TOP - .35, 0)); }
+  if (plinth && tier === 1 && SLAB[type]) { const w = DEF[type].size * CELL; g.add(box(w, 1.0, w, M.court, 0, SLAB_TOP - .5, 0));   // a metre deep: ground lowered by a neighbour never opens a gap }
   if (!NO_AO[type]) { const w = DEF[type].size * CELL + 1.3, ao = new THREE.Mesh(new THREE.PlaneGeometry(w, w).rotateX(-Math.PI / 2), aoMat); ao.position.y = .04; ao.userData.ao = true; g.add(ao); }
   let n = 0;
   g.traverse(o => { if (o.userData.ao) return; if (o.isMesh) { o.castShadow = o.receiveShadow = !o.userData.noShadow; if (!NO_TINT.has(o.material)) o.material = tinted(o.material, tt, (n++ * 5 + Math.floor(Math.random() * 3)) % 6); } });
@@ -1667,8 +1667,11 @@ function planFlatten(ev, FO) {
   const verts = [];
   for (let j = Math.max(0, Math.floor(ev.z0 - FO)); j <= Math.min(V - 1, Math.ceil(ev.z1 + FO)); j++)
     for (let i = Math.max(0, Math.floor(ev.x0 - FO)); i <= Math.min(V - 1, Math.ceil(ev.x1 + FO)); i++) {
-      const k = idx(i, j); if (lock[k]) continue;
+      const k = idx(i, j);
       const dx = Math.max(ev.x0 - i, 0, i - ev.x1), dz = Math.max(ev.z0 - j, 0, j - ev.z1), dist = Math.hypot(dx, dz);
+      // ground shared with a neighbour stays put, except that it may come down to this building's level: left higher, it would
+      // bury this building's base (a neighbour's base runs well below its top, so its side just shows a little more)
+      if (lock[k]) { if (dist === 0 && H[k] > ev.target) verts.push({ k, inside: true, h0: H[k], h1: ev.target, d0: dirt[k], d1: dirt[k] }); continue; }
       if (dist > FO) continue;
       verts.push({ k, inside: dist === 0, h0: H[k], h1: lerp(ev.target, H[k], sstep(0, FO, dist)), d0: dirt[k],
         d1: dirt[k] });   // no dirt splat: buildings stand on grass
