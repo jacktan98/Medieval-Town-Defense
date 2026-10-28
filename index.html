@@ -1646,7 +1646,7 @@ const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
 // stone bases fill their tiles exactly; this is how far each one's top sits above the building's ground level
 const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, barracks: .2 };
 // tier 1 stands on a packed-earth slab like the palisade fort's yard, filling its tiles so neighbours meet edge to edge
-const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1, barracks: 1 }, SLAB_TOP = .08;
+const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1, barracks: 1, tower: 1 }, SLAB_TOP = .08;
 const plinthTop = (type, tier) => tier === 1 ? (SLAB[type] ? SLAB_TOP : null) : PLINTH_TOP[type];
 // a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
 // so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
