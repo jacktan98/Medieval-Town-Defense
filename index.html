@@ -118,6 +118,11 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .sheet{background:#1c1d18;border:1px solid var(--gold);border-radius:8px;padding:20px 22px;width:min(420px,100%);display:flex;flex-direction:column;gap:12px}
 .sheet h2{margin:0;font-family:var(--display);font-weight:400;font-size:34px;color:var(--gold);text-wrap:balance}
 .sheet h2.lost{color:var(--bad)}
+.mapSheet{align-items:center;text-align:center}
+.maps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.mapBtn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;border-radius:10px;background:#24261f;border-color:#4a4838;width:150px}
+.mapBtn svg{width:132px;height:99px;display:block}
+.mapBtn b{font-size:14px;color:var(--parch)} .mapBtn.last{border-color:var(--gold)}
 .sheet p{margin:0;color:var(--muted)}
 .sheet dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-variant-numeric:tabular-nums}
 .sheet dt{color:var(--muted)} .sheet dd{margin:0;text-align:right;font-weight:700}
@@ -310,6 +315,15 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
     </div>
   </div>
   <div class="galBar" id="galBar" hidden><b>Gallery</b><button id="galTurn">Turn</button><button id="galDoors">Doors</button><button id="galWalk">Walk</button><button class="primary" id="galBack">Back</button></div>
+  <div class="modal" id="mapPick" hidden>
+    <div class="sheet mapSheet">
+      <h2>Choose map</h2>
+      <div class="maps">
+        <button class="mapBtn" data-map="meadow"><svg viewBox="0 0 120 90"><rect width="120" height="90" rx="8" fill="#7fa456"/><path d="M84 0 C78 22 92 40 86 62 C82 76 88 84 86 90 H100 C102 80 96 72 100 60 C106 40 92 22 98 0 Z" fill="#4f8fc4"/><g fill="#3f6e2a"><circle cx="14" cy="16" r="6"/><circle cx="24" cy="10" r="5"/><circle cx="108" cy="20" r="5"/><circle cx="112" cy="72" r="6"/><circle cx="16" cy="74" r="5"/><circle cx="64" cy="14" r="5"/></g><g fill="#a19c92"><circle cx="70" cy="76" r="3.5"/><circle cx="20" cy="44" r="3"/></g><rect x="38" y="40" width="16" height="16" fill="#c9c3b6" stroke="#4d4a43" stroke-width="2"/><path d="M46 40 V30" stroke="#3a2a1a" stroke-width="1.5"/><path d="M46 30 l7 2 l-7 2 Z" fill="#3f6fd6"/></svg><b>Meadow</b></button>
+        <button class="mapBtn" data-map="isle"><svg viewBox="0 0 120 90"><rect width="120" height="90" rx="8" fill="#7fa456"/><ellipse cx="60" cy="47" rx="37" ry="34" fill="#4f8fc4"/><ellipse cx="60" cy="47" rx="27" ry="24" fill="#93b766"/><g stroke="#8a5a30" stroke-width="6"><path d="M60 9 V25"/><path d="M84 59 L98 64"/><path d="M36 59 L22 64"/></g><g fill="#3f6e2a"><circle cx="46" cy="36" r="4"/><circle cx="74" cy="34" r="4"/><circle cx="72" cy="62" r="4"/><circle cx="10" cy="12" r="5"/><circle cx="110" cy="80" r="5"/></g><g fill="#a19c92"><circle cx="104" cy="22" r="3.5"/><circle cx="16" cy="28" r="3.5"/><circle cx="60" cy="86" r="3"/></g><rect x="53" y="42" width="14" height="14" fill="#c9c3b6" stroke="#4d4a43" stroke-width="2"/><path d="M60 42 V33" stroke="#3a2a1a" stroke-width="1.5"/><path d="M60 33 l7 2 l-7 2 Z" fill="#3f6fd6"/></svg><b>River isle</b></button>
+      </div>
+    </div>
+  </div>
   <div class="modal" id="summary" hidden>
     <div class="sheet">
       <h2 id="sumTitle"></h2>
@@ -331,7 +345,12 @@ const $ = s => document.querySelector(s);
   P.setHSL = function (h, s2, l) { sL.call(this, h, s2, l); return this.convertSRGBToLinear(); }; }
 const N = 28, CELL = 2, SIZE = N * CELL, V = SIZE + 1;
 const F = 3, TICK = 20;
-const KX = 19, KZ = 27;                // castle site (cells 8–10, 12–14)
+let KX = 19, KZ = 27;                  // castle site: Meadow cells 8–10, 12–14; River isle 12–14, 12–14 (set per map in startGame)
+// MAP: 'meadow' (the original map) or 'isle' (the castle on an island ringed by a river, three fixed bridges); ?map=isle skips the picker
+var MAP = (location.search.match(/[?&]map=(meadow|isle)\b/) || [])[1] || (() => { try { return localStorage.getItem('mtd-map'); } catch (e) { return null; } })() || 'meadow';
+// river isle: the river's centre line wobbles round the castle; ISLE.r is its mean radius in metres
+const ISLE = { r: 16.6 }, ISLE_BRIDGES = [-90, 30, 150], ISLE_ROCKS = [-30, 90, 210];
+const isleR = a => ISLE.r + .9 * Math.sin(3 * a + .6) + .6 * Math.sin(5 * a + 2.1) + .4 * Math.sin(8 * a + 1.3);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -438,6 +457,13 @@ function genHeight(x, z) {
   h += Math.max(0, fbm(x * .14 + 9, z * .14 + 3) - .6) * 16;
   h += Math.max(0, 10 - x) * .35 * fbm(x * .1, z * .1 + 7);
   const dk = Math.hypot(x - KX, z - KZ);                         // open meadow around the castle
+  if (MAP === 'isle') {
+    // a flat island, gentle banks, hills rising again a few metres beyond the far bank
+    const r = isleR(Math.atan2(z - KZ, x - KX)), t = Math.abs(dk - r), flat = 3.0 + (h - 3.0) * .4;
+    let land = dk < r ? flat : lerp(2.6 + (h - 3.0) * .4, h, sstep(r + 4, r + 11, dk));
+    land = lerp(1.0, land, sstep(2.3, 6, t));
+    return lerp(-1.9, land, sstep(1.3, 2.3, t));
+  }
   h = lerp(3.0 + (h - 3.0) * .4, h, sstep(6, 13, dk));
   const rx = SIZE * .68 + Math.sin(z * .12) * 5 + Math.sin(z * .05 + 1) * 3;
   return lerp(-1.4, h, sstep(2.2, 7.5, Math.abs(x - rx)));
@@ -446,6 +472,30 @@ function genTerrain() {
   for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) { const k = idx(i, j); H[k] = genHeight(i, j); gvar[k] = fbm(i * .21 + 40, j * .21); dvar[k] = fbm(i * .09 + 70, j * .09 + 30); }
   dirt.fill(0); lock.fill(0); road.fill(0); occB = new Array(N * N).fill(null);
 }
+// ---------- bridges (River isle): fixed timber footbridges, one cell wide, along a grid axis ----------
+// bridgeCell[n] = bridge index + 1; units on one walk at its deck height (walkY), and only bridges cross the river
+let bridges = [];
+const bridgeCell = new Uint8Array(N * N), BRIDGE_RISE = .45;
+function genBridges() {
+  bridges.forEach(b => b.g && scene.remove(b.g)); bridges = []; bridgeCell.fill(0);
+  if (MAP !== 'isle') return;
+  for (const deg of ISLE_BRIDGES) {
+    const a = deg * Math.PI / 180, alongZ = Math.abs(Math.sin(a)) > .7, r = isleR(a);
+    const fixed = Math.floor((alongZ ? KX + Math.cos(a) * r : KZ + Math.sin(a) * r) / CELL), dir = Math.sign(alongZ ? Math.sin(a) : Math.cos(a));
+    const cellOf = k => alongZ ? k * N + fixed : fixed * N + k, wet = k => { const n = cellOf(k); return cellStats(n % N, (n / N) | 0).mn < 0; };
+    let k = Math.floor((alongZ ? KZ : KX) / CELL); while (!wet(k)) k += dir;
+    const kIn = k - dir; while (wet(k)) k += dir;
+    const k0 = Math.min(kIn, k), k1 = Math.max(kIn, k), u0 = (k0 + .5) * CELL, u1 = (k1 + .5) * CELL, c = (fixed + .5) * CELL;   // the deck lands half-way into each bank cell
+    const at = u => alongZ ? hAt(c, u) : hAt(u, c);
+    const b = { alongZ, c, u0, u1, L: u1 - u0, h0: at(u0) + .05, h1: at(u1) + .05 };
+    bridges.push(b);
+    for (let q = k0; q <= k1; q++) bridgeCell[cellOf(q)] = bridges.length;
+  }
+}
+function deckY(b, u) { const t = clamp((u - b.u0) / b.L, 0, 1); return lerp(b.h0, b.h1, t) + BRIDGE_RISE * Math.sin(Math.PI * t); }
+// ground height for a unit: the deck on a bridge, else the terrain
+function walkY(x, z) { const i = bridgeCell[cellAt(x, z)], h = hAt(x, z); if (!i) return h; const b = bridges[i - 1]; return Math.max(h, deckY(b, b.alongZ ? z : x)); }
+const nearBridge = (x, z, d) => bridges.some(b => { const u = b.alongZ ? z : x, w = b.alongZ ? x : z; return Math.abs(w - b.c) < d && u > b.u0 - d && u < b.u1 + d; });
 function hAt(x, z) {
   x = clamp(x, 0, SIZE); z = clamp(z, 0, SIZE);
   const i = Math.min(Math.floor(x), V - 2), j = Math.min(Math.floor(z), V - 2), fx = x - i, fz = z - j;
@@ -460,7 +510,10 @@ function cellStats(a, b) {
 }
 
 const cH = new Float32Array(N * N), cS = new Float32Array(N * N);
-function cacheCells() { for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) { const n = b * N + a; cH[n] = hAt((a + .5) * CELL, (b + .5) * CELL); cS[n] = cellStats(a, b).spread; } }
+function cacheCells() {
+  for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) { const n = b * N + a; cH[n] = hAt((a + .5) * CELL, (b + .5) * CELL); cS[n] = cellStats(a, b).spread; }
+  for (let n = 0; n < N * N; n++) if (bridgeCell[n]) { cH[n] = walkY((n % N + .5) * CELL, (((n / N) | 0) + .5) * CELL); cS[n] = 0; }
+}
 
 // ---------- three setup ----------
 const canvas = $('#c');
@@ -758,6 +811,16 @@ function genTrees() {
   for (let cj = 0; cj < N; cj++) for (let ci = 0; ci < N; ci++) for (let a = 0; a < 3; a++) {
     const x = ci * CELL + hash(ci * 3 + a, cj) * CELL, z = cj * CELL + hash(cj + a * 7, ci * 5) * CELL;
     const dk = Math.hypot(x - KX, z - KZ);
+    if (MAP === 'isle') {
+      // woods on the island (clear round the castle and on the way to each bridge), forest beyond the river, none on the rock outcrops
+      const r = isleR(Math.atan2(z - KZ, x - KX)), mask = fbm(x * .08 + 20, z * .08 + 11), h = hAt(x, z);
+      if (dk < 7.5 || Math.abs(dk - r) < 3.4 || h <= 1 || nearBridge(x, z, 3) || isleRockSite(x, z, 5)) continue;
+      if (dk < r && ISLE_BRIDGES.some(d => { const a = d * Math.PI / 180, t = (x - KX) * Math.cos(a) + (z - KZ) * Math.sin(a); return t > 0 && Math.abs((z - KZ) * Math.cos(a) - (x - KX) * Math.sin(a)) < 2.2; })) continue;
+      const lone = hash(x * 2.1, z * 1.7) < .06;
+      const woods = dk < r ? dk > 8.5 && mask > .43 && hash(x * 1.3, z * .7) < (mask - .39) * 3 : mask > .46 && hash(x * 1.3, z * .7) < (mask - .4) * 3;
+      if (woods || lone) trees.push({ x, z, s: .75 + hash(z, x) * .5, k: 1 });
+      continue;
+    }
     if (dk < 7.5 || (z > KZ && Math.abs(x - KX) < 3 && dk < 16)) continue;
     const mask = fbm(x * .08 + 20, z * .08 + 11), h = hAt(x, z);
     const lone = hash(x * 2.1, z * 1.7) < .07, forest = dk > 12 && mask > .5 && hash(x * 1.3, z * .7) < (mask - .45) * 3 * sstep(12, 18, dk);
@@ -782,8 +845,22 @@ const treeFree = (t, now) => !t.dead && !t.cut && t.k >= 1 && !t.claim && !((t.b
 // ---------- rocks ----------
 let rocks = [];
 const rockGeo = new THREE.DodecahedronGeometry(.75, 0), rockMat = mat('#958f84'); addGrit(rockMat, 'rock');
+// River isle: three outcrops just beyond the far bank, between the bridges
+const isleRockSite = (x, z, d) => MAP === 'isle' && ISLE_ROCKS.some(g => { const a = g * Math.PI / 180, R = isleR(a) + 6.5; return Math.hypot(x - KX - Math.cos(a) * R, z - KZ - Math.sin(a) * R) < d; });
 function genRocks() {
   rocks.forEach(r => scene.remove(r.mesh)); rocks = [];
+  const addRock = (x, z, s0, rot) => { const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true; mesh.rotation.set(...rot); rocks.push({ x, z, amount: 5, s0, mesh }); scene.add(mesh); };
+  if (MAP === 'isle') {
+    for (const g of ISLE_ROCKS) {
+      const a = g * Math.PI / 180, R = isleR(a) + 6.5, cx = KX + Math.cos(a) * R, cz = KZ + Math.sin(a) * R;
+      for (let n = 0, k = 0; n < 300 && k < 7; n++) {
+        const x = cx + (Math.random() - .5) * 7, z = cz + (Math.random() - .5) * 7;
+        if (x < 1 || z < 1 || x > SIZE - 1 || z > SIZE - 1 || hAt(x, z) < 1 || rocks.some(r => Math.hypot(r.x - x, r.z - z) < 1.9)) continue;
+        addRock(x, z, .95 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
+      }
+    }
+    return;
+  }
   for (let n = 0; n < 6000 && rocks.length < 28; n++) {
     const x = 1 + Math.random() * (SIZE - 2), z = 1 + Math.random() * (SIZE - 2);
     if (Math.hypot(x - KX, z - KZ) < 12 || hAt(x, z) < 1.2 || slopeAt(x, z) < .75) continue;
@@ -831,7 +908,7 @@ function genClutter() {
 }
 function seatClutter() {
   for (const it of clutter) {
-    const c = CL[it.ci], cell = cellAt(it.x, it.z), s = (occB[cell] || road[cell]) ? 1e-4 : it.s;
+    const c = CL[it.ci], cell = cellAt(it.x, it.z), s = (occB[cell] || road[cell] || bridgeCell[cell]) ? 1e-4 : it.s;
     dummy.position.set(it.x, hAt(it.x, it.z) - .03, it.z); dummy.rotation.set(0, it.rot, 0);
     dummy.scale.set(s, s * .8, s); dummy.updateMatrix();
     c.mesh.setMatrixAt(it.n, dummy.matrix);
@@ -1384,6 +1461,46 @@ function makeStatue() {
   g.add(box(.05, .8, .05, M.stone2, .38, 2.5, 0));
   return g;
 }
+// a timber footbridge over the river: planks across a gentle arch, two log stringers, trestles standing in the water,
+// log railings, grey stone landings at both ends. Built along local z, then turned onto its axis.
+function makeBridge(b) {
+  const g = new THREE.Group(), L = b.L, W = 1.9, mid = (b.u0 + b.u1) / 2;
+  const yAt = z => deckY(b, mid + z), wx = z => b.alongZ ? b.c : mid + z, wz = z => b.alongZ ? mid + z : b.c;
+  for (const s of [-1, 1]) {                      // stone landings set into each bank
+    const z = s * (L / 2 - .5), y = yAt(z);
+    g.add(box(W + .6, 1.6, 1.1, M.plainStone, 0, y - .85, z));
+    for (const x of [-1, 1]) g.add(box(.34, .45, .34, M.plainStone, x * (W / 2 + .15), y + .2, s * (L / 2 - .25)));
+  }
+  const n = Math.round(L / .27);
+  for (let i = 0; i < n; i++) {
+    const z = -L / 2 + (i + .5) * L / n, dy = (yAt(z + .01) - yAt(z)) / .01;
+    const p = box(W + (i % 3 === 1 ? .12 : 0), .07, L / n - .025, M.wood, ((i * 37) % 5 - 2) * .015, yAt(z), z);
+    p.rotation.x = -Math.atan(dy); g.add(p);
+  }
+  const seg = (x, z0, z1, dy, r, m) => {        // a log from z0 to z1 following the deck, dy below/above it
+    const y0 = yAt(z0) + dy, y1 = yAt(z1) + dy, c = cyl(r, r, Math.hypot(z1 - z0, y1 - y0) + .04, 7, m, x, (y0 + y1) / 2, (z0 + z1) / 2);
+    c.rotation.x = Math.PI / 2 - Math.atan2(y1 - y0, z1 - z0); g.add(c);
+  };
+  const S = Math.max(4, Math.round(L / 1.2));
+  for (const x of [-.6, .6]) for (let i = 0; i < S; i++) seg(x, -L / 2 + i * L / S, -L / 2 + (i + 1) * L / S, -.12, .11, M.log);
+  // trestles wherever the deck crosses water, every ~2.4 m
+  for (let z = -L / 2 + 1.6; z < L / 2 - 1.5; z += 2.4) {
+    const gy = hAt(wx(z), wz(z)); if (gy > -.2) continue;
+    const top = yAt(z) - .2, bot = gy - .3;
+    for (const x of [-.75, .75]) g.add(cyl(.12, .14, top - bot, 8, M.log, x, (top + bot) / 2, z));
+    g.add(box(W + .3, .16, .26, M.log, 0, top, z));
+    for (const r of [.85, -.85]) { const br = box(.08, Math.min(1.9, (top - bot) * .9), .08, M.log, 0, top - .8, z); br.rotation.z = r; g.add(br); }
+  }
+  for (const x of [-W / 2 + .05, W / 2 - .05]) {
+    const k = Math.max(4, Math.round((L - .6) / 1.1)), zs = []; for (let i = 0; i <= k; i++) zs.push(-L / 2 + .3 + i * (L - .6) / k);
+    for (const z of zs) g.add(cyl(.05, .06, .78, 6, M.log, x, yAt(z) + .4, z));
+    for (let i = 0; i < k; i++) { seg(x, zs[i], zs[i + 1], .78, .045, M.log); seg(x, zs[i], zs[i + 1], .4, .035, M.log); }
+  }
+  g.position.set(b.alongZ ? b.c : mid, 0, b.alongZ ? mid : b.c); if (!b.alongZ) g.rotation.y = Math.PI / 2;
+  // turned onto x, local x flips to -z: harmless, the bridge is symmetric across its width
+  return g;
+}
+function buildBridges() { for (const b of bridges) { b.g = makeBridge(b); scene.add(b.g); } }
 const MODELS = { barracks: makeBarracks, house: makeHouse, tower: makeTower, castle: makeCastle, lodge: makeLodge, quarry: makeQuarry, farm: makeFarm,
   wall: makeWall, gate: makeGate, well: makeWell, torch: makeTorch, flowers: makeFlowers, statue: makeStatue };
 // grit: every mesh gets a slightly different, weathered copy of its material; tier 1 is dirtier and duller
@@ -1464,7 +1581,7 @@ function makeLine(color, opacity) {
   const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, toneMapped: false }));
   l.renderOrder = 10; l.visible = false; scene.add(l); return l;
 }
-const footLine = makeLine('#8cc46e', 1), ringLine = makeLine('#d4a84e', .7), reachLine = makeLine('#8fc1db', .8), selLine = makeLine('#f2c95e', 1);
+const rangeLine = makeLine('#8fc1db', .85), footLine = makeLine('#8cc46e', 1), ringLine = makeLine('#d4a84e', .7), reachLine = makeLine('#8fc1db', .8), selLine = makeLine('#f2c95e', 1);
 function setLine(line, pts) { line.geometry.dispose(); line.geometry = new THREE.BufferGeometry().setFromPoints(pts); line.visible = true; }
 function drape(line, x0, z0, x1, z1) {
   const pts = [], edge = (ax, az, bx, bz) => {
@@ -1647,7 +1764,7 @@ function evaluate(type, ci, cj, free) {
   const T = DEF[type], s = T.size, x0 = ci * CELL, z0 = cj * CELL, x1 = x0 + s * CELL, z1 = z0 + s * CELL;
   const r = { type, ci, cj, s, x0, z0, x1, z1, ok: true, reason: '' };
   if (ci < 0 || cj < 0 || ci + s > N || cj + s > N) return { ...r, ok: false, reason: 'Off the map' };
-  for (let b = cj; b < cj + s; b++) for (let a = ci; a < ci + s; a++) if (occB[b * N + a]) return { ...r, ok: false, reason: 'Occupied' };
+  for (let b = cj; b < cj + s; b++) for (let a = ci; a < ci + s; a++) { if (occB[b * N + a]) return { ...r, ok: false, reason: 'Occupied' }; if (bridgeCell[b * N + a]) return { ...r, ok: false, reason: 'Bridge' }; }
   // solid buildings can't sit on another building's door cell, or villagers coming out get trapped there
   if (!WALK[type] && type !== 'gate' && buildings.some(B => !B.dead && B.door && B.door.a >= ci && B.door.a < ci + s && B.door.b >= cj && B.door.b < cj + s))
     return { ...r, ok: false, reason: type === 'wall' ? 'Blocks a door · use a gate' : 'Blocks a door' };
@@ -1678,6 +1795,7 @@ function evaluateRoad(a, b) {
   const o = occB[b * N + a];
   if (o && o.type !== 'gate') return { ...r, ok: false, reason: 'Occupied' };
   if (road[b * N + a]) return { ...r, ok: false, reason: 'Already a path', soft: true };
+  if (bridgeCell[b * N + a]) return { ...r, ok: false, reason: 'Bridge' };
   const st = cellStats(a, b);
   if (st.mn < .4) return { ...r, ok: false, reason: 'Water' };
   if (st.spread >= 1.9) return { ...r, ok: false, reason: 'Too steep' };
@@ -1898,8 +2016,9 @@ const FARM_OBST = { 1: [[-1.0, -1.2, .55, .4], [.9, -1.2, .3, .3]], 2: [[1.1, -.
 function farmBlocked(B, x, z) { const c = center(B), [lx, lz] = unrot(B.face || 0, x - c.x, z - c.z); return FARM_OBST[B.tier].some(([ox, oz, hx, hz]) => Math.abs(lx - ox) < hx + .18 && Math.abs(lz - oz) < hz + .18); }
 function canStand(x, z, mode) {   // mode 0 villager, 1 worker, 2 enemy
   if (x < .5 || z < .5 || x > SIZE - .5 || z > SIZE - .5) return false;
+  if (bridgeCell[cellAt(x, z)]) return true;
   const h = hAt(x, z);
-  if (h < (mode === 2 ? -1.6 : mode === 1 ? .3 : .5)) return false;
+  if (h < (mode === 2 ? (MAP === 'isle' ? .3 : -1.6) : mode === 1 ? .3 : .5)) return false;   // raiders wade the meadow's river, never the isle's
   const b = occB[cellAt(x, z)];
   if (b && !WALK[b.type] && !(b.type === 'gate' && mode !== 2)) return false;
   if (b && b.type === 'farm' && farmBlocked(b, x, z)) return false;
@@ -2162,7 +2281,7 @@ function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz);
   if (d < stop) return true;
   let sp = v.speed * mult * (road[cellAt(v.x, v.z)] ? 1.6 : 1);
-  if (mode === 2 && hAt(v.x, v.z) < .4) sp *= .5;
+  if (mode === 2 && walkY(v.x, v.z) < .4) sp *= .5;
   const step = Math.min(d - stop * .5, sp * dt), base = Math.atan2(dx, dz);
   if (step < .002) return false;
   // commit to one side when walking around an obstacle, instead of flipping sides every frame
@@ -2193,6 +2312,7 @@ function smoothPos(u, dt, now) {
 function stride(u, dt, rate) { u.amp = (u.amp || 0) + ((u.walking ? 1 : 0) - (u.amp || 0)) * Math.min(1, dt * 6); if (u.amp > .02) u.phase += dt * rate; return u.amp; }
 // ---------- pathfinding: A* over the cell grid, then follow cell centres, skipping any we can see past ----------
 function cellPass(n, mode) {
+  if (bridgeCell[n]) return true;
   const o = occB[n]; if (o && !WALK[o.type] && !(o.type === 'gate' && mode !== 2)) return false;
   return cH[n] > (mode === 1 ? .2 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);
 }
@@ -2238,8 +2358,15 @@ function unstick(v, mode) {
 }
 // v.noProg: seconds since the unit last got 0.25 m closer to this target (unstick resets v.stuck, never this),
 // so callers can give up or settle for "near enough" instead of pushing at a spot forever
+// distance still to walk: along the planned path when there is one (a detour, e.g. round to a bridge, still counts as progress)
+function pathLeft(v, tx, tz) {
+  const p = v.path; if (!p || !p.length || Math.hypot(v.pathX - tx, v.pathZ - tz) > .6) return Math.hypot(tx - v.x, tz - v.z);
+  let d = Math.hypot(p[0].x - v.x, p[0].z - v.z);
+  for (let i = 1; i < p.length; i++) d += Math.hypot(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z);
+  return d + Math.hypot(tx - p[p.length - 1].x, tz - p[p.length - 1].z);
+}
 function trackProgress(v, tx, tz, dt) {
-  const d = Math.hypot(tx - v.x, tz - v.z), now = performance.now(), P = v.prog;
+  const d = pathLeft(v, tx, tz), now = performance.now(), P = v.prog;
   if (!P || now - P.seen > 300 || Math.hypot(P.x - tx, P.z - tz) > .6) v.prog = { x: tx, z: tz, best: d, t: 0, seen: now };
   else { P.seen = now; if (d < P.best - .25) { P.best = d; P.t = 0; } else P.t += dt; }
   v.noProg = v.prog.t; return d;
@@ -2469,7 +2596,7 @@ function updateVillagers(dt, now) {
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
     v.arms[0].rotation.x = ease(v.arms[0].rotation.x, L); v.arms[1].rotation.x = ease(v.arms[1].rotation.x, Rt); v.body.rotation.x = ease(v.body.rotation.x, lean);
     if (v.soldier) (v.toolKind === 'spear' ? spearPose : swordPose)(v, v.attackT || 0, swing);   // exact: eased, the strikes go soft
-    smoothPos(v, dt, now); v.g.position.set(v.rx, hAt(v.rx, v.rz), v.rz);
+    smoothPos(v, dt, now); v.g.position.set(v.rx, walkY(v.rx, v.rz), v.rz);
     if (v.sbar) { const on = v.soldier && v.hp < v.maxHp; v.sbar.grp.visible = on; if (on) { v.sbar.set(v.hp / v.maxHp); v.sbar.grp.position.set(v.rx, v.g.position.y + 1.5 * UNIT_K, v.rz); } }
   }
 }
@@ -2615,7 +2742,7 @@ function updateEnemies(dt) {
   for (let n = enemies.length - 1; n >= 0; n--) {
     const e = enemies[n];
     if (e.dead) {
-      e.deadT += dt; e.body.rotation.x = -Math.min(1.5, e.deadT * 4); e.g.position.y = hAt(e.x, e.z) - Math.max(0, e.deadT - 1.2) * .6;
+      e.deadT += dt; e.body.rotation.x = -Math.min(1.5, e.deadT * 4); e.g.position.y = walkY(e.x, e.z) - Math.max(0, e.deadT - 1.2) * .6;
       if (e.deadT > 2.4) { scene.remove(e.g); scene.remove(e.bar.grp); enemies.splice(n, 1); }
       continue;
     }
@@ -2664,7 +2791,7 @@ function updateEnemies(dt) {
     if (e.kind === 'archer') bowPose(e, e.aiming && !(e.attackT > 0) && e.cool < DRAW, e.attackT > 0, -.35 - sw * .3, -sw * .6);
     else if (e.kind === 'spear') { e.arms[0].rotation.x = -.55 - sw * .2; spearPose(e, e.attackT, sw); }   // level at the hip, thrust out
     else { e.arms[0].rotation.x = -.55 - sw * .2; swordPose(e, e.attackT, sw); }
-    smoothPos(e, dt, performance.now()); const y = hAt(e.rx, e.rz);
+    smoothPos(e, dt, performance.now()); const y = walkY(e.rx, e.rz);
     e.g.position.set(e.rx, y < 0 ? y * .4 - .2 : y, e.rz);
     e.bar.grp.visible = e.hp < e.max; e.bar.set(e.hp / e.max); e.bar.grp.position.set(e.rx, e.g.position.y + 1.6 * UNIT_K + (e.horse ? SADDLE : 0), e.rz);
   }
@@ -2790,7 +2917,7 @@ function hurtSoldier(v, d) {
 function updateFallen(dt) {
   for (let n = fallen.length - 1; n >= 0; n--) {
     const f = fallen[n], v = f.v; f.t += dt;
-    v.body.rotation.x = -Math.min(1.5, f.t * 4); v.g.position.y = hAt(v.x, v.z) - Math.max(0, f.t - 1.2) * .6;
+    v.body.rotation.x = -Math.min(1.5, f.t * 4); v.g.position.y = walkY(v.x, v.z) - Math.max(0, f.t - 1.2) * .6;
     if (f.t > 2.4) { scene.remove(v.g); fallen.splice(n, 1); }
   }
   if (PH.kind !== 'day') return;
@@ -3011,6 +3138,7 @@ const DEM_ICO = '<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L2
 const STAT = (ico, txt, cls = '') => `<span class="stat ${cls}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
 function refreshCard() {
   const card = $('#card');
+  syncRange();
   if (!selected) { card.hidden = true; return; }
   $('#cardHp').parentElement.hidden = !!selected.path;
   if (selected.path) {                                 // a path tile: just a name and Demolish (no refund)
@@ -3075,6 +3203,14 @@ function selectPath(a, b) {
 }
 function removePath(P) { road[P.b * N + P.a] = 0; rebuildRoads(); villagers.forEach(v => v.path = null); sfx('click'); deselect(); }
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
+// archers' reach round a selected castle or archer tower; redrawn when the tier changes
+let rangeKey = '';
+function syncRange() {
+  const B = selected, T = B && !B.path && DEF[B.type], k = T && T.range ? B.id + ':' + B.tier : '';
+  if (k === rangeKey) return; rangeKey = k;
+  if (!k) { rangeLine.visible = false; return; }
+  const c = center(B); drapeCircle(rangeLine, c.x, c.z, T.range[B.tier - 1]);
+}
 function deselect() { selected = null; selLine.visible = false; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
 $('#rotBtn').addEventListener('click', rotatePlacement);
@@ -3271,11 +3407,21 @@ document.addEventListener('webkitfullscreenchange', () => { syncFs(); resize(); 
 syncFs();
 let resetArmed = 0;
 $('#reset').addEventListener('click', () => {
-  if (resetArmed && performance.now() - resetArmed < 3000) { resetArmed = 0; $('#reset').innerHTML = PICO.restart; $('#reset').classList.remove('armed'); startGame(); return; }
+  if (resetArmed && performance.now() - resetArmed < 3000) { resetArmed = 0; $('#reset').innerHTML = PICO.restart; $('#reset').classList.remove('armed'); showMapPick(); return; }
   resetArmed = performance.now(); $('#reset').innerHTML = PICO.tick; $('#reset').classList.add('armed');
   setTimeout(() => { if (resetArmed && performance.now() - resetArmed >= 2900) { resetArmed = 0; $('#reset').innerHTML = PICO.restart; $('#reset').classList.remove('armed'); } }, 3000);
 });
-$('#again').addEventListener('click', startGame);
+$('#again').addEventListener('click', showMapPick);
+// map picker: shown on entry and on Restart / Play again; the game waits (paused) underneath
+function showMapPick() {
+  if (paused && !$('#pausedTag').hidden) setPaused(false);
+  $('#summary').hidden = true; paused = true; hideGhost(); $('#mapPick').hidden = false;
+  document.querySelectorAll('.mapBtn').forEach(b => b.classList.toggle('last', b.dataset.map === MAP));
+}
+document.querySelectorAll('.mapBtn').forEach(b => b.addEventListener('click', () => {
+  MAP = b.dataset.map; try { localStorage.setItem('mtd-map', MAP); } catch (e) {}
+  $('#mapPick').hidden = true; paused = false; startGame();
+}));
 addEventListener('keydown', e => {
   if (/^(w|a|s|d|q|e|arrow)/i.test(e.key)) { heldKeys.add(e.key.toLowerCase()); return; }
   const map = { v: 'select', V: 'select', 1: 'house', 2: 'farm', 3: 'lodge', 4: 'quarry', 5: 'tower', 6: 'wall', 7: 'gate', 8: 'barracks', r: 'road', R: 'road' };
@@ -3423,11 +3569,12 @@ function startGame() {
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
-  genTerrain(); genTrees(); genRocks(); genClutter(); syncTerrain(); hideGhost(); deselect();
+  if (MAP === 'isle') { KX = 27; KZ = 27; } else { KX = 19; KZ = 27; }
+  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); buildBridges(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
   stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
   $('#summary').hidden = true; $('#log').innerHTML = '';
-  const ev = findValid('castle', 8, 12, { free: true });
+  const ev = MAP === 'isle' ? findValid('castle', 12, 12, { free: true }) : findValid('castle', 8, 12, { free: true });
   if (ev) { const B = place('castle', ev.ci, ev.cj, { instant: true, free: true, quiet: true }); const c = center(B); target.set(c.x, 2, c.z); }
   updateCam();
   log('Drag · twist · pinch');
@@ -3439,6 +3586,7 @@ function startGame() {
 
 // ---------- loop ----------
 resize(); startGame();
+if (!/[?&](gallery|debug|map=)/.test(location.search)) showMapPick();
 const easeOut = t => 1 - Math.pow(1 - t, 3);
 const BAR_TOP = { barracks: 3.4, house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
 let last = performance.now(), hudT = 0, buildT = 0;
