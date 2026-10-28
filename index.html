@@ -604,19 +604,16 @@ terrainMat.onBeforeCompile = sh => {
 const terrain = new THREE.Mesh(tGeo, terrainMat);
 terrain.receiveShadow = true; scene.add(terrain);
 const waterMat = new THREE.MeshStandardMaterial({ color: '#3e6e7a', transparent: true, opacity: .85, roughness: .7, metalness: 0 });   // rough enough that low-angle views don't glare white
-const SKIRT = 50;   // scenery beyond the playable map on every side (see genSkirt); the water plane covers it too
-const water = new THREE.Mesh(new THREE.PlaneGeometry(SIZE + 2 * SKIRT, SIZE + 2 * SKIRT).rotateX(-Math.PI / 2).translate(SIZE / 2, 0, SIZE / 2), waterMat);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE).rotateX(-Math.PI / 2).translate(SIZE / 2, 0, SIZE / 2), waterMat);
 water.receiveShadow = true; scene.add(water);
 // flowing water: two layers of soft noise drift with the current (down the Meadow's river, round the isle's ring) and
 // lighten the surface in streaks; where the bed is shallow a band of broken foam laps at the bank. The bed's height comes
 // from a small texture of the heightmap (hTex, refreshed by syncTerrain).
-const HV = SIZE + 2 * SKIRT + 1, hData = new Uint8Array(HV * HV * 4), hTex = new THREE.DataTexture(hData, HV, HV, THREE.RGBAFormat);   // the bed under the map and its skirt
+const hData = new Uint8Array(V * V * 4), hTex = new THREE.DataTexture(hData, V, V, THREE.RGBAFormat);   // the bed under the water
 hTex.magFilter = hTex.minFilter = THREE.LinearFilter;
 const waterU = { uIsle: { value: 0 }, uC: { value: new THREE.Vector2() } };
-const outH = new Float32Array(HV * HV); let outHKey = '';
 function syncWaterTex() {
-  if (outHKey !== MAP) { outHKey = MAP; for (let j = 0; j < HV; j++) for (let i = 0; i < HV; i++) outH[j * HV + i] = genHeight(i - SKIRT, j - SKIRT); }   // the skirt never changes within a game
-  for (let j = 0; j < HV; j++) for (let i = 0; i < HV; i++) { const x = i - SKIRT, z = j - SKIRT, h = x >= 0 && z >= 0 && x <= SIZE && z <= SIZE ? H[idx(x, z)] : outH[j * HV + i]; hData[(j * HV + i) * 4] = clamp(Math.round((h + 3) / 6 * 255), 0, 255); }
+  for (let k = 0; k < V * V; k++) hData[k * 4] = clamp(Math.round((H[k] + 3) / 6 * 255), 0, 255);
   hTex.needsUpdate = true; waterU.uIsle.value = MAP === 'isle' ? 1 : 0; waterU.uC.value.set(KX, KZ);
 }
 waterMat.onBeforeCompile = sh => {
@@ -633,7 +630,7 @@ waterMat.onBeforeCompile = sh => {
       return p - vec2(0.0, uTime * .55 * k);
     }
     ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float bed = texture2D(uH, (vWP.xz + ${SKIRT}.5) / ${HV}.0).r * 6.0 - 3.0, depth = -bed;
+    float bed = texture2D(uH, (vWP.xz + .5) / ${V}.0).r * 6.0 - 3.0, depth = -bed;
     vec2 q1 = flowAt(vWP.xz, 1.0), q2 = flowAt(vWP.xz, 1.6);
     float streak = smoothstep(.5, .85, wn(q1 * 1.1) * .55 + wn(q2 * 2.4) * .45), dark = smoothstep(.55, .2, wn(q2 * .7 + 3.1));
     diffuseColor.rgb *= .88 + .12 * dark;
@@ -661,61 +658,34 @@ function recolor() {
     tCol[k * 3] = tmpC.r; tCol[k * 3 + 1] = tmpC.g; tCol[k * 3 + 2] = tmpC.b;
   }
 }
-// ---------- the scenery skirt: land and forest beyond the playable map, so zooming out never shows the void ----------
-// One more terrain mesh, 1 m vertices from -SKIRT to SIZE + SKIRT, following genHeight (rivers and hills run on out of the
-// map). Its edge vertices take the map's own heights so the two meet without a seam; inside the map it sinks out of sight.
-// Nothing out here is part of the game: no cells, no building, no units.
-const SV = SIZE + 2 * SKIRT + 1, skPos = new Float32Array(SV * SV * 3), skCol = new Float32Array(SV * SV * 3), skIdx = [];
-for (let j = 0; j < SV - 1; j++) for (let i = 0; i < SV - 1; i++) { const a = j * SV + i, b = a + 1, c = a + SV, d = c + 1; skIdx.push(a, c, b, b, c, d); }
-const skGeo = new THREE.BufferGeometry();
-skGeo.setAttribute('position', new THREE.BufferAttribute(skPos, 3)); skGeo.setAttribute('color', new THREE.BufferAttribute(skCol, 3)); skGeo.setIndex(skIdx);
-const skirt = new THREE.Mesh(skGeo, terrainMat); skirt.receiveShadow = true; scene.add(skirt);
-// the edge of the buildable map: a pale band laid on the ground all round it (the land beyond is shaded darker too)
-const boundMat = new THREE.MeshBasicMaterial({ color: '#f3e3b0', transparent: true, opacity: .6, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
-const boundary = new THREE.Mesh(new THREE.BufferGeometry(), boundMat); boundary.renderOrder = 2; scene.add(boundary);
-function buildBoundary() {
-  const pos = [], w = .28, y = (x, z) => Math.max(hAt(x, z), 0) + .07;
-  const strip = (ax, az, bx, bz, nx, nz) => {        // a band along one edge, nx/nz pointing inward
-    const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / .5);
-    for (let i = 0; i < n; i++) {
-      const t0 = i / n, t1 = (i + 1) / n, x0 = lerp(ax, bx, t0), z0 = lerp(az, bz, t0), x1 = lerp(ax, bx, t1), z1 = lerp(az, bz, t1);
-      const p = [[x0, z0], [x1, z1], [x1 + nx * w, z1 + nz * w], [x0 + nx * w, z0 + nz * w]].map(([x, z]) => [x, y(x, z), z]);
-      pos.push(...p[0], ...p[2], ...p[1], ...p[0], ...p[3], ...p[2]);
+// ---------- the map's sides: solid earth from the ground's edge down, and water where a river runs off the edge ----------
+// so seen from a low angle the map is a block of land, not a paper-thin sheet
+const EDGE_BASE = -4;
+const edgeEarth = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, side: THREE.DoubleSide }));
+const edgeWater = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: '#3d6e86', transparent: true, opacity: .85, roughness: .7, side: THREE.DoubleSide }));
+edgeEarth.receiveShadow = true; scene.add(edgeEarth, edgeWater);
+function buildEdges() {
+  const ep = [], ec = [], wp = [], c = new THREE.Color();
+  // earth colour by depth below the rim: a grassy lip, then soil, darker and stonier further down
+  const col = (y, top, x, z) => { const d = top - y; c.set(d < .12 ? '#5f7a35' : d < 1.2 ? '#7a5d3e' : '#665241'); c.multiplyScalar(.9 + .2 * hash(x * 1.3 + y, z * .7 - y)); return [c.r, c.g, c.b]; };
+  const side = pts => {                       // pts: edge vertices [x, z] in order along one side
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], h0 = H[idx(x0, z0)], h1 = H[idx(x1, z1)];
+      const q = [[x0, h0, z0], [x1, h1, z1], [x1, EDGE_BASE, z1], [x0, EDGE_BASE, z0]];
+      for (const k of [0, 1, 2, 0, 2, 3]) { ep.push(...q[k]); ec.push(...col(q[k][1], k === 1 || k === 2 ? h1 : h0, q[k][0], q[k][2])); }
+      if (h0 < 0 || h1 < 0) {                 // the river's cross-section where it leaves the map
+        const w = [[x0, Math.min(h0, 0), z0], [x1, Math.min(h1, 0), z1], [x1, 0, z1], [x0, 0, z0]];
+        for (const k of [0, 1, 2, 0, 2, 3]) wp.push(...w[k]);
+      }
     }
   };
-  const e = .05, S = SIZE - .05;
-  strip(e, e, S, e, 0, 1); strip(S, e, S, S, -1, 0); strip(S, S, e, S, 0, -1); strip(e, S, e, e, 1, 0);
-  boundary.geometry.dispose(); boundary.geometry = new THREE.BufferGeometry(); boundary.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-}
-const skTrunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(.13, .18, .9, 5).translate(0, .45, 0), new THREE.MeshStandardMaterial({ color: '#4d3622', flatShading: true }), 3000);
-const skCrowns = new THREE.InstancedMesh(new THREE.ConeGeometry(.85, 2.3, 6).translate(0, 1.9, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true }), 3000);
-skCrowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(3000 * 3), 3); skTrunks.count = skCrowns.count = 0;
-skTrunks.castShadow = skCrowns.castShadow = false;   // no shadows out here: thousands of shadow-casting trees halve the frame rate skTrunks.frustumCulled = skCrowns.frustumCulled = false; scene.add(skTrunks, skCrowns);   // r128 culls instances by the mesh origin
-function genSkirt() {
-  const inside = (x, z) => x > 0 && z > 0 && x < SIZE && z < SIZE, edge = (x, z) => x >= 0 && z >= 0 && x <= SIZE && z <= SIZE;
-  const hy = (x, z) => edge(x, z) ? H[idx(x, z)] : genHeight(x, z);
-  for (let j = 0; j < SV; j++) for (let i = 0; i < SV; i++) {
-    const k = j * SV + i, x = i - SKIRT, z = j - SKIRT, h = inside(x, z) ? H[idx(x, z)] - 4 : hy(x, z);
-    skPos[k * 3] = x; skPos[k * 3 + 1] = h; skPos[k * 3 + 2] = z;
-    const sl = Math.hypot(hy(x + 1, z) - hy(x - 1, z), hy(x, z + 1) - hy(x, z - 1)) / 2;
-    tmpC.copy(C.grass2).lerp(C.grass, clamp((fbm(x * .21 + 40, z * .21) - .25) * 2, 0, 1));
-    tmpC.lerp(C.dry, sstep(.55, .72, fbm(x * .09 + 70, z * .09 + 30)) * .4);
-    tmpC.lerp(C.sand, sstep(.8, .2, h)); tmpC.lerp(C.bed, sstep(-.1, -.8, h)); tmpC.lerp(C.rock, sstep(.55, 1.1, sl));
-    tmpC.multiplyScalar((.94 + .1 * hash(x * 1.7, z * 2.3)) * .72);   // shaded: not part of the game
-    skCol[k * 3] = tmpC.r; skCol[k * 3 + 1] = tmpC.g; skCol[k * 3 + 2] = tmpC.b;
+  const e = [...Array(SIZE + 1).keys()];
+  side(e.map(i => [i, 0])); side(e.map(i => [SIZE, i])); side(e.map(i => [SIZE - i, SIZE])); side(e.map(i => [0, SIZE - i]));
+  for (const [m, pos, cols] of [[edgeEarth, ep, ec], [edgeWater, wp, null]]) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    if (cols) g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.computeVertexNormals();
+    m.geometry.dispose(); m.geometry = g;
   }
-  skGeo.attributes.position.needsUpdate = skGeo.attributes.color.needsUpdate = true; skGeo.computeVertexNormals(); skGeo.computeBoundingSphere();
-  // forest beyond the map: denser than inside, thinning far out
-  let n = 0; const tc = new THREE.Color();
-  for (let z = -SKIRT + 1; z < SIZE + SKIRT - 1 && n < 3000; z += 2.5) for (let x = -SKIRT + 1; x < SIZE + SKIRT - 1 && n < 3000; x += 2.5) {
-    if (edge(x, z) || x > -1.5 && z > -1.5 && x < SIZE + 1.5 && z < SIZE + 1.5) continue;
-    const px = x + (hash(x, z) - .5) * 1.6, pz = z + (hash(z, x * 1.3) - .5) * 1.6, h = genHeight(px, pz), mask = fbm(px * .08 + 20, pz * .08 + 11);
-    if (h < 1 || mask < .38 || hash(px * 1.3, pz * .7) > (mask - .3) * 2.6) continue;
-    const s = .8 + hash(pz, px) * .6; dummy.position.set(px, h - .05, pz); dummy.rotation.set(0, hash(px, pz) * 6, 0); dummy.scale.set(s, s, s); dummy.updateMatrix();
-    skTrunks.setMatrixAt(n, dummy.matrix); skCrowns.setMatrixAt(n, dummy.matrix);
-    const r = hash(px * 3.3, pz * 1.1); tc.setHSL(.27 + (r - .5) * .07, .3 + r * .15, .16 + hash(pz, px * 2) * .09); skCrowns.setColorAt(n, tc); n++;
-  }
-  skTrunks.count = skCrowns.count = n; skTrunks.instanceMatrix.needsUpdate = skCrowns.instanceMatrix.needsUpdate = skCrowns.instanceColor.needsUpdate = true;
 }
 const gIdx = [];
 for (let n = 0; n <= N; n++) { const L = n * CELL; for (let s = 0; s < V - 1; s++) { gIdx.push(idx(s, L), idx(s + 1, L)); gIdx.push(idx(L, s), idx(L, s + 1)); } }
@@ -1161,7 +1131,7 @@ function doorCell(ev, type, f) {
 const doorOk = d => d.a >= 0 && d.b >= 0 && d.a < N && d.b < N && cellPass(d.b * N + d.a, 1);
 function syncTerrain() {
   for (let k = 0; k < V * V; k++) tPos[k * 3 + 1] = H[k];
-  tGeo.attributes.position.needsUpdate = true; cacheCells(); syncWaterTex();
+  tGeo.attributes.position.needsUpdate = true; cacheCells(); syncWaterTex(); buildEdges();
   recolor(); tGeo.attributes.color.needsUpdate = true; tGeo.computeBoundingSphere();
   tGeo.computeVertexNormals();   // the shadow lookup reads normals even with no normal bias; without them the ground received no shadows
   gIdx.forEach((k, n) => { gPos[n * 3 + 1] = H[k] + .06; }); gGeo.attributes.position.needsUpdate = true;
@@ -3783,7 +3753,7 @@ function startGame() {
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
   if (MAP === 'isle') { KX = 27; KZ = 27; } else { KX = 19; KZ = 27; }
-  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); genSkirt(); buildBoundary(); buildBridges(); genShore(); hideGhost(); deselect();
+  genTerrain(); genBridges(); genTrees(); genRocks(); genClutter(); syncTerrain(); buildBridges(); genShore(); hideGhost(); deselect();
   Object.assign(res, { gold: 40, wood: 45, stone: 0, food: 20 });
   stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: performance.now() };
   $('#summary').hidden = true; $('#log').innerHTML = '';
