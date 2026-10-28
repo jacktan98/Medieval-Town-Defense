@@ -163,14 +163,12 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .tools button b{font-family:var(--body);font-weight:700;font-size:12px;line-height:1.15}
 .tools button small{font-size:10.5px;line-height:1.1}
 .tools button small .cost .ico{width:11px;height:11px}
-.card{border-radius:10px;border-color:#6b5a2e;padding:6px 7px;gap:4px;box-shadow:0 2px 10px rgba(0,0,0,.35);width:min(228px,100%);align-self:flex-end}   /* as narrow as its content, on the right, the view open on the left */
+.card{border-radius:10px;border-color:#6b5a2e;padding:7px 8px;gap:5px;box-shadow:0 2px 10px rgba(0,0,0,.35);width:fit-content;max-width:min(400px,100%);align-self:flex-end}   /* as narrow as its content (a path's is tiny), on the right */
 .cardHead{display:flex;align-items:center;gap:6px}
 .cardHead .iconBtn{width:30px;min-width:30px;height:30px;min-height:30px}
 .cardIco{width:30px;height:30px;border-radius:7px;background:#24261f;border:1px solid #4a4838;display:inline-flex;align-items:center;justify-content:center;color:var(--gold);flex-shrink:0}
 .cardIco svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.cardName{flex:0 0 auto;min-width:0}
-#cardStats{justify-content:flex-end;gap:2px 9px} .cardHead .headGap{flex:1} .cardName{text-align:right} .cardName .cardSub{justify-content:flex-end}
-.card .row .iconBtn{flex:0 0 auto;width:30px;min-width:30px;height:30px;min-height:30px;padding:0} .card .row .iconBtn svg{width:15px;height:15px} .cardHead #demBtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round} .cardHead #demBtn{flex:0 0 auto;min-height:30px;height:30px;border-radius:7px;padding:0 9px;display:inline-flex;align-items:center;gap:5px}
+.cardName{flex:1;min-width:0}
 .card h4{font-size:15px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cardSub{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;line-height:1.2}
 .pips{display:inline-flex;gap:3px} .pips i{width:6px;height:6px;border-radius:50%;background:#3a3a30;border:1px solid #6b5a2e} .pips i.on{background:var(--gold);border-color:var(--gold)}
@@ -179,12 +177,12 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .stat{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--parch);font-variant-numeric:tabular-nums}
 .stat .ico{width:12px;height:12px}
 .stat.good{color:var(--ok)} .stat.warn{color:#e6c46a} .stat.bad{color:var(--bad)}
-.card .row{gap:4px;flex-wrap:wrap;justify-content:flex-end} .card .row .cost{gap:2px} .card .row .cost + .cost{margin-left:3px} .card .row .cost .ico{width:12px;height:12px}
-.card .row button{flex:0 0 auto;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 6px;gap:4px}
+.card .row{gap:5px;flex-wrap:nowrap} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
+.card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
 .card .row button.primary{background:#3d3520;flex:1 0 auto}
 .card .row button.danger,.card .row button.ib{flex:0 0 auto} button.danger.armed{background:#8f3326;border-color:var(--bad);color:#fff} .card .row button.danger.armed{min-width:46px;justify-content:center}
 button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-.mini{display:inline-block;width:38px;height:5px;border-radius:3px;background:#3a3a30;overflow:hidden;margin-right:2px} .mini i{display:block;height:100%;background:#e6c46a} .card .row button.ib{width:30px;padding:0}
+.mini{display:inline-block;width:38px;height:5px;border-radius:3px;background:#3a3a30;overflow:hidden;margin-right:2px} .mini i{display:block;height:100%;background:#e6c46a} .card .row button.ib{width:34px;padding:0}
 .card .row .bIco{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #pauseBtn{position:absolute;top:8px;right:max(8px,env(safe-area-inset-right,0px));width:38px;height:38px;min-height:38px;background:var(--panel);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .pausedTag{position:absolute;inset:0;transform:none;top:0;left:0;display:flex;align-items:flex-start;justify-content:center;padding-top:18vh;background:rgba(10,12,10,.35);pointer-events:none;font-family:inherit;font-size:inherit;text-shadow:none}
@@ -293,9 +291,10 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
   <div class="dock">
     <div class="card" id="card" hidden>
       <div class="cardHead">
-        <button class="iconBtn" id="cardRotBtn" hidden aria-label="Rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button><button class="iconBtn" id="closeCard" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg></button><span class="headGap"></span>
-        <div class="cardName"><h4 id="cardTitle"></h4><div class="cardSub"><span id="cardSub"></span><span class="pips" id="cardPips"></span></div></div>
         <span class="cardIco" id="cardIco"></span>
+        <div class="cardName"><h4 id="cardTitle"></h4><div class="cardSub"><span id="cardSub"></span><span class="pips" id="cardPips"></span></div></div>
+        <button class="iconBtn" id="cardRotBtn" hidden aria-label="Rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button>
+        <button class="iconBtn" id="closeCard" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg></button>
       </div>
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
