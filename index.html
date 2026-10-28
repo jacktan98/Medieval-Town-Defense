@@ -176,7 +176,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .stats{display:flex;flex-wrap:wrap;gap:2px 11px}
 .stat{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--parch);font-variant-numeric:tabular-nums}
 .stat .ico{width:12px;height:12px} .stat{cursor:pointer}
-.statTip{position:fixed;z-index:200;transform:translate(-50%,-100%);margin-top:-6px;padding:3px 8px;border-radius:6px;background:#1c1d18;border:1px solid #6b5a2e;color:var(--parch);font-size:12px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.statTip{position:fixed;z-index:200;transform:translate(-50%,-100%);margin-top:-6px;padding:3px 8px;border-radius:6px;background:#1c1d18;border:1px solid #6b5a2e;color:var(--parch);font-size:12px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.4)} .statTip.below{transform:translate(-50%,0);margin-top:6px}
 .stat.good{color:var(--ok)} .stat.warn{color:#e6c46a} .stat.bad{color:var(--bad)}
 .card .row{gap:5px;flex-wrap:nowrap;justify-content:flex-end} .card .row .cost + .cost{margin-left:4px} .card .row .cost .ico{width:13px;height:13px}
 .card .row button{flex:1 1 0;min-width:0;min-height:30px;font-size:12.5px;border-radius:7px;background:#24261f;flex-direction:row;gap:5px;flex-wrap:nowrap;white-space:nowrap;padding:0 8px}
@@ -3293,12 +3293,18 @@ function selectPath(a, b) {
 function removePath(P) { road[P.b * N + P.a] = 0; rebuildRoads(); villagers.forEach(v => v.path = null); sfx('click'); deselect(); }
 let statTipT = 0;
 document.body.appendChild($('#statTip'));   // out of the dock: its transform would offset a fixed tooltip
-$('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the stats are redrawn every .2 s, which can swallow a click
-  const st = e.target.closest('.stat'); if (!st || !st.dataset.name) return;
-  const r = st.getBoundingClientRect(), tip = $('#statTip');
-  tip.textContent = st.dataset.name; tip.style.left = (r.left + r.width / 2) + 'px'; tip.style.top = r.top + 'px'; tip.hidden = false;
+// a name tooltip over (or, for the top bar, under) an icon, for 1.6 s
+function showTip(el, name, below) {
+  const r = el.getBoundingClientRect(), tip = $('#statTip');
+  tip.textContent = name; tip.classList.toggle('below', !!below);
+  tip.style.left = (r.left + r.width / 2) + 'px'; tip.style.top = (below ? r.bottom : r.top) + 'px'; tip.hidden = false;
   clearTimeout(statTipT); statTipT = setTimeout(() => { tip.hidden = true; }, 1600);
+}
+$('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the stats are redrawn every .2 s, which can swallow a click
+  const st = e.target.closest('.stat'); if (st && st.dataset.name) showTip(st, st.dataset.name);
 });
+const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cPop: 'Working villagers' };
+for (const id in CHIP_NAME) $('#' + id).addEventListener('pointerdown', e => showTip(e.currentTarget, CHIP_NAME[id], true));
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
 // archers' reach round a selected castle or archer tower; redrawn when the tier changes
 let rangeKey = '';
