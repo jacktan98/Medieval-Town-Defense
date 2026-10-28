@@ -2034,14 +2034,44 @@ const JOB_TOOL = { lodge: 'axe', quarry: 'pick', farm: 'hoe' };
 // down on one knee by c (0 standing … 1 kneeling): body lowered, front leg forward, back leg behind
 function kneel(p, c) { p.body.position.y = -.2 * c; p.legs[0].rotation.x = -1.3 * c; p.legs[1].rotation.x = .6 * c; }
 // working swings (t in seconds): right arm R, free arm L, tool tilt, body lean; w is the swing sine (a strike sounds as it passes +0.85)
+// one work stroke over a cycle p (0–1): a slow eased wind-up (w 0 → -1, tool raised), a fast strike (→ +1), a short hold at
+// impact, then the recovery back to 0; w passing +0.85 is the hit (sound, chips)
+function stroke(p) { return p < .5 ? -sstep(0, .5, p) : p < .62 ? lerp(-1, 1, Math.pow((p - .5) / .12, 1.6)) : p < .72 ? 1 : 1 - sstep(.72, 1, p); }
 const TOOL_POSE = {
-  axe: t => { const w = Math.sin(t * 5.8); return { w, R: -1.75 + w * .95, L: -.35 - w * .15, tilt: -.6, lean: .08 - w * .06 }; },     // one-handed chop, free arm steadies
-  // pick and hoe work low: the mason drops onto one knee as the pick comes down, the farmer stays crouched and dips with each stroke
-  // (crouch → kneel(); the figure only bends at the ground, so a forward lean would tip it over)
-  pick: t => { const w = Math.sin(t * 5.2); return { w, R: -1.5 + w, L: -.35 - w * .15, tilt: -.75, lean: .08, crouch: .3 + .4 * (w + 1) / 2 }; },
-  hoe: t => { const w = Math.sin(t * 4.8); return { w, R: -.85 + w * .35, L: -.25, tilt: -.32, lean: .1, crouch: .55 + .2 * w }; },
-  hammer: t => { const w = Math.sin(t * 8.5); return { w, R: -1.25 + w * .55, L: -.75, tilt: -.95, lean: .12 }; },
+  // chopping: the whole body twists away on the wind-up and into the trunk on the blow; the free arm steadies
+  axe: t => { const w = stroke(t / 1.1 % 1); return { w, R: -1.85 + w * .75, L: -.35 - w * .15, tilt: -.6, lean: .06, twist: -.35 * w }; },   // lands at chest height on the trunk
+  // pick and hoe work low (crouch → kneel(); the figure only bends at the ground, so a forward lean would tip it over):
+  // the mason rises as the pick goes up and drops onto his knee as it lands
+  pick: t => { const w = stroke(t / 1.25 % 1); return { w, R: -1.5 + w, L: -.35 - w * .15, tilt: -.75, lean: .06, crouch: .2 + .55 * (w + 1) / 2 }; },
+  // the farmer lifts the hoe, chops it into the soil, then drags it back towards himself (the recovery), crouched throughout
+  hoe: t => { const w = stroke(t / 1.05 % 1); return { w, R: -.85 + w * .35, L: -.25, tilt: -.32, lean: .1, crouch: .5 + .25 * Math.max(w, 0), twist: -.1 * w }; },
+  // builders: three light taps and a big blow; half of them kneel to work low (by seed), the rest stand
+  hammer: (t, seed = 0) => {
+    const p = t / 1.9 % 1, big = p >= .6, w = stroke(big ? (p - .6) / .4 : p / .2 % 1), amp = big ? .85 : .4;
+    return { w, big, R: -1.25 + w * amp, L: -.75, tilt: -.95, lean: .1, crouch: Math.sin(seed * 12.9) > 0 ? .55 : 0 };
+  },
 };
+// chips thrown up at each hit: wood from an axe, stone from a pick, clods from a hoe, splinters from a hammer
+const CHIP = { axe: ['#c9a271', .9, 6], pick: ['#a39d8f', .12, 6], hoe: ['#6b5236', .06, 5], hammer: ['#d8c49a', .5, 3] };   // colour, height of the hit, count
+const chipGeo = new THREE.BoxGeometry(.045, .03, .045), chipMats = {}, chips = [];
+function chipBurst(v, kind, big) {
+  const c = CHIP[kind]; if (!c || chips.length > 120) return;
+  const a = v.g.rotation.y, x = (v.rx ?? v.x) + Math.sin(a) * .6, z = (v.rz ?? v.z) + Math.cos(a) * .6, g = hAt(x, z);
+  const m0 = chipMats[kind] = chipMats[kind] || mat(c[0]);
+  for (let n = 0; n < c[2] * (big ? 1.7 : 1); n++) {
+    const m = new THREE.Mesh(chipGeo, m0); m.position.set(x, g + c[1], z); m.rotation.set(Math.random() * 6, Math.random() * 6, 0); scene.add(m);
+    chips.push({ m, g, vx: (Math.random() - .5) * 1.6, vy: 1 + Math.random() * 1.4, vz: (Math.random() - .5) * 1.6, t: 0, life: .6 + Math.random() * .35 });
+  }
+}
+function updateChips(dt) {
+  for (let n = chips.length - 1; n >= 0; n--) {
+    const c = chips[n], p = c.m.position; c.t += dt; c.vy -= 9 * dt;
+    p.x += c.vx * dt; p.y += c.vy * dt; p.z += c.vz * dt; c.m.rotation.x += dt * 8;
+    if (p.y < c.g + .015) { p.y = c.g + .015; c.vx *= .4; c.vz *= .4; c.vy = 0; }
+    c.m.scale.setScalar(1 - Math.max(0, (c.t / c.life - .7) / .3));
+    if (c.t >= c.life) { scene.remove(c.m); chips.splice(n, 1); }
+  }
+}
 const toolFor = v => v.build ? 'hammer' : v.job ? JOB_TOOL[v.job.type] : null;
 const castleB = () => buildings.find(B => B.type === 'castle');
 // a log for the right shoulder and a block held at the chest, hidden until carried
@@ -2401,10 +2431,10 @@ function updateVillagers(dt, now) {
     const carrying = v.carryLog.visible || v.carryStone.visible;
     // arm angle: 0 hangs down, -1.57 points straight ahead, -3 is overhead; tools follow the right hand
     const kind = v.pivot ? v.toolKind : null, logC = v.carryLog.visible, stoneC = v.carryStone.visible;
-    let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0, w = null, crouch = 0;
+    let L = -swing * .8, Rt = swing * .8, tilt = -.2, lean = 0, w = null, crouch = 0, twist = 0, big = false;
     if (logC) { Rt = -2.75; L = -swing * .6; }                       // hand on the log over the right shoulder
     else if (stoneC) { L = Rt = -1.2; }                               // block held against the chest
-    else if (v.working && TOOL_POSE[kind]) { ({ w, R: Rt, L, tilt, lean, crouch = 0 } = TOOL_POSE[kind](now / 1000 + v.seed)); if (crouch) kneel(v, crouch); } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
+    else if (v.working && TOOL_POSE[kind]) { ({ w, R: Rt, L, tilt, lean, crouch = 0, twist = 0, big = false } = TOOL_POSE[kind](now / 1000 + v.seed, v.seed)); if (crouch) kneel(v, crouch); } else if (kind) { Rt = -.3 + swing * .25; tilt = -.25; }          // walking with the tool held low
     if (v.changing) {                                                 // bending down to change: lean in and out, arms to the ground
       // down on one knee and up again (the figure bends only at the ground, so it kneels rather than stoops), hands to the ground
       const k = Math.sin(Math.PI * clamp(1 - v.changeT / CHANGE_T, 0, 1)); lean = .22 * k; L = Rt = -1.0 * k; tilt = -.2; kneel(v, k);
@@ -2415,7 +2445,8 @@ function updateVillagers(dt, now) {
       if (v.toolKind === 'spear') { const u = spearThrust(at); Rt = -1.0 - .45 * u + swing * .08; tilt = -.57 + .45 * u - swing * .08; }   // set exactly below (spearPose)
       else { Rt = -.45; tilt = -.4; }   // set exactly below (swordPose)
     }
-    if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); } } else if (w < 0) v.struck = false; }
+    if (w !== null) { if (w > .85) { if (!v.struck) { v.struck = true; sfx(STROKE_SFX[kind], v); chipBurst(v, kind, big); } } else if (w < 0) v.struck = false; }
+    v.body.rotation.y += (twist - v.body.rotation.y) * Math.min(1, dt * 14);
     const ease = (o, t) => o + (t - o) * Math.min(1, dt * 14);    // poses blend over ~0.1 s, so switching task never snaps
     if (v.pivot) { v.pivot.visible = !logC && !stoneC && !(v.changing && v.toolOff); v.pivot.rotation.x = ease(v.pivot.rotation.x, tilt); }
     if (cheer) { L = -2.9 + Math.sin(now / 1000 * 9) * .2; Rt = -2.9 - Math.sin(now / 1000 * 9) * .2; lean = 0; }
@@ -3298,7 +3329,7 @@ function galPose(p, t, dt) {
     return;
   }
   if (p.carry === 'log') { R = -2.75; L = -sw * .6; } else if (p.carry === 'stone') { L = R = -1.2; }
-  else if (p.work && !gWalk) { let crouch; ({ R, L, tilt, lean, crouch } = TOOL_POSE[p.tool](t + p.seed)); kneel(p, crouch || 0); }
+  else if (p.work && !gWalk) { let crouch, twist; ({ R, L, tilt, lean, crouch, twist } = TOOL_POSE[p.tool](t + p.seed, p.seed)); kneel(p, crouch || 0); p.body.rotation.y = twist || 0; }
   else if (p.tool) { R = -.3 + sw * .25; tilt = -.25; }
   if (p.pivot) { p.pivot.visible = !p.carry; p.pivot.rotation.x = ease(p.pivot.rotation.x, tilt); }
   p.arms[0].rotation.x = ease(p.arms[0].rotation.x, L); p.arms[1].rotation.x = ease(p.arms[1].rotation.x, R); p.body.rotation.x = ease(p.body.rotation.x, lean);
@@ -3335,7 +3366,7 @@ function startGame() {
   anims.length = 0; spawnQueue = [];
   for (const B of buildings) { scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B); hideDefenders(B); } buildings.length = 0;
   for (const v of villagers) { scene.remove(v.g); if (v.sbar) scene.remove(v.sbar.grp); } villagers.length = 0;
-  for (const f of fallen) scene.remove(f.v.g); fallen.length = 0; respawns.length = 0; rallyFor = null;
+  for (const f of fallen) scene.remove(f.v.g); fallen.length = 0; for (const c of chips) scene.remove(c.m); chips.length = 0; respawns.length = 0; rallyFor = null;
   for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0;
   for (const a of arrows) scene.remove(a.m); arrows.length = 0;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
@@ -3642,7 +3673,7 @@ function frame(now) {
   if (galleryOn) { updateGallery(dt, now); renderer.render(gScene, camera); requestAnimationFrame(frame); return; } updateLamps(dt, now); updateLight(dt, now);
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
-  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); updateFallen(gdt); }
+  if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); updateFallen(gdt); updateChips(gdt); }
   updateArrows(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
   if (anims.length) {
     for (let n = anims.length - 1; n >= 0; n--) { const a = anims[n], t = clamp((now - a.t0) / a.dur, 0, 1); applyPlan(a.plan, easeOut(t)); if (t >= 1) anims.splice(n, 1); }
