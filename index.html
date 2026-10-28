@@ -444,7 +444,9 @@ function cacheCells() { for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) 
 // ---------- three setup ----------
 const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// render at the screen's full sharpness (phones are 3×); adaptResolution steps it down if frames get slow
+var pixelK = Math.min(devicePixelRatio, 3), fpsAcc = 0, fpsN = 0;
+renderer.setPixelRatio(pixelK);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
 const scene = new THREE.Scene();
@@ -3661,7 +3663,16 @@ function guideTick() {
 }
 $('#gSkip').addEventListener('click', () => { guideFinish(); $('#guide').hidden = true; });
 
+// every 3 s: if frames averaged over 24 ms (under ~40 fps), drop the resolution half a step, down to 1.5× at most
+function adaptResolution(raw) {
+  if (raw > .2) return;                          // a hidden tab or a stall, not the render cost
+  fpsAcc += raw; fpsN++;
+  if (fpsAcc < 3) return;
+  const ms = fpsAcc / fpsN * 1000; fpsAcc = fpsN = 0;
+  if (ms > 24 && pixelK > 1.5) { pixelK = Math.max(1.5, pixelK - .5); renderer.setPixelRatio(pixelK); resize(); }
+}
 function frame(now) {
+  adaptResolution((now - last) / 1000);
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   keyCamera(dt);
   if (galleryOn) { updateGallery(dt, now); renderer.render(gScene, camera); requestAnimationFrame(frame); return; } updateLamps(dt, now); updateLight(dt, now);
