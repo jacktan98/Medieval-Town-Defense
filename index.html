@@ -1126,9 +1126,9 @@ function makeBarracks(tier, plinth) {
       if (weapon === 'spear') { const sp = box(.03, 1.5, .03, M.timber, x, .75, 1.26); sp.rotation.x = -.16; g.add(sp); const tip = cone(.035, .15, 4, M.iron, x, 1.55, 1.13); tip.rotation.x = -.16; g.add(tip); }
       else { const sw = box(.03, .62, .06, M.iron, x, .55, 1.24); sw.rotation.x = -.12; g.add(sw); g.add(box(.13, .03, .04, M.iron, x, .87, 1.2)); g.add(box(.035, .12, .035, M.timber, x, .94, 1.19)); }
       if (shield && n !== 1) {
-        const sh = shield === 'round' ? cyl(.19, .19, .04, 12, M.wood, x + .05, .3, 1.42) : box(.3, .42, .04, M.flag, x + .05, .3, 1.42);
-        if (shield === 'round') sh.rotation.x = Math.PI / 2 - .25; else sh.rotation.x = -.25;
-        g.add(sh); const boss = cyl(.05, .05, .04, 8, M.iron, x + .05, .31, 1.45); boss.rotation.x = Math.PI / 2; g.add(boss);
+        // leaning against the rack, face out to the front
+        const sh = shield === 'round' ? roundShield(.19, M.wood) : heaterShield(.3, .44, kiteM, steelM);
+        sh.rotation.set(-.25, Math.PI / 2, 0, 'YXZ'); sh.position.set(x + .05, .3, 1.42); g.add(sh);
       }
     }
   };
@@ -1151,7 +1151,7 @@ function makeBarracks(tier, plinth) {
     g.add(box(2.34, .08, .08, M.timber, X, 1.13, F + .01));
     g.add(pyramid(1.95, 1.05, .86, M.thatch, 1.68, X, -.65));
     g.add(box(.5, .8, .05, M.wood, -1, .45, F + .03)); for (const x of [-.25, .2]) g.add(box(.2, .2, .04, M.glow, x, .78, F + .03));
-    g.add(box(.05, 1.7, .05, M.timber, .62, .85, F + .3)); g.add(flagBox(.42, .3, .03, M.flag, .85, 1.52, F + .3));
+    g.add(box(.05, 1.0, .05, M.timber, X, 2.6, -.65)); g.add(flagBox(.45, .3, .03, M.flag, X + .25, 2.95, -.65));   // flag on the roof peak
     rack('spear', 'round'); dummy(true);
   } else {                     // garrison: stone hall, blue tiled roof, swords and blue shields, a hanging banner
     g.add(box(2.3, 1.3, 1.9, M.stone2, X, .7, -.65));
@@ -1160,7 +1160,7 @@ function makeBarracks(tier, plinth) {
     g.add(box(.55, .9, .06, M.timber, -1, .5, F + .02));
     for (const y of [.25, .7]) g.add(box(.56, .04, .07, M.iron, -1, y, F + .04));
     for (const x of [-.4, .2]) g.add(box(.18, .26, .04, M.glow, x, .95, F + .02));
-    g.add(drapeBox(.34, .6, .03, M.drape, -.1, .55 + .45, F + .04));
+    g.add(box(.05, 1.0, .05, M.timber, X, 2.95, -.65)); g.add(flagBox(.45, .3, .03, M.flag, X + .25, 3.3, -.65));
     rack('sword', 'kite'); dummy(true);
   }
   return g;
@@ -1859,6 +1859,8 @@ function makeHair(m) {
 // headgear for soldiers and raiders, rounded rather than pointed
 const steelM = mat('#a3aab2'), soldierBandM = mat('#2d4f86'), ironM = mat('#5b6067'), bandM = mat('#3b3129'), plumeM = mat('#b3261e'),
   raiderHoodM = (() => { const m = mat('#3a2a26'); m.side = THREE.DoubleSide; return m; })();
+const captainShieldM = mat('#2a2b2e'), captainRimM = mat('#d9d6cc');
+const mailM = mat('#8d939a'), kiteM = mat('#3466b0');   // soldiers' mail; their blue shields and surcoat (plain: M.flag waves)
 function makeHelm(kind) {
   const h = new THREE.Group(), add = o => { o.castShadow = true; h.add(o); return o; };
   if (kind === 'kettle') {                   // soldier: polished kettle hat, a dome with a wide flat brim
@@ -1869,9 +1871,10 @@ function makeHelm(kind) {
     const d = add(new THREE.Mesh(new THREE.SphereGeometry(.153, 14, 7, 0, Math.PI * 2, 0, Math.PI * .55), steelM)); d.position.y = 1.045; d.scale.y = 1.12;
     add(cyl(.156, .156, .032, 14, soldierBandM, 0, 1.06, 0));
     add(box(.028, .12, .022, steelM, 0, 1.0, .148));
-  } else if (kind === 'hood') {              // raider archer: dark rounded hood open at the face, short collar
-    const d = add(new THREE.Mesh(new THREE.SphereGeometry(.158, 12, 8, Math.PI * .75, Math.PI * 1.5, 0, Math.PI * .66), raiderHoodM)); d.position.set(0, 1.04, -.01);
+  } else if (kind === 'hood') {              // raider archer: tall pointed iron cap on a dark coif that wraps the neck, open at the face
+    const d = add(new THREE.Mesh(new THREE.SphereGeometry(.158, 12, 8, Math.PI * .75, Math.PI * 1.5, 0, Math.PI * .66), raiderHoodM)); d.position.set(0, 1.03, -.01);
     add(cyl(.16, .23, .1, 10, raiderHoodM, 0, .9, -.01));
+    add(cone(.162, .27, 10, ironM, 0, 1.2, 0)); add(cyl(.165, .165, .035, 12, bandM, 0, 1.075, 0));
   } else {                                   // raider: dark iron dome with a riveted band and a nose guard; the captain adds a red crest
     const d = add(new THREE.Mesh(new THREE.SphereGeometry(.153, 14, 7, 0, Math.PI * 2, 0, Math.PI * .55), ironM)); d.position.y = 1.045; d.scale.y = 1.12;
     add(cyl(.156, .156, .032, 14, bandM, 0, 1.06, 0));
@@ -2371,9 +2374,28 @@ function mountHorse(p) {
   for (const [n, sx] of [[0, -1], [1, 1]]) { p.legs[n].rotation.x = -1.2; p.legs[n].rotation.z = sx * .55; }
   p.horse = h;
 }
+// shields are worn on the outside of the left forearm, so the arm never passes through them
+// heater shield (flat-topped, pointed foot) in a rim; its face looks along -x, out from a left arm
+function heaterShield(w, h, faceM, rimM) {
+  const sh = new THREE.Shape(), hw = w / 2, hh = h / 2;
+  sh.moveTo(0, -hh); sh.quadraticCurveTo(-hw * .95, -hh * .45, -hw, hh * .25); sh.lineTo(-hw, hh * .8);
+  sh.quadraticCurveTo(-hw * .5, hh * .88, 0, hh); sh.quadraticCurveTo(hw * .5, hh * .88, hw, hh * .8); sh.lineTo(hw, hh * .25);
+  sh.quadraticCurveTo(hw * .95, -hh * .45, 0, -hh);
+  const geo = d => { const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); g.rotateY(-Math.PI / 2); return g; };
+  const g = new THREE.Group(), rim = new THREE.Mesh(geo(.022), rimM), face = new THREE.Mesh(geo(.03), faceM);
+  rim.scale.set(1, 1.1, 1.12); face.position.x = -.006; rim.castShadow = face.castShadow = true; g.add(rim, face); return g;
+}
+function roundShield(r, faceM) {
+  const g = new THREE.Group(), d = cyl(r, r, .035, 14, faceM, 0, 0, 0); d.rotation.z = Math.PI / 2; g.add(d);
+  const b = new THREE.Mesh(new THREE.SphereGeometry(r * .26, 8, 5), M.iron); b.position.x = -.02; b.castShadow = true; g.add(b);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r, .014, 4, 18), M.iron); rim.rotation.y = Math.PI / 2; g.add(rim);
+  return g;
+}
+function armShield(p, sh) { sh.position.set(-.09, -.2, .02); p.arms[0].add(sh); return sh; }
 function makeRaider(kind) {
   const p = makePerson({ tunic: enemyTunic[kind], helm: kind === 'archer' ? 'hood' : kind === 'captain' ? 'captain' : 'raider', tool: kind === 'archer' ? 'bow' : kind === 'spear' ? 'spear' : 'sword' });
-  if (kind !== 'archer') p.body.add(box(.05, .38, .3, shieldM, -.2, .7, .1));
+  if (kind === 'sword') armShield(p, roundShield(.19, M.wood));                                 // spearmen carry none; archers need both hands
+  if (kind === 'captain') armShield(p, heaterShield(.32, .46, captainShieldM, captainRimM));
   if (ENEMY[kind].mounted) mountHorse(p);
   return p;
 }
@@ -2535,13 +2557,12 @@ function killVillager(v) {
 
 // ---------- barracks soldiers: villagers who muster at a barracks at night, gear up by its tier and fight raiders hand to hand ----------
 const SOLDIER = { hp: [70, 100, 140], dmg: [7, 10, 14], rate: .9, names: ['Militia', 'Guard', 'Man-at-arms'] };
-const mailM = mat('#8d939a'), kiteM = mat('#3466b0');
 const SQUAD = [[0, 0], [-.8, -.5], [.8, -.5]];      // where the three stand round their spot
 var respawns = [], fallen = [];                     // fallen soldiers come back as villagers after 60 s of daylight
 // tier 1 militia: blue tunic, padded cap, spear; tier 2 guard: leather jerkin, kettle hat, spear, round wooden shield;
 // tier 3 man-at-arms: mail under a blue surcoat, steel helm, sword, blue kite shield
 function soldierKit(v, tier) {
-  if (v.kit) v.kit.forEach(o => v.body.remove(o));
+  if (v.kit) v.kit.forEach(o => o.parent && o.parent.remove(o));
   v.kit = []; v.kitTier = tier;
   const put = o => { o.castShadow = true; v.body.add(o); v.kit.push(o); return o; };
   const tunic = tier === 3 ? mailM : guardTunic;
@@ -2550,15 +2571,14 @@ function soldierKit(v, tier) {
   if (tier === 1) { const c = put(new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 5, 0, Math.PI * 2, 0, Math.PI * .5), leatherM)); c.scale.y = .8; c.position.y = 1.06; }
   else put(makeHelm(tier === 2 ? 'kettle' : 'soldier'));
   if (tier === 2) put(cyl(.152, .212, .34, 8, leatherM, 0, .66, 0));
-  if (tier === 3) { put(cyl(.15, .214, .42, 8, M.flag, 0, .62, 0)); put(cyl(.17, .17, .05, 8, leatherM, 0, .55, 0)); }
-  if (tier === 2) { const sh = put(cyl(.19, .19, .035, 12, M.wood, -.23, .68, .06)); sh.rotation.z = Math.PI / 2; put(new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 5), M.iron)).position.set(-.255, .68, .06); }
-  if (tier === 3) { put(box(.04, .44, .3, kiteM, -.23, .68, .07)); put(box(.046, .46, .04, M.iron, -.232, .68, .07)); put(new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 5), M.iron)).position.set(-.258, .72, .07); }
+  if (tier === 3) { put(cyl(.15, .214, .42, 8, kiteM, 0, .62, 0)); put(cyl(.17, .17, .05, 8, leatherM, 0, .55, 0)); }
+  if (tier > 1) { const sh = armShield(v, tier === 2 ? roundShield(.19, M.wood) : heaterShield(.3, .44, kiteM, steelM)); sh.castShadow = true; v.kit.push(sh); }
   if (v.pivot) v.pivot.parent.remove(v.pivot);
   v.toolKind = tier === 3 ? 'sword' : 'spear'; v.pivot = makeTool(v.toolKind); v.arms[1].add(v.pivot);
   v.soldier = true; v.maxHp = v.hp = SOLDIER.hp[tier - 1];
 }
 function stripKit(v) {
-  if (v.kit) { v.kit.forEach(o => v.body.remove(o)); v.kit = null; }
+  if (v.kit) { v.kit.forEach(o => o.parent && o.parent.remove(o)); v.kit = null; }
   v.soldier = false; v.foe = null; giveTool(v, toolFor(v));
   if (v.sbar) v.sbar.grp.visible = false;
 }
