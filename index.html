@@ -1010,7 +1010,7 @@ function makeCastle(tier, plinth) {
   const root = new THREE.Group(), g = new THREE.Group(), W = 2.6, k = CASTLE_K[tier - 1];
   if (plinth) root.add(box(6.0, 2.0, 6.0, tier === 2 ? M.plainStone : M.stone, 0, -.8, 0));
   g.scale.set(k, 1, k); root.add(g);
-  if (tier > 1) g.add(box(4.8, .12, 4.8, M.court, 0, .26, 0));
+  if (tier > 1) g.add(box(4.8, .12, 4.8, tier === 2 ? M.plainStone : M.stone, 0, .26, 0));   // courtyard paved like the base
   if (tier === 1) {            // palisade fort: sharpened logs and a timber hall
     for (let s = -W; s <= W + .01; s += .45) {
       const hh = k => 2.0 + hash(s * 3, k) * .4;
@@ -1102,7 +1102,7 @@ function makeLodge(tier, plinth) {
     g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.6, X, -.15));
     g.add(box(.46, .66, .06, M.timber, -1, .42, .46));
     pile(1.05, 1.25, 2);
-    axeStump(.15, 1.25);
+    axeStump(1.1, -.85);       // chopping block round the back, beside the hut
   } else {                     // log cabin, then timber yard
     for (let n = 0; n < 5; n++) {
       const y = .35 + n * .32;
@@ -1320,7 +1320,7 @@ function makeWell() {
   g.add(cyl(.78, .82, .06, 14, M.stone, 0, .03, 0));
   g.add(cyl(.5, .55, .6, 10, M.stone2, 0, .3, 0));
   const cap = new THREE.Mesh(new THREE.TorusGeometry(.47, .07, 6, 14), M.stone); cap.rotation.x = Math.PI / 2; cap.position.y = .62; cap.castShadow = true; g.add(cap);
-  g.add(cyl(.42, .42, .04, 10, M.water, 0, .5, 0));
+  g.add(cyl(.42, .42, .04, 14, M.water, 0, .61, 0));   // the ring is solid: the water sits just inside the coping
   for (const sx of [-1, 1]) g.add(box(.09, 1.75, .09, M.timber, sx * .6, .875, 0));
   g.add(box(1.32, .08, .08, M.timber, 0, 1.75, 0));
   const ax = cyl(.045, .045, 1.24, 8, M.timber, 0, 1.25, 0); ax.rotation.z = Math.PI / 2; g.add(ax);
