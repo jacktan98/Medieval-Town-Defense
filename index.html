@@ -3173,8 +3173,12 @@ function edgePoint() {
   if (MAP === 'pass') {                          // always the foot of the pass, on the bottom edge
     // with a route to the castle if there is one; walled off, anywhere open down there (they come up and break the walls),
     // never the old fallback in the mountains, where they stood stuck
+    // scattered about the middle of the open span there (a bell curve over its middle half), not evenly across it
+    const z = SIZE - 1.2; let x0 = 1e9, x1 = -1e9;
+    for (let x = 1; x < SIZE - 1; x += .5) if (passOpen(x, z) && passOpen(x, z - 1)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+    const mid = (x0 + x1) / 2, half = (x1 - x0) / 2;
     for (const needRoute of [true, false]) for (let n = 0; n < 120; n++) {
-      const x = 13 + Math.random() * 28, z = SIZE - 1.2;
+      const x = n < 90 ? mid + (Math.random() + Math.random() + Math.random() - 1.5) / 1.5 * half * .5 : x0 + Math.random() * (x1 - x0);
       if (passOpen(x, z) && passOpen(x, z - 1) && (!needRoute || !dp || findPath(x, z, dp.x, dp.z, 2))) return { x, z };
     }
     return { x: 27, z: SIZE - 1.5 };
