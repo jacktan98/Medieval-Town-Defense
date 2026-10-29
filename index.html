@@ -3278,7 +3278,7 @@ function updateVolley(dt) {
     if (f) { f.g.rotation.y = Math.atan2(q.x - f.g.position.x, q.z - f.g.position.z); volleyPose(f, false); f.g.updateMatrixWorld(true); from = (f.pivot || f.arms[0]).getWorldPosition(new THREE.Vector3()); f.vLoose = .2; }
     else { const c = C ? center(C) : { x: KX, z: KZ }; from = new THREE.Vector3(c.x + (Math.random() - .5) * 3, (C ? C.group.position.y + DEF.castle.shootY[C.tier - 1] : 4), c.z + (Math.random() - .5) * 3); }
     const d = Math.hypot(tx - from.x, tz - from.z);
-    fireArrow(from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) hurtEnemy(e, q.per); }, 3 + d * .25);
+    fireArrow(from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); let hit = false; for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) { hurtEnemy(e, q.per); hit = true; } if (hit) sfx('arrowHit', { x: tx, z: tz }); }, 3 + d * .25);
   }
   if (VQ && C.volley) figs.forEach((f, i) => {           // after updateDefense, so this pose wins while the volley lasts
     f.vLoose = Math.max(0, (f.vLoose || 0) - dt);
@@ -3289,7 +3289,7 @@ function updateVolley(dt) {
 }
 function hurtEnemy(e, d) {
   if (e.dead) return; e.hp -= d; e.flashT = .14;
-  if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; const y = walkY(e.x, e.z); for (let i = 0; i < 5; i++) dustAt(e.x, y, e.z); }   // a puff of dust as they fall
+  if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; sfx('grunt', e); const y = walkY(e.x, e.z); for (let i = 0; i < 5; i++) dustAt(e.x, y, e.z); }   // a puff of dust as they fall
 }
 // who goes for what: spearmen hit the nearest building, swordsmen hunt archer towers, the captain rides for the castle,
 // archers aim past walls and gates at what lies behind them
@@ -3318,7 +3318,7 @@ function updateEnemies(dt) {
       const d = Math.hypot(foe.x - e.x, foe.z - e.z), reach = Math.max(.75, e.range) + (e.horse ? .3 : 0);
       e.running = !e.horse && d > reach;
       if (d > reach) steer(e, foe.x, foe.z, dt, 2, reach * .9, e.running ? 1.3 : 1);
-      else { e.g.rotation.y = Math.atan2(foe.x - e.x, foe.z - e.z); if ((e.cool -= dt) <= 0) { e.cool = e.rate; e.attackT = e.kind === 'spear' ? SPEAR_T : SWORD_T; sfx('attack', e); hurtSoldier(foe, e.dmg); } }
+      else { e.g.rotation.y = Math.atan2(foe.x - e.x, foe.z - e.z); if ((e.cool -= dt) <= 0) { e.cool = e.rate; e.attackT = e.kind === 'spear' ? SPEAR_T : SWORD_T; sfx('clash', e); hurtSoldier(foe, e.dmg); } }
     } else if (B) {
       const d = distRect(B, e.x, e.z);
       if (e.detour) { steer(e, e.detour.x, e.detour.z, dt, 2); if ((e.detour.t -= dt) < 0) e.detour = null; }
@@ -3452,7 +3452,7 @@ function updateSoldier(v, dt) {
   if (foe) {
     const reach = (v.toolKind === 'spear' ? 1.15 : .9) + (foe.horse ? .3 : 0), d = Math.hypot(foe.x - v.x, foe.z - v.z);
     if (d > reach) { walkTo(v, foe.x, foe.z, dt, 1, reach * .9, 1.25); if (v.noProg > 4) { v.skip = { e: foe, t: 4 }; v.foe = null; } }    // can't reach that one
-    else { turnTo(v, Math.atan2(foe.x - v.x, foe.z - v.z), dt); if (v.cool <= 0) { v.cool = SOLDIER.rate; v.attackT = v.toolKind === 'spear' ? SPEAR_T : SWORD_T; hurtEnemy(foe, SOLDIER.dmg[k]); sfx('attack', v); } }
+    else { turnTo(v, Math.atan2(foe.x - v.x, foe.z - v.z), dt); if (v.cool <= 0) { v.cool = SOLDIER.rate; v.attackT = v.toolKind === 'spear' ? SPEAR_T : SWORD_T; hurtEnemy(foe, SOLDIER.dmg[k]); sfx('clash', v); } }
   } else if (Math.hypot(hx - v.x, hz - v.z) > .35) walkTo(v, hx, hz, dt, 1, .3, 1.3);
 }
 // dawn: back to the barracks, in, out of the kit, out again to the day's work (a lost barracks: change where they stand)
@@ -3530,7 +3530,7 @@ function updateDefense(dt) {
       const from = f ? bowPoint(f) : new THREE.Vector3(c.x, B.group.position.y + T.shootY[k], c.z);
       const lead = best.walking ? .5 : 0, to = new THREE.Vector3(best.x + Math.sin(best.g.rotation.y) * lead, best.g.position.y + .7, best.z + Math.cos(best.g.rotation.y) * lead);
       const tgt = best, dmg = T.dmg[k];
-      fireArrow(from, to, () => hurtEnemy(tgt, dmg));
+      fireArrow(from, to, () => { if (!tgt.dead) sfx('arrowHit', tgt); hurtEnemy(tgt, dmg); });
     }
   }
 }
@@ -3580,7 +3580,7 @@ function updateHungry(v, dt) {
   if (!v.g.visible && !v.hideT) exitDoor(v);
   const dp = doorPoint(H0);
   if (walkTo(v, dp.x, dp.z, dt, 1, .4, .8) || nearDoor(v, H0, dp) || v.noProg > 6) {
-    v.sleeping = true; v.indoor = H0; goIn(v, H0); floatText('Zzz', '#bcd0ff', dp.x, hAt(dp.x, dp.z) + 1.8, dp.z);
+    v.sleeping = true; v.indoor = H0; goIn(v, H0); sfx('yawn', dp); floatText('Zzz', '#bcd0ff', dp.x, hAt(dp.x, dp.z) + 1.8, dp.z);
   }
 }
 
@@ -3603,7 +3603,7 @@ function startNight() {
   log(`<b>Night ${PH.wave}</b> · ${spawnQueue.length} raiders · ${ps.posted} on guard`, 'warn');
 }
 function startDay() {
-  PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
+  sfx('rooster'); PH.wave++; PH.kind = 'day'; PH.t = DAYLEN[PH.wave - 1];
   for (const v of villagers) if (v.post) {
     if (v.soldier) { v.unkit = v.post.B; v.posted = false; v.prog = null; v.path = null; }     // walk back to the barracks to change
     else if (v.kitT > 0) { v.kitT = 0; v.posted = false; if (!v.g.visible || v.doorWalk) { v.indoor = v.post.B; exitDoor(v); } }   // dawn caught them changing
@@ -3658,7 +3658,9 @@ function updateLight(dt, now) {
 
 // ---------- HUD ----------
 const hintEl = $('#hint');
-function setHint(html, cls) { hintEl.innerHTML = html; hintEl.className = 'pill' + (cls ? ' ' + cls : ''); }
+// a red hint straight after the player's own tap or key press gets the "not allowed" knock (hover hints stay silent)
+let userActT = -1e9; for (const ev of ['pointerup', 'click', 'keydown']) addEventListener(ev, () => { userActT = performance.now(); }, true);
+function setHint(html, cls) { if (cls === 'bad' && performance.now() - userActT < 80) sfx('nope'); hintEl.innerHTML = html; hintEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const TOOL_ICON = {
   market: '<svg viewBox="0 0 24 24"><path d="M3.5 9 L5.5 4 H18.5 L20.5 9 Z"/><path d="M3.5 9 a2.75 2.2 0 0 0 5.5 0 a2.75 2.2 0 0 0 5.5 0 a2.75 2.2 0 0 0 5.5 0"/><path d="M5 11.5 V20 H19 V11.5"/><path d="M9.5 20 V15 H14.5 V20"/></svg>',
@@ -4178,7 +4180,7 @@ $('#cardTrade').addEventListener('click', e => {
   const t = TRADES[+b.dataset.i], give = { [t.give]: 10 }, n = t.n[B.tier - 1], c = center(B);
   if (!canAfford(give)) return setHint(`Need ${costHTML(give)}`, 'bad');
   pay(give); res[t.get] += n; const y = B.group.position.y + 2.4;
-  floatRes(t.get, n, c.x, y, c.z); coinFly(c.x, y, c.z, Math.min(4, Math.ceil(n / 2)), t.get); sfx('coins'); refreshCard();
+  floatRes(t.get, n, c.x, y, c.z); coinFly(c.x, y, c.z, Math.min(4, Math.ceil(n / 2)), t.get); sfx('trade'); refreshCard();
 });
 $('#volleyBtn').addEventListener('click', () => {
   if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return; if (PH.kind !== 'night') return setHint('Night only', 'bad');
@@ -4270,11 +4272,18 @@ var SND = {   // game event -> file in audio/sfx (or audio/music) and its trim a
   coins:     { file: 'sfx/Coins_payout.mp3',         trim: .7 },
   arrow:     { file: 'sfx/Arrow_shot.mp3',           trim: .889 },
   horn:      { file: 'sfx/Wave_horn.mp3',            trim: 1 },      // nightfall: the raiders' horn
-  attack:    { files: ['sfx/Attack_1.mp3', 'sfx/Attack_2.mp3'], trim: .445 },   // a raider's strike, one of the two at random
+  attack:    { files: ['sfx/Enemy_attack_1.mp3', 'sfx/Enemy_attack_2.mp3'], trim: .445 },   // a raider's strike on a building, one of the two at random
+  clash:     { file: 'sfx/Attack_clash.mp3',         trim: .445 },   // soldier and raider trading blows
+  arrowHit:  { file: 'sfx/Arrow_hit.mp3',            trim: .6 },     // an arrow striking a raider
+  grunt:     { file: 'sfx/Enemy_grunt.mp3',          trim: .5 },     // a raider falls
+  trade:     { file: 'sfx/Market_trade.mp3',         trim: .7 },
+  rooster:   { file: 'sfx/Morning_rooster.mp3',      trim: .8 },     // dawn: the night is won
+  yawn:      { file: 'sfx/Villager_yawn.mp3',        trim: .6 },     // a hungry villager goes to sleep
+  nope:      { file: 'sfx/Not_allowed.mp3',          trim: .5 },     // a tap that can't be done (any red hint straight after a tap or key)
   // long recordings of repeated work: single strikes are cut out of them (see strikes()) and one plays per swing
   chop:      { file: 'sfx/Woodcutter_axe.mp3',       trim: .736, strikes: true },
   pick:      { file: 'sfx/Mason_pick.mp3',           trim: .736, strikes: true },
-  hammer:    { file: 'sfx/Building_with_hammer.mp3', trim: .668, strikes: true },
+  hammer:    { file: 'sfx/Builder_hammer.mp3', trim: .668, strikes: true },
   hoe:       { file: 'sfx/Farmer_hoe.mp3',           trim: .6,   strikes: true },
   // a path tile laid: Path_placed.mp3 when it is added; until then one soft hoe stroke into the earth
   path:      { file: 'sfx/Path_placed.mp3',          trim: .5, fallback: 'hoe' },
@@ -4291,7 +4300,7 @@ var LOOPS = {
   birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
 };
 var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
-var SFX_GAP = { path: .12, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
+var SFX_GAP = { path: .12, clash: .12, arrowHit: .08, grunt: .15, yawn: 1, nope: .3, rooster: 2, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
 var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
 // var: sfx()/setMusic() can run during the startup reset, before this block executes
@@ -4322,7 +4331,12 @@ if (actx) for (const k in SND) {
       const cuts = strikes(b), sr = b.sampleRate;
       for (const [from, len] of cuts) clips[k].push({ buf: b, from, len, gain: gainFor(levelOf(b, Math.floor(from * sr), Math.floor((from + len) * sr)), S.trim) });
       if (!cuts.length) clips[k].push({ buf: b, from: 0, len: b.duration, gain: gainFor(levelOf(b), S.trim) });
-    } else clips[k].push({ buf: b, from: 0, len: b.duration, gain: gainFor(levelOf(b), S.trim) });
+    } else {   // skip any silence before the sound starts (some recordings open with ~0.4 s of it), so it lands on its event
+      const d = b.getChannelData(0); let pk = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      let i0 = 0; while (i0 < d.length && Math.abs(d[i0]) < pk * .03) i0++;
+      const from = Math.max(0, i0 / b.sampleRate - .01);
+      clips[k].push({ buf: b, from, len: b.duration - from, gain: gainFor(levelOf(b), S.trim) });
+    }
   }, () => {})).catch(() => {});
 }
 for (const k in LOOPS) {

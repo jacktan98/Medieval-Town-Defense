@@ -8,11 +8,18 @@
 | `Building_destroyed.mp3` | Raiders destroy a building |
 | `Coins_payout.mp3` | Every 20 s payout |
 | `Arrow_shot.mp3` | Any archer shoots (yours or the raiders') |
-| `Attack_1.mp3`, `Attack_2.mp3` | A raider strikes a building; one of the two at random, never the same twice running |
+| `Enemy_attack_1.mp3`, `Enemy_attack_2.mp3` | A raider strikes a building; one of the two at random, never the same twice running |
+| `Attack_clash.mp3` | A soldier and a raider trade blows (either side striking) |
+| `Arrow_hit.mp3` | An arrow strikes a raider (towers, castle, volley) |
+| `Enemy_grunt.mp3` | A raider falls |
+| `Market_trade.mp3` | A trade at the market |
+| `Morning_rooster.mp3` | Dawn, when a night is won |
+| `Villager_yawn.mp3` | A hungry villager goes to sleep |
+| `Not_allowed.mp3` | A tap or key that can't be done (any red hint right after it: "Occupied", "Need 5 wood", "Night only"…) |
 | `Woodcutter_axe.mp3` | One chop per axe swing (single strikes are cut out of the recording automatically) |
 | `Mason_pick.mp3` | One hit per pick swing (cut the same way) |
 | `Farmer_hoe.mp3` | One stroke per hoe swing |
-| `Building_with_hammer.mp3` | One knock per hammer swing (cut the same way) |
+| `Builder_hammer.mp3` | One knock per hammer swing (cut the same way) |
 | `Path_placed.mp3` (not supplied yet) | A path tile is laid; until it exists a soft hoe stroke plays instead |
 | `Bird_chirping.mp3` | Loops softly during the day, stops at night |
 
@@ -22,3 +29,5 @@ different recording level needs no code change. World sounds also get quieter th
 where the camera looks. To add or rename a sound, edit the `SND` table in `index.html`.
 
 `Bird_chirping.m4a` is a compressed copy of `Bird_chirping.mp3` for faster phone loading; if you replace the `.mp3`, delete the `.m4a` too.
+
+Leading silence in a clip is skipped automatically when it loads, so a sound lands right on its event.
