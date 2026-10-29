@@ -816,6 +816,8 @@ const GRIT = {
     diffuseColor.rgb *= .76 + .3 * gg + .1 * gk;`,
   rock: `float r1 = gn2(vGP.xz * 3.6 + vGP.y * 2.7), r2 = gn2(vec2(vGP.x + vGP.y, vGP.z - vGP.y) * 11.0);
     diffuseColor.rgb *= (.74 + .3 * r1 + .14 * r2) * (gh2(floor(vGP.xz * 26.0 + vGP.y * 9.0)) > .93 ? .7 : 1.0);`,
+  earth: `vec2 ep = vGP.xz + vGP.y * 1.3; float e1 = gn2(ep * 1.7), e2 = gn2(ep * 7.5 + 3.1), es = gh2(floor(ep * 22.0));
+    diffuseColor.rgb *= (.8 + .26 * e1 + .12 * e2) * (es > .94 ? .7 : es < .05 ? 1.2 : 1.0);`,
   stone: `float s1 = gn2(vec2(vGP.x + vGP.z, vGP.y) * 9.0);
     diffuseColor.rgb *= .9 + .18 * s1;`,
 };
@@ -835,7 +837,7 @@ function addGrit(m, kind) {
   m.customProgramCacheKey = () => 'grit:' + kind + ':' + prev.toString();
 }
 for (const m of [M.wood, M.rough, M.timber, M.log, M.dark]) addGrit(m, 'wood');
-addGrit(M.stone, 'stone'); addGrit(M.stone2, 'stone');
+addGrit(M.stone, 'stone'); addGrit(M.stone2, 'stone'); addGrit(M.court, 'earth');   // tier 1 slabs: mottled packed earth with pebbles
 M.plainStone = mat('#8f8a80'); addGrit(M.plainStone, 'rock');   // tier 2 bases: rough grey stone without block joints
 M.drape = mat('#2f4f8a');
 M.awning = mat('#3466b0');   // market awning stripes: the town's blue (no flag wave)
@@ -1135,7 +1137,7 @@ function rebuildRoads() {
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
-  lodge: [[-1, .52], [-.6, 1.14], [-.6, 1.14]],
+  lodge: [[-.65, .52], [-.6, 1.14], [-.6, 1.14]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
   barracks: [[-1, .42], [-1, .42], [-1, .42]],
@@ -1316,10 +1318,10 @@ function makeLodge(tier, plinth) {
   const pile = (x, z, n, rad = .17) => { const d = rad * 2.1; for (let r = 0; r < n; r++) for (let c = 0; c < n - r; c++) { const l = cyl(rad, rad, 1.1, 7, M.log, x, rad * 1.8 + r * d * .87, z + (c - (n - r - 1) / 2) * d); l.rotation.z = Math.PI / 2; g.add(l); } };
   const axeStump = (x, z) => { g.add(cyl(.28, .3, .45, 8, M.logEnd, x, .25, z)); const h = box(.05, .6, .05, M.timber, x + .08, .7, z); h.rotation.z = -.4; g.add(h); g.add(box(.05, .16, .22, M.iron, x - .02, .5, z)); };
   if (tier === 1) {            // woodcutter's hut: short log walls, thatched roof, chopping stump
-    const X = -.9;              // the door (x -1) lines up with the left column's path tile
+    const X = -.55, D = X - .1;  // hut centre and its door (DOOR.lodge[0]; doorShift lines the path tile's arm up with it)
     for (let n = 0; n < 4; n++) {
       const y = .3 + n * .3;
-      if (n < 3) for (const [x0, x1] of [[X - 1, -1.27], [-.73, X + 1]]) { const l1 = cyl(.15, .15, x1 - x0, 6, M.log, (x0 + x1) / 2, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
+      if (n < 3) for (const [x0, x1] of [[X - 1, D - .27], [D + .27, X + 1]]) { const l1 = cyl(.15, .15, x1 - x0, 6, M.log, (x0 + x1) / 2, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
       else { const l1 = cyl(.15, .15, 2.0, 6, M.log, X, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
       const l2 = cyl(.15, .15, 2.0, 6, M.log, X, y, -.75); l2.rotation.z = Math.PI / 2; g.add(l2);
       const l3 = cyl(.15, .15, 1.4, 6, M.log, X + .9, y + .15, -.15); l3.rotation.x = Math.PI / 2; g.add(l3);
@@ -1327,7 +1329,7 @@ function makeLodge(tier, plinth) {
     }
     g.add(box(1.7, 1.2, 1.1, M.rough, X, .75, -.15));
     g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.9, X, -.15));
-    g.add(box(DOOR_W, DOOR_H, .06, M.timber, -1, .08 + DOOR_H / 2, .46));
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, D, .08 + DOOR_H / 2, .46));
     pile(1.05, 1.25, 2);
     axeStump(1.1, -.85);       // chopping block round the back, beside the hut
   } else {                     // log cabin, then timber yard
@@ -1495,11 +1497,12 @@ function makeQuarry(tier, plinth) {
       for (const sx of [-1, 1]) { const h = box(.035, .035, .95, M.timber, sx * .16, .24, -.08); h.rotation.x = -.14; wb.add(h); wb.add(box(.035, .16, .035, M.timber, sx * .16, .08, -.28)); }
     }
     if (tier === 3) {
-      g.add(box(.14, 2.6, .14, M.timber, 1.0, 1.4, -1.0)); g.add(box(1.8, .12, .12, M.timber, .4, 2.6, -1.0));
-      g.add(box(.03, .9, .03, M.dark, -.4, 2.15, -1.0)); g.add(box(.35, .3, .35, M.stone2, -.4, 1.55, -1.0));
-      g.add(box(1.0, .35, .6, M.wood, .6, .55, -1.55));      // cart parked behind, off the door path
-      for (const x of [.2, 1.0]) { const w = cyl(.22, .22, .08, 10, M.timber, x, .25, -1.22); w.rotation.x = Math.PI / 2; g.add(w); }
-      blocks([[.45, .95, -1.55], [.85, .95, -1.55]]);
+      // a hoist on the yard's right side, its block hanging over a cart being loaded
+      g.add(box(.14, 2.6, .14, M.timber, 1.6, 1.4, -.35)); g.add(box(1.3, .12, .12, M.timber, 1.0, 2.6, -.35));
+      g.add(box(.03, .9, .03, M.dark, .5, 2.15, -.35)); g.add(box(.35, .3, .35, M.stone2, .5, 1.55, -.35));
+      g.add(box(1.0, .35, .6, M.wood, .75, .55, -.7));
+      for (const x of [.35, 1.15]) { const w = cyl(.22, .22, .08, 10, M.timber, x, .25, -.37); w.rotation.x = Math.PI / 2; g.add(w); }
+      blocks([[.55, .95, -.75], [.95, .95, -.75]]);
     }
   }
   return g;
@@ -2019,10 +2022,12 @@ function charmOf(B) {
 const housesNear = (x, z) => buildings.filter(B => B.type === 'house' && Math.hypot(center(B).x - x, center(B).z - z) <= CHARM_R).length;
 function center(B) { return { x: (B.ev.x0 + B.ev.x1) / 2, z: (B.ev.z0 + B.ev.z1) / 2 }; }
 function doorPoint(B) { const d = B.door; if (!d) return { x: center(B).x, z: B.ev.z1 + .6 }; const [sx, sz] = doorShift(B); return { x: (d.a + .5) * CELL + sx, z: (d.b + .5) * CELL + sz }; }
-// how far this tier's door sits across from the door tile's centre line (the tile lines up with the tier-1 door)
+// how far this tier's door sits across from the door tile's centre line (the tile holding the tier-1 door: on a 2x2 its
+// centre is 1 m off the building's middle, toward the door's side)
 function doorShift(B) {
   const L = DOOR[B.type]; if (!L || !B.door) return [0, 0];
-  return faceRot(B.face || 0, L[B.tier - 1][0] - L[0][0], 0);
+  const tile = B.ev.s % 2 ? 0 : Math.sign(L[0][0]) * CELL / 2;
+  return faceRot(B.face || 0, L[B.tier - 1][0] - tile, 0);
 }
 // where the model's own door is; villagers walk from the path tile to here before they vanish inside
 function innerDoor(B) {
