@@ -1141,11 +1141,11 @@ function seatRocks() {
 
 // ---------- roads: packed-earth tracks with soft, slightly wavy edges and flat stones set in them ----------
 // built from overlapping discs along each connection, so bends come out round and edges organic rather than square
-const roadMatBase = new THREE.MeshStandardMaterial({ color: '#64553a', roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const roadMatBase = new THREE.MeshStandardMaterial({ color: '#4e3f2a', roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const roadMatTop = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
 const roadBase = new THREE.Mesh(new THREE.BufferGeometry(), roadMatBase), roadTop = new THREE.Mesh(new THREE.BufferGeometry(), roadMatTop);
 roadBase.receiveShadow = roadTop.receiveShadow = true; scene.add(roadBase, roadTop);
-const MAX_PSTONES = N * N * 10;
+const MAX_PSTONES = N * N * 24;
 const pathStones = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1.1, 1, 6), mat('#ffffff'), MAX_PSTONES);
 addGrit(pathStones.material, 'rock'); pathStones.receiveShadow = pathStones.castShadow = true; pathStones.frustumCulled = false; scene.add(pathStones);   // r128 culls instances by the mesh origin
 // sized up front: r128 sizes instanceColor from .count on the first setColorAt, and count starts at 0 here
@@ -1184,13 +1184,13 @@ function discInto(arr, cx, cz, r, lift, col, seg = 12) {
   }
 }
 // a tile: a disc at the centre and a chain of discs out to each connected edge; radii wobble by position, so neighbours agree
-function tileInto(arr, a, b, m, rad, wob, lift, col, stones, door) {
+function tileInto(arr, a, b, m, rad, wob, lift, col, stones, door, discs) {
   const cx = (a + .5) * CELL, cz = (b + .5) * CELL, e = CELL / 2;
   const pts = [[cx, cz]];
   // a door off the tile's centre line: the arm into the building runs straight at the door
   if (door) pts.push([cx + door.sx, cz + door.sz]);
   for (const [da, db, bit] of DIRS) if (m & bit) for (const t of [.34, .67, 1]) { const k = door && bit === door.bit; pts.push([cx + da * e * t + (k ? door.sx : 0), cz + db * e * t + (k ? door.sz : 0)]); }
-  for (const [x, z] of pts) discInto(arr, x, z, rad + wob * (hash(x * 3.1, z * 2.3) - .5), lift, col);
+  for (const [x, z] of pts) { const r = rad + wob * (hash(x * 3.1, z * 2.3) - .5); discInto(arr, x, z, r, lift, col); if (discs) discs.push([x, z, r]); }
   if (stones) for (const [x, z] of pts) if (hash(x * 1.7, z * 5.3) < .5 && !stoneAt(x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1)) stones.push([x + (hash(x, z * 3) - .5) * rad * 1.1, z + (hash(z * 2, x) - .5) * rad * 1.1, x * 7 + z * 3]);
 }
 function setGeo(mesh, arr, col) {
@@ -1199,14 +1199,28 @@ function setGeo(mesh, arr, col) {
   g.computeVertexNormals(); mesh.geometry.dispose(); mesh.geometry = g;
 }
 function rebuildRoads() {
-  const base = [], top = [], tc = [], stones = [], doors = {};
+  const base = [], top = [], tc = [], stones = [], doors = {}, edge = [];
   for (const B of buildings) if (B.door && !B.dead) { const [sx, sz] = doorShift(B); if (sx || sz) doors[B.door.b * N + B.door.a] = { bit: B.door.bit, sx, sz }; }
   for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) if (road[b * N + a]) {
     if (stoneAt((a + .5) * CELL, (b + .5) * CELL)) continue;    // a gate's own tile: its stone floor is the path
     const m = roadMask(a, b), d = doors[b * N + a];
-    tileInto(base, a, b, m, .47, .12, .05, null, null, d); tileInto(top, a, b, m, .4, .1, .08, tc, stones, d);
+    tileInto(base, a, b, m, .5, .08, .05, null, null, d, edge); tileInto(top, a, b, m, .4, .1, .08, tc, stones, d);
   }
   setGeo(roadBase, base); setGeo(roadTop, top, tc);
+  // kerb: small stones set along the track's outer edge, wherever a point on a disc's rim is outside every other disc
+  const near = {}; for (const q of edge) { const k = cellAt(q[0], q[1]); (near[k] = near[k] || []).push(q); }
+  const kerb = [];
+  for (const [x, z, r] of edge) for (let i = 0; i < 14; i++) {
+    const t = (i + hash(x * 2.1, z * 1.3)) / 14 * 6.283, px = x + Math.cos(t) * (r - .04), pz = z + Math.sin(t) * (r - .04);
+    if (stoneAt(px, pz) || hash(px * 3.3, pz * 2.9) < .18) continue;   // a few gaps, so it reads as laid by hand
+    let inside = false;
+    const c = cellAt(px, pz), ca = c % N, cb = (c / N) | 0;
+    for (let db = -1; db <= 1 && !inside; db++) for (let da = -1; da <= 1 && !inside; da++) {
+      const L = near[(cb + db) * N + ca + da]; if (!L || ca + da < 0 || ca + da >= N) continue;
+      for (const q of L) if (q[0] !== x || q[1] !== z) { if (Math.hypot(px - q[0], pz - q[1]) < q[2] - .07) { inside = true; break; } }
+    }
+    if (!inside && !kerb.some(k => Math.abs(k[0] - px) < .17 && Math.abs(k[1] - pz) < .17 && Math.hypot(k[0] - px, k[1] - pz) < .17)) kerb.push([px, pz]);
+  }
   // flat set stones, a few per tile, grey-brown and half sunk into the earth
   const sc = new THREE.Color(); let n = 0;
   for (const [x, z, k] of stones) {
@@ -1215,6 +1229,13 @@ function rebuildRoads() {
     dummy.position.set(x, hAt(x, z) + .1, z); dummy.rotation.set((h - .5) * .12, h * 6.3, (hash(k, 4.4) - .5) * .12); dummy.scale.set(r, .06, r * (.75 + .4 * h)); dummy.updateMatrix();
     pathStones.setMatrixAt(n, dummy.matrix);
     sc.setRGB(.37 + .1 * h, .34 + .09 * h, .29 + .07 * h); sc.setRGB(sc.r ** 2.2, sc.g ** 2.2, sc.b ** 2.2); pathStones.setColorAt(n, sc); n++;
+  }
+  for (const [x, z] of kerb) {
+    if (n >= MAX_PSTONES) break;
+    const h = hash(x * 5.1, z * 3.7), r = .05 + .045 * h;
+    dummy.position.set(x, hAt(x, z) + .07, z); dummy.rotation.set((h - .5) * .2, h * 6.3, (hash(z, x) - .5) * .2); dummy.scale.set(r, .09, r * (.8 + .4 * h)); dummy.updateMatrix();
+    pathStones.setMatrixAt(n, dummy.matrix);
+    sc.setRGB(.4 + .12 * h, .38 + .1 * h, .33 + .08 * h); sc.setRGB(sc.r ** 2.2, sc.g ** 2.2, sc.b ** 2.2); pathStones.setColorAt(n, sc); n++;
   }
   pathStones.count = n; pathStones.instanceMatrix.needsUpdate = true; if (pathStones.instanceColor) pathStones.instanceColor.needsUpdate = true;
   seatClutter();
@@ -2291,7 +2312,7 @@ function paintRoad(a, b) {
   const ev = evaluateRoad(a, b);
   if (!ev.ok) { if (!ev.soft) setHint(ev.reason, 'bad'); return false; }
   if (!canAfford(PATH_COST)) { setHint(`Need ${shortfall(PATH_COST)}`, 'bad'); return false; }
-  pay(PATH_COST); road[b * N + a] = 1; rebuildRoads(); villagers.forEach(v => v.path = null);
+  pay(PATH_COST); road[b * N + a] = 1; rebuildRoads(); villagers.forEach(v => v.path = null); sfx('path', { x: (a + .5) * CELL, z: (b + .5) * CELL });
   const m = roadMask(a, b);
   setHint('<b>Path</b>', 'ok');
   return true;
@@ -3888,6 +3909,8 @@ function pickBuilding(e, strict) {
     if (p.x > ev.x0 + m && p.x < ev.x1 - m && p.z > ev.z0 + m && p.z < ev.z1 - m && p.y > B.group.position.y + .2) return B;
     return null;
   }
+  // missed every model: whatever stands on the tapped tile (a torch or flowers are much smaller than their tile)
+  if (!strict) { const pt = pick(e), o = pt && occB[cellAt(pt.x, pt.z)]; if (o && !o.dead) return o; }
   return null;
 }
 const PAINT = { road: 1, wall: 1 };
@@ -3942,7 +3965,12 @@ function tap(e) {
     const pt = pick(e); if (!pt) { setHint('Pick a spot', 'bad'); return; }
     volleyAim = false; if (PH.kind !== 'night') return refreshCard(); castVolley(pt); setHint('Volley'); refreshCard(); return;
   }
-  if (PAINT[tool]) { paintAt(e); return; }
+  if (PAINT[tool]) {
+    // the Path tool on a path tile takes it up again (a quick undo for a misplaced tile)
+    const pt = tool === 'road' && pick(e), c = pt && cellAt(pt.x, pt.z);
+    if (pt && road[c]) { removePath({ a: c % N, b: (c / N) | 0 }); setHint('Path removed'); return; }
+    paintAt(e); return;
+  }
   const building = tool && tool !== 'select';
   const hb = pickBuilding(e, building);
   if (hb) { select(hb); return; }
@@ -4248,6 +4276,8 @@ var SND = {   // game event -> file in audio/sfx (or audio/music) and its trim a
   pick:      { file: 'sfx/Mason_pick.mp3',           trim: .736, strikes: true },
   hammer:    { file: 'sfx/Building_with_hammer.mp3', trim: .668, strikes: true },
   hoe:       { file: 'sfx/Farmer_hoe.mp3',           trim: .6,   strikes: true },
+  // a path tile laid: Path_placed.mp3 when it is added; until then one soft hoe stroke into the earth
+  path:      { file: 'sfx/Path_placed.mp3',          trim: .5, fallback: 'hoe' },
   victory:   { file: 'music/Victory_sound.mp3',      trim: 1 },
   defeat:    { file: 'music/Defeat_sound.mp3',       trim: 1 },
 };
@@ -4261,7 +4291,7 @@ var LOOPS = {
   birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
 };
 var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
-var SFX_GAP = { chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
+var SFX_GAP = { path: .12, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
 var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
 // var: sfx()/setMusic() can run during the startup reset, before this block executes
@@ -4312,7 +4342,8 @@ for (const k in LOOPS) {
 }
 // at: a world point; world sounds fade with distance from what the camera looks at, and when zoomed far out
 function sfx(name, at, vol = 1) {
-  if (muted || !actx || actx.state !== 'running' || !clips[name] || !clips[name].length) return;
+  if (muted || !actx || actx.state !== 'running') return;
+  if (!clips[name] || !clips[name].length) return SND[name] && SND[name].fallback ? sfx(SND[name].fallback, at, vol * .7) : undefined;
   const now = actx.currentTime; if (now - (sfxLast[name] || -9) < (SFX_GAP[name] || .05)) return;
   let v = vol;
   if (at) { v *= clamp(1 - Math.hypot(at.x - target.x, at.z - target.z) / 28, 0, 1) * clamp(1.25 - dist / 80, .3, 1); if (v < .03) return; }

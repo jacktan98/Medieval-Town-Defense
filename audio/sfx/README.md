@@ -13,6 +13,7 @@
 | `Mason_pick.mp3` | One hit per pick swing (cut the same way) |
 | `Farmer_hoe.mp3` | One stroke per hoe swing |
 | `Building_with_hammer.mp3` | One knock per hammer swing (cut the same way) |
+| `Path_placed.mp3` (not supplied yet) | A path tile is laid; until it exists a soft hoe stroke plays instead |
 | `Bird_chirping.mp3` | Loops softly during the day, stops at night |
 
 **Volume balance:** every clip is measured when it loads (loudness of its loudest 0.3 s) and brought to one
