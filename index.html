@@ -1043,7 +1043,10 @@ function genClutter() {
 }
 function seatClutter() {
   for (const it of clutter) {
-    const c = CL[it.ci], cell = cellAt(it.x, it.z), s = (occB[cell] || road[cell] || bridgeCell[cell]) ? 1e-4 : it.s;
+    // hidden when any part of it reaches an occupied, paved or bridge tile (a bush beside a base used to poke onto it)
+    const c = CL[it.ci], R = (c.kind === 'bush' ? .62 : c.kind === 'tuft' ? .3 : .2) * it.s;
+    const D = R * .72, busy = [[0, 0], [R, 0], [-R, 0], [0, R], [0, -R], [D, D], [D, -D], [-D, D], [-D, -D]].some(([dx, dz]) => { const cell = cellAt(it.x + dx, it.z + dz); return occB[cell] || road[cell] || bridgeCell[cell]; });
+    const s = busy ? 1e-4 : it.s;
     dummy.position.set(it.x, hAt(it.x, it.z) - .03, it.z); dummy.rotation.set(0, it.rot, 0);
     dummy.scale.set(s, s * .8, s); dummy.updateMatrix();
     c.mesh.setMatrixAt(it.n, dummy.matrix);
@@ -1137,7 +1140,7 @@ function rebuildRoads() {
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
-  lodge: [[-.65, .52], [-.42, .82], [-.42, .82]],
+  lodge: [[-.65, .52], [-1.17, -.03], [-1.17, -.03]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
   barracks: [[-1, .42], [-1, .42], [-1, .42]],
@@ -1311,7 +1314,7 @@ function makeCastle(tier, plinth) {
   }
   return root;
 }
-const LODGE_K = .7, LODGE_KY = .8;   // T2/T3 cabin drawn at .7 in plan and .8 in height; its door keeps the standard size
+const LODGE_K = .7, LODGE_KY = .8, LODGE_AT = [-.75, -.85];   // T2/T3 cabin drawn at .7 in plan and .8 in height; its door keeps the standard size
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
@@ -1334,7 +1337,7 @@ function makeLodge(tier, plinth) {
     pile(1.05, 1.25, 2);
     axeStump(1.1, -.85);       // chopping block round the back, beside the hut
   } else {                     // log cabin, then timber yard; the cabin is drawn at LODGE_K in x and z (the door keeps its size)
-    const cab = new THREE.Group(), K = LODGE_K; cab.scale.set(K, LODGE_KY, K); g.add(cab);
+    const cab = new THREE.Group(), K = LODGE_K, CX = LODGE_AT[0], CZ = LODGE_AT[1]; cab.scale.set(K, LODGE_KY, K); cab.position.set(CX, 0, CZ); g.add(cab);
     for (let n = 0; n < 5; n++) {
       const y = .35 + n * .32;
       const l1 = cyl(.17, .17, 2.9, 6, M.log, 0, y, .9); l1.rotation.z = Math.PI / 2; cab.add(l1);
@@ -1344,14 +1347,15 @@ function makeLodge(tier, plinth) {
     }
     cab.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
     cab.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
-    g.add(box(DOOR_W, DOOR_H, .06, M.timber, -.6 * K, .2 + DOOR_H / 2, 1.08 * K));
-    g.add(box(.26, .22, .06, M.glow, .6 * K, 1.0, 1.08 * K));
-    pile(.5, 1.15, 3, .14);   // in front of the cabin, well inside the base
-    axeStump(1.3, -1.3);
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, CX - .6 * K, .2 + DOOR_H / 2, CZ + 1.08 * K));
+    g.add(box(.26, .22, .06, M.glow, CX + .6 * K, 1.0, CZ + 1.08 * K));
+    pile(.5, 1.15, 3, .14);   // in front, well inside the base
+    axeStump(1.55, .4);
+    if (tier === 2) { pile(1.05, -1.0, 2); g.add(cyl(.14, .14, .2, 7, M.logEnd, 1.55, .1, -.3)); g.add(cyl(.12, .12, .18, 7, M.logEnd, 1.3, .09, -.45)); }   // beside the cabin
     if (tier === 3) {
       cab.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
       // sawbuck: two X trestles cradling a log, a frame saw standing in the cut, sawn rounds beside it
-      const SX = -1.2, SZ = -.3;   // the sawbuck, drawn in nearer the cabin
+      const SX = 1.05, SZ = -2.4;   // the sawbuck, beside the cabin on its right
       for (const z of [1.35, 1.8]) for (const sx of [-1, 1]) { const l = box(.07, .8, .07, M.timber, SX, .38, z + SZ); l.rotation.z = sx * .55; g.add(l); }
       const lg = cyl(.13, .13, .75, 7, M.log, SX, .62, 1.57 + SZ); lg.rotation.x = Math.PI / 2; g.add(lg);
       g.add(box(.012, .09, .5, M.iron, SX, .78, 1.57 + SZ));
@@ -1396,8 +1400,7 @@ function makeMarket(tier, plinth) {
   if (tier === 1) {
     stall(0, -.15, 1.7, 1.05);
     crate(-1.1, .75); crate(-1.05, 1.15, .26, .4); sack(1.0, .8); sack(1.25, 1.05, .12); barrel(1.15, -.9); crate(-1.15, -.85, .34, .2);
-    wheat(.15, 1.25); wheat(.5, 1.45); logs(-1.75, .1, 1); stones(1.75, .1); wheat(-.4, -1.35); logs(.55, -1.45); stones(-1.75, 1.75); sack(1.75, -1.5);
-    wheat(1.65, 1.7); crate(1.75, 1.2, .3); logs(-.3, 2.0); stones(.95, 2.0); barrel(-1.85, -1.2); crate(-1.5, -1.75, .3, .6);
+    wheat(.3, 1.35); logs(-1.75, .1, 1); stones(1.75, .1); logs(.4, -1.45);
   } else if (tier === 2) {
     stall(-.9, -.6, 1.8, 1.2); stall(1.05, -.4, 1.6, 1.1, -.25);
     // a hand cart of goods at the front
@@ -1405,8 +1408,7 @@ function makeMarket(tier, plinth) {
     for (const sz of [-1, 1]) { const wh = cyl(.26, .26, .06, 10, M.timber, -.6, .26, 1.2 + sz * .34); wh.rotation.x = Math.PI / 2; g.add(wh); }
     g.add(box(.05, .05, .9, M.timber, .1, .45, 1.2)); sack(-.75, 1.2, .13); sack(-.45, 1.25, .12);
     barrel(1.5, 1.1); barrel(1.15, 1.35); crate(.55, 1.4, .3, .5); crate(-1.6, .6, .3);
-    stones(2.0, .3); logs(-2.0, 1.55, 1); wheat(.35, .65); wheat(.05, 1.8); logs(0, -1.85); stones(-1.75, -1.75); wheat(1.8, -1.6); sack(2.05, -.6);
-    wheat(1.55, .5); crate(-.3, .55, .3); stones(1.0, 2.0); logs(-.95, 2.05); wheat(-2.15, -.2); crate(1.0, -1.95, .3);
+    stones(2.0, .3); wheat(.35, .65); logs(0, -1.85); wheat(1.8, -1.6);
   } else {
     // open market hall: stone pillars, a timber floor frame, a steep blue gable roof; tables of goods inside
     for (const x of [-1.5, 0, 1.5]) for (const z of [-1.3, 1.3]) { g.add(cyl(.14, .17, 2.1, 8, M.stone2, x, 1.05, z)); g.add(box(.36, .14, .36, M.stone2, x, 2.1, z)); }
@@ -1418,9 +1420,7 @@ function makeMarket(tier, plinth) {
     for (const [x, z] of [[-1.12, -.82], [-.74, -.95], [-.95, -.55], [.78, -.88], [1.15, -.78], [1.12, .2]]) barrel(x, z);
     crate(1.15, .8, .32, .3); crate(.8, .95, .26, .1); sack(-1.15, .82); sack(-.85, .95, .12); crate(-.3, -.95, .28, .5);
     // and round the hall, on the open paving
-    wheat(-1.9, 2.0); wheat(-1.5, 2.2); stones(1.9, 2.05); logs(1.05, 2.15); logs(-1.2, -2.1); stones(1.3, -2.1); wheat(2.15, -1.95);
-    wheat(2.2, .25); wheat(2.2, -.3); stones(-2.2, .3); sack(-2.2, -.4);
-    crate(-.55, 2.15, .3); wheat(.25, 2.2); logs(-.1, -2.15); crate(-2.15, -1.2, .3); wheat(-2.15, 1.1);
+    wheat(-1.7, 2.1); stones(1.9, 2.05); logs(-1.2, -2.1); wheat(2.2, .0);
     // a sign hung from an iron bracket on the middle front pillar, square to the front
     g.add(box(.04, .04, .56, M.iron, 0, 1.86, 1.66));     for (const z of [1.62, 1.86]) g.add(box(.015, .14, .015, M.iron, 0, 1.78, z));
     g.add(box(.04, .3, .34, M.awning, 0, 1.56, 1.74));
