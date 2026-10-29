@@ -78,6 +78,9 @@ details[open] summary::after{content:"Hide"} details:not([open]) summary::after{
 .card h4{margin:0;font-family:var(--display);font-weight:400;font-size:19px;color:var(--gold)}
 .card p{margin:0;font-size:14px;color:var(--parch);font-variant-numeric:tabular-nums}
 .card .row{display:flex;gap:8px;flex-wrap:wrap}
+.trades{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.trades button{min-height:28px;padding:0 6px;border-radius:7px;background:#24261f;font-size:12px;gap:3px;white-space:nowrap;justify-content:center}
+.trades button .cost .ico{width:13px;height:13px} .trades .to{opacity:.6;margin:0 1px}
 .card button{flex-direction:row;gap:6px;min-height:38px}
 .hpbar{height:6px;border-radius:3px;background:#3a2622;overflow:hidden}
 .hpbar i{display:block;height:100%;background:var(--ok)}
@@ -307,6 +310,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       </div>
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
+      <div class="trades" id="cardTrade" hidden></div>
       <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="danger" id="demBtn" title="Demolish"></button></div>
     </div>
     <div class="guideCard" id="guide" hidden><span class="gStep" id="gStep"></span><b id="gText"></b><button id="gSkip">Skip</button></div>
@@ -422,19 +426,24 @@ const DEF = {
   castle: { size: 3, name: 'Castle', maxdh: 2.6, hp: [900, 1200, 1600], cost: {}, gold: [3, 5, 7],
             up: [{ stone: 60, wood: 40, gold: 70 }, { stone: 100, gold: 100 }], range: [13, 15, 17], dmg: [11, 15, 20], rate: [1.3, 1.15, 1.0],
             archers: [4, 4, 5], shootY: [3.2, 4.6, 5.2], residents: [3, 3, 3], tiers: ['Palisade fort', 'Stone keep', 'Castle'] },
+  market: { size: 2, name: 'Market', maxdh: 1.6, hp: [110, 160, 230], cost: { wood: 20, gold: 15 },
+            up: [{ wood: 25, gold: 30 }, { stone: 25, gold: 50 }], tiers: ['Market stall', 'Market', 'Market hall'], key: '9' },
   well:    { size: 1, name: 'Well', decor: true, maxdh: 1.3, falloff: 1.2, hp: [80], cost: { stone: 5 }, tiers: ['Well'], noRoad: true },
   torch:   { size: 1, name: 'Torch', decor: true, maxdh: 1.6, falloff: 1, hp: [40], cost: { wood: 2 }, tiers: ['Torch post'], noRoad: true },
   flowers: { size: 1, name: 'Flowers', decor: true, maxdh: 1.2, falloff: 1, hp: [40], cost: { gold: 3 }, tiers: ['Flowers'], noRoad: true },
   statue:  { size: 1, name: 'Statue', decor: true, maxdh: 1.2, falloff: 1.2, hp: [150], cost: { stone: 12, gold: 10 }, tiers: ['Statue'], noRoad: true },
 };
 const MEAL = 20, LUMBER_LOAD = 2;
+// market trades: give 10 of one thing for n (by market tier) of another
+const TRADES = [{ give: 'wood', get: 'gold', n: [4, 5, 6] }, { give: 'stone', get: 'gold', n: [6, 8, 10] },
+  { give: 'gold', get: 'wood', n: [6, 8, 10] }, { give: 'gold', get: 'stone', n: [4, 5, 7] }, { give: 'gold', get: 'food', n: [6, 8, 10] }];
 DEF.castle.food = [3, 4, 5];
 DEF.tower.shootY = DEF.tower.shootY.map((y, i) => y * TOWER_K[i]);
-const BUILD_T = { house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, barracks: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
+const BUILD_T = { market: 12, house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, barracks: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
 for (const t in BUILD_T) DEF[t].build = BUILD_T[t];
 DEF.well.charm = .25; DEF.torch.charm = .1; DEF.flowers.charm = .15; DEF.statue.charm = .35;
 const PATH_COST = { gold: 1 }, PATH_CHARM = .02, CHARM_R = 8, WALK = { farm: 1, torch: 1, flowers: 1 };
-const CATS = { eco: ['house', 'farm', 'lodge', 'quarry'], def: ['tower', 'barracks', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
+const CATS = { eco: ['house', 'farm', 'lodge', 'quarry', 'market'], def: ['tower', 'barracks', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
 const WALLY = { wall: 1, gate: 1 };   // walls join only walls and gates
 // spearmen are the basic raider and come first; swordsmen join from wave 2, captains from wave 3
 const WAVES = [
@@ -829,6 +838,7 @@ for (const m of [M.wood, M.rough, M.timber, M.log, M.dark]) addGrit(m, 'wood');
 addGrit(M.stone, 'stone'); addGrit(M.stone2, 'stone');
 M.plainStone = mat('#8f8a80'); addGrit(M.plainStone, 'rock');   // tier 2 bases: rough grey stone without block joints
 M.drape = mat('#2f4f8a');
+M.awning = mat('#3466b0');   // market awning stripes: the town's blue (no flag wave)
 M.drape.onBeforeCompile = sh => {
   sh.uniforms.uTime = windU;
   sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1131,7 +1141,7 @@ const DOOR = {
   barracks: [[-1, .42], [-1, .42], [-1, .42]],
 };
 // buildings the player can turn (walls and gates have their own E–W / N–S rotation); face 0 = +z, 1 = +x, 2 = -z, 3 = -x
-const FACING = { house: 1, lodge: 1, quarry: 1, barracks: 1, farm: 1, tower: 1, castle: 1, well: 1, torch: 1, flowers: 1, statue: 1 };
+const FACING = { market: 1, house: 1, lodge: 1, quarry: 1, barracks: 1, farm: 1, tower: 1, castle: 1, well: 1, torch: 1, flowers: 1, statue: 1 };
 const unrot = (f, x, z) => faceRot((4 - f) % 4, x, z);
 const faceRot = (f, x, z) => { const a = f * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a)); return [x * c + z * s, -x * s + z * c]; };
 // the tile in front of the door when the building faces f, lined up with the door so villagers walk straight in
@@ -1345,6 +1355,52 @@ function makeLodge(tier, plinth) {
       g.add(box(.035, .035, .52, M.timber, -1.5, 1.04, 1.57));
       g.add(cyl(.14, .14, .2, 7, M.logEnd, -1.78, .1, 1.22)); g.add(cyl(.12, .12, .18, 7, M.logEnd, -1.72, .29, 1.25));
     }
+  }
+  return g;
+}
+// market: tier 1 one stall under a striped awning, tier 2 two stalls and a cart, tier 3 an open hall on stone pillars
+// with a blue roof; goods everywhere (crates, sacks, barrels, produce, cloth)
+function makeMarket(tier, plinth) {
+  const g = new THREE.Group();
+  if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
+  const crate = (x, z, s = .32, r = 0) => { const c = box(s, s, s, M.wood, x, s / 2, z); c.rotation.y = r; g.add(c); };
+  const sack = (x, z, r = .15) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 7, 5), M.canvas); o.scale.y = 1.25; o.position.set(x, r * 1.1, z); o.castShadow = true; g.add(o); };
+  const barrel = (x, z) => { g.add(cyl(.17, .15, .44, 9, M.log, x, .22, z)); g.add(cyl(.175, .175, .04, 9, M.iron, x, .32, z)); };
+  const produce = (x, z, w) => {                     // a tray of fruit, veg and cloth on a counter top at height y
+    for (let i = 0; i < 6; i++) { const o = new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 4), FLOWER[i % 5]); o.position.set(x - w / 2 + .1 + i * (w - .2) / 5, .86, z + (i % 2) * .08); o.castShadow = true; g.add(o); }
+  };
+  // a stall: posts, counter, awning sloping to the front in canvas and blue stripes
+  const stall = (x, z, w, d, rot = 0) => {
+    const s = new THREE.Group(); s.position.set(x, 0, z); s.rotation.y = rot;
+    const P = tier === 1 ? M.rough : M.timber;
+    for (const sx of [-1, 1]) { s.add(box(.08, 1.75, .08, P, sx * (w / 2 - .05), .87, -d / 2 + .05)); s.add(box(.08, 1.45, .08, P, sx * (w / 2 - .05), .72, d / 2 - .05)); }
+    s.add(box(w - .1, .08, .5, M.wood, 0, .78, d / 2 - .3)); s.add(box(w - .1, .7, .06, M.wood, 0, .38, d / 2 - .1));
+    const stripes = 7, aw = new THREE.Group(); aw.position.set(0, 1.62, 0); aw.rotation.x = .32;
+    for (let i = 0; i < stripes; i++) aw.add(box((w + .2) / stripes, .03, d + .25, i % 2 ? M.awning : M.canvas, -w / 2 - .1 + (i + .5) * (w + .2) / stripes, 0, .05));
+    s.add(aw);
+    for (let i = 0; i < 5; i++) { const o = new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 4), FLOWER[i % 5]); o.position.set(-w / 2 + .3 + i * (w - .6) / 4, .86, d / 2 - .3); o.castShadow = true; s.add(o); }
+    g.add(s);
+  };
+  if (tier === 1) {
+    stall(0, -.2, 2.2, 1.3);
+    crate(-1.35, .9); crate(-1.3, 1.35, .26, .4); sack(1.25, .95); sack(1.5, 1.2, .12); barrel(1.45, -1.2); crate(-1.4, -1.1, .36, .2);
+  } else if (tier === 2) {
+    stall(-.9, -.6, 1.8, 1.2); stall(1.05, -.4, 1.6, 1.1, -.25);
+    // a hand cart of goods at the front
+    g.add(box(.9, .1, .6, M.wood, -.6, .42, 1.2)); g.add(box(.9, .22, .05, M.wood, -.6, .56, .92)); g.add(box(.9, .22, .05, M.wood, -.6, .56, 1.48));
+    for (const sz of [-1, 1]) { const wh = cyl(.26, .26, .06, 10, M.timber, -.6, .26, 1.2 + sz * .34); wh.rotation.x = Math.PI / 2; g.add(wh); }
+    g.add(box(.05, .05, .9, M.timber, .1, .45, 1.2)); sack(-.75, 1.2, .13); sack(-.45, 1.25, .12);
+    barrel(1.5, 1.1); barrel(1.15, 1.35); crate(.55, 1.4, .3, .5); crate(-1.6, .6, .3);
+  } else {
+    // open market hall: stone pillars, a timber floor frame, a steep blue gable roof; tables of goods inside
+    for (const x of [-1.5, 0, 1.5]) for (const z of [-1.3, 1.3]) { g.add(cyl(.14, .17, 2.1, 8, M.stone2, x, 1.05, z)); g.add(box(.36, .14, .36, M.stone2, x, 2.1, z)); }
+    g.add(box(3.6, .16, .2, M.timber, 0, 2.22, -1.3)); g.add(box(3.6, .16, .2, M.timber, 0, 2.22, 1.3));
+    for (const x of [-1.5, 0, 1.5]) g.add(box(.16, .16, 2.8, M.timber, x, 2.22, 0));
+    g.add(prism(3.9, 3.3, 1.3, M.roofBlue, 0, 2.3, 0));
+    for (const x of [-.8, .8]) { g.add(box(1.1, .06, .6, M.wood, x, .78, 0)); for (const sx of [-1, 1]) g.add(box(.06, .76, .5, M.wood, x + sx * .5, .38, 0)); produce(x, -.05, 1.0); }
+    barrel(-1.75, 1.75); crate(1.7, 1.7, .32, .3); sack(1.35, 1.8); crate(-1.7, -1.75, .3); sack(1.8, -1.7, .14);
+    // hanging sign at the front
+    g.add(box(.05, .05, .4, M.iron, 0, 1.95, 1.48)); g.add(box(.5, .3, .04, M.awning, 0, 1.72, 1.66));
   }
   return g;
 }
@@ -1623,7 +1679,7 @@ function makeBridge(b) {
   return g;
 }
 function buildBridges() { for (const b of bridges) { b.g = makeBridge(b); scene.add(b.g); } }
-const MODELS = { barracks: makeBarracks, house: makeHouse, tower: makeTower, castle: makeCastle, lodge: makeLodge, quarry: makeQuarry, farm: makeFarm,
+const MODELS = { market: makeMarket, barracks: makeBarracks, house: makeHouse, tower: makeTower, castle: makeCastle, lodge: makeLodge, quarry: makeQuarry, farm: makeFarm,
   wall: makeWall, gate: makeGate, well: makeWell, torch: makeTorch, flowers: makeFlowers, statue: makeStatue };
 // grit: every mesh gets a slightly different, weathered copy of its material; tier 1 is dirtier and duller
 const aoTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -1657,9 +1713,9 @@ const makeModel = (type, tier, plinth, mask, rot = 0, fixed = false) => {
 };
 
 // stone bases fill their tiles exactly; this is how far each one's top sits above the building's ground level
-const PLINTH_TOP = { house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, barracks: .2 };
+const PLINTH_TOP = { market: .2, house: .1, tower: .2, castle: .2, lodge: .2, quarry: .2, barracks: .2 };
 // tier 1 stands on a packed-earth slab like the palisade fort's yard, filling its tiles so neighbours meet edge to edge
-const SLAB = { house: 1, lodge: 1, quarry: 1, castle: 1, barracks: 1, tower: 1 }, SLAB_TOP = .08;
+const SLAB = { market: 1, house: 1, lodge: 1, quarry: 1, castle: 1, barracks: 1, tower: 1 }, SLAB_TOP = .08;
 const plinthTop = (type, tier) => tier === 1 ? (SLAB[type] ? SLAB_TOP : null) : PLINTH_TOP[type];
 // a stone-based building placed edge to edge with another settles at the height that makes the two stone tops flush,
 // so a row of buildings reads as one continuous platform (only if that is within reach of the ground it stands on)
@@ -2968,7 +3024,10 @@ function updateVolley(dt) {
     volleyPose(f, next && !(f.vLoose > .1));
   });
 }
-function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; e.flashT = .14; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
+function hurtEnemy(e, d) {
+  if (e.dead) return; e.hp -= d; e.flashT = .14;
+  if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; const y = walkY(e.x, e.z); for (let i = 0; i < 5; i++) dustAt(e.x, y, e.z); }   // a puff of dust as they fall
+}
 // who goes for what: spearmen hit the nearest building, swordsmen hunt archer towers, the captain rides for the castle,
 // archers aim past walls and gates at what lies behind them
 const NOT_WALL = B => B.type !== 'wall' && B.type !== 'gate';
@@ -2982,8 +3041,8 @@ function updateEnemies(dt) {
   for (let n = enemies.length - 1; n >= 0; n--) {
     const e = enemies[n];
     if (e.dead) {
-      e.deadT += dt; e.body.rotation.x = -Math.min(1.5, e.deadT * 4); e.g.position.y = walkY(e.x, e.z) - Math.max(0, e.deadT - 1.2) * .6;
-      if (e.deadT > 2.4) { scene.remove(e.g); scene.remove(e.bar.grp); enemies.splice(n, 1); }
+      e.deadT += dt; e.body.rotation.x = -Math.min(1.5, e.deadT * 4); e.g.position.y = walkY(e.x, e.z) - Math.max(0, e.deadT - .8) * .8;
+      if (e.deadT > 1.9) { scene.remove(e.g); scene.remove(e.bar.grp); enemies.splice(n, 1); }
       continue;
     }
     e.walking = false; e.aiming = false; e.running = false;
@@ -3214,12 +3273,15 @@ function updateDefense(dt) {
 }
 
 // ---------- economy ----------
+const farmersAt = B => villagers.filter(v => v.job === B && !v.build && !v.hungry && !v.post).length;
 function econTick() {
   for (const B of buildings) {
     if (!B.built) continue;
     const c = center(B), T = DEF[B.type];
-    if (B.type === 'farm' && villagers.some(v => v.job === B) && villagers.every(v => v.job !== B || v.build)) continue;
-    if (B.type === 'farm') { const f = T.food[B.tier - 1]; res.food += f; stats.food += f; floatRes('food', f, c.x, B.group.position.y + 1.6, c.z); }
+    if (B.type === 'farm') {          // food by farmers at work: a Manor farm with 1 of its 2 farmers makes half
+      const k = B.tier - 1, raw = T.food[k] * farmersAt(B) / T.workers[k], f = Math.floor(raw) + (Math.random() < raw % 1 ? 1 : 0);
+      if (f) { res.food += f; stats.food += f; floatRes('food', f, c.x, B.group.position.y + 1.6, c.z); }
+    }
     if (B.type === 'castle') {
       const g = T.gold[B.tier - 1], f = T.food[B.tier - 1]; res.gold += g; stats.gold += g; res.food += f; stats.food += f;
       floatRes('gold', g, c.x, B.group.position.y + 7.2, c.z); floatRes('food', f, c.x, B.group.position.y + 6.4, c.z); coinFly(c.x, B.group.position.y + 5, c.z, 3);
@@ -3304,7 +3366,11 @@ function endGame(won) {
 }
 function updatePhase(dt) {
   if (gameOver) return;
-  if (PH.kind === 'day') { PH.t -= dt; if (PH.t <= 0) startNight(); }
+  if (PH.kind === 'day') {
+    const was = PH.t; PH.t -= dt;
+    if (was > DUSK && PH.t <= DUSK) { banner('Dusk', `Night ${PH.wave} soon`); log(`<b>Dusk</b> · raiders at nightfall`, 'warn'); }
+    if (PH.t <= 0) startNight();
+  }
   else {
     if (spawnQueue.length && (spawnT -= dt) <= 0) { const [k, p] = spawnQueue.shift(); spawnEnemy(k, p, PH.wave); spawnT = 1.1; }
     if (!spawnQueue.length && !enemies.some(e => !e.dead)) { if (PH.wave >= NIGHTS) endGame(true); else startDay(); }
@@ -3312,10 +3378,11 @@ function updatePhase(dt) {
   if (PH.kind === 'day' && (econT -= dt) <= 0) { econT = TICK; econTick(); }   // no payouts at night: the ring waits for dawn
 }
 let skyT = 0;
+const DUSK = 40;   // the last 40 s of each day fade slowly to night
 function updateLight(dt, now) {
-  const target = PH.kind === 'day' ? (PH.t < 15 ? .3 + .7 * PH.t / 15 : 1) : 0;
+  const target = PH.kind === 'day' ? (PH.t < DUSK ? .25 + .75 * sstep(0, DUSK, PH.t) : 1) : 0;
   light += (target - light) * Math.min(1, dt * 1.2);
-  const dusk = PH.kind === 'day' ? clamp(sstep(15, 0, PH.t) * (1 - Math.abs(light - .5) * 1.2), 0, 1) : 0;
+  const dusk = PH.kind === 'day' ? clamp(sstep(DUSK, 0, PH.t) * (1 - Math.abs(light - .55) * 1.1), 0, 1) : 0;
   skyHorizon.copy(SKY_NIGHT).lerp(SKY_DAY, light).lerp(SKY_DUSK, Math.min(dusk, .6)); scene.fog.color.copy(skyHorizon);
   if ((skyT -= dt) <= 0) { skyT = .15; paintSky(); } sky.position.copy(camera.position);
   windU.value = now / 1000;
@@ -3330,6 +3397,7 @@ const hintEl = $('#hint');
 function setHint(html, cls) { hintEl.innerHTML = html; hintEl.className = 'pill' + (cls ? ' ' + cls : ''); }
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const TOOL_ICON = {
+  market: '<svg viewBox="0 0 24 24"><path d="M3.5 9 L5.5 4 H18.5 L20.5 9 Z"/><path d="M3.5 9 a2.75 2.2 0 0 0 5.5 0 a2.75 2.2 0 0 0 5.5 0 a2.75 2.2 0 0 0 5.5 0"/><path d="M5 11.5 V20 H19 V11.5"/><path d="M9.5 20 V15 H14.5 V20"/></svg>',
   house: '<svg viewBox="0 0 24 24"><path d="M4 11 L12 4 L20 11"/><path d="M6 9.5 V20 H18 V9.5"/><path d="M10 20 V15 H14 V20"/></svg>',
   farm: '<svg viewBox="0 0 24 24"><path d="M3 20 H21"/><path d="M7 20 V10 M12 20 V8 M17 20 V10"/><path d="M7 12 l-2.2-2.2 M7 12 l2.2-2.2 M12 10 l-2.2-2.2 M12 10 l2.2-2.2 M17 12 l-2.2-2.2 M17 12 l2.2-2.2"/></svg>',
   lodge: '<svg viewBox="0 0 24 24"><path d="M5 20 L15 8"/><path d="M13 5.5 C17 3.5 21 6.5 20 11 L15.5 8 Z"/><path d="M4 20 H11"/></svg>',
@@ -3420,7 +3488,7 @@ function refreshCard() {
     const ch = Math.round(charmOf(B) * 100); if (ch) st.push(STAT('charm', `+${ch}%`, 'good'));
     const hg = villagers.filter(v => v.home === B && v.hungry).length; if (hg) st.push(STAT('bowl', `${hg}`, 'bad'));
   }
-  if (B.type === 'farm') st.push(STAT('food', `+${T.food[k]}`));
+  if (B.type === 'farm') { const f = +(T.food[k] * farmersAt(B) / T.workers[k]).toFixed(1); st.push(STAT('food', `+${f}`, f < T.food[k] ? 'warn' : '')); }
   if (T.residents) st.push(STAT('pop', `${villagers.filter(v => v.home === B).length}`));
   if (T.workers && B.built) { const w = villagers.filter(v => v.job === B).length; st.push(STAT('hammer', `${w}/${T.workers[k]}`, w < T.workers[k] ? 'warn' : '')); }
   if (T.range) {
@@ -3435,6 +3503,14 @@ function refreshCard() {
   }
   if (T.decor) st.push(STAT('charm', `+${Math.round(T.charm * 100)}%`, 'good'));
   $('#cardStats').innerHTML = st.join('');
+  const tr = $('#cardTrade'); tr.hidden = B.type !== 'market' || !B.built;
+  if (!tr.hidden) {                                   // rebuilt only when something changes, or taps get lost between redraws
+    const key = B.id + ':' + k + ':' + TRADES.map(t => +canAfford({ [t.give]: 10 })).join('');
+    if (tr.dataset.key !== key) {
+      tr.dataset.key = key;
+      tr.innerHTML = TRADES.map((t, i) => `<button data-i="${i}" ${canAfford({ [t.give]: 10 }) ? '' : 'disabled'} title="Trade">${costHTML({ [t.give]: 10 })}<span class="to">›</span>${costHTML({ [t.get]: t.n[k] })}</button>`).join('');
+    }
+  }
   $('#rallyBtn').hidden = $('#recallBtn').hidden = !T.soldiers || !B.built;
   $('#rallyBtn').setAttribute('aria-pressed', String(rallyFor === B)); $('#recallBtn').disabled = !B.rally;
   const vb = $('#volleyBtn'); vb.hidden = B.type !== 'castle';
@@ -3697,7 +3773,7 @@ document.querySelectorAll('.mapBtn').forEach(b => b.addEventListener('click', ()
 }));
 addEventListener('keydown', e => {
   if (/^(w|a|s|d|q|e|arrow)/i.test(e.key)) { heldKeys.add(e.key.toLowerCase()); return; }
-  const map = { v: 'select', V: 'select', 1: 'house', 2: 'farm', 3: 'lodge', 4: 'quarry', 5: 'tower', 6: 'wall', 7: 'gate', 8: 'barracks', r: 'road', R: 'road' };
+  const map = { v: 'select', V: 'select', 1: 'house', 2: 'farm', 3: 'lodge', 4: 'quarry', 5: 'tower', 6: 'wall', 7: 'gate', 8: 'barracks', 9: 'market', r: 'road', R: 'road' };
   if (map[e.key]) setTool(map[e.key]);
   else if (e.key === 'g' || e.key === 'G') $('#gridBtn').click();
   else if (e.key === 'Escape') { deselect(); setTool('select'); }
@@ -3736,7 +3812,7 @@ function buildGallery() {
   let z = 3;
   const row = (title, depth, fill) => { const zc = z + depth / 2; galLabel(title, '#f2c95e', 1.5, zc, true); fill(zc, depth); gRows.push({ title, z: zc, depth }); z += depth + 3.4; };
   const add = (g, x, zc, turns) => { g.position.set(x, 0, zc); g.userData.turn = 0; gScene.add(g); gItems.push({ g, turns }); return g; };
-  for (const type of ['castle', 'house', 'lodge', 'quarry', 'farm', 'tower', 'barracks']) {
+  for (const type of ['castle', 'house', 'lodge', 'quarry', 'farm', 'market', 'tower', 'barracks']) {
     const T = DEF[type], d = T.size * CELL;
     row(T.name, d, zc => T.tiers.forEach((nm, i) => { add(makeModel(type, i + 1, true, 0, 0), GAL_X[i], zc, true); galLabel(nm, '#fff', GAL_X[i], zc + d / 2 + 1.1); }));
   }
@@ -3817,6 +3893,13 @@ function updateGallery(dt, now) {
 }
 $('#adGallery').addEventListener('click', openGallery);
 $('#rallyBtn').addEventListener('click', () => { if (!selected) return; rallyFor = rallyFor === selected ? null : selected; setHint(rallyFor ? 'Tap a spot' : 'Select a building'); refreshCard(); });
+$('#cardTrade').addEventListener('click', e => {
+  const b = e.target.closest('button'), B = selected; if (!b || !B || B.type !== 'market' || !B.built) return;
+  if (paused) return setHint('Paused', 'bad');
+  const t = TRADES[+b.dataset.i], give = { [t.give]: 10 }, n = t.n[B.tier - 1], c = center(B);
+  if (!canAfford(give)) return setHint(`Need ${costHTML(give)}`, 'bad');
+  pay(give); res[t.get] += n; floatRes(t.get, n, c.x, B.group.position.y + 2.4, c.z); sfx('coins'); refreshCard();
+});
 $('#volleyBtn').addEventListener('click', () => {
   if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return; if (PH.kind !== 'night') return setHint('Night only', 'bad');
   volleyAim = !volleyAim; if (!volleyAim) volleyLine.visible = false; setHint(volleyAim ? 'Tap a spot' : 'Select a building'); refreshCard();
@@ -3865,7 +3948,7 @@ function startGame() {
 resize(); startGame();
 if (!/[?&](gallery|debug|map=)/.test(location.search)) showMapPick(); else $('#mapPick').hidden = true;   // shown from the first paint, so the game never flashes up behind it
 const easeOut = t => 1 - Math.pow(1 - t, 3);
-const BAR_TOP = { barracks: 3.4, house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
+const BAR_TOP = { market: 3.0, barracks: 3.4, house: 3.4, farm: 1.6, lodge: 3.6, quarry: 3.0, tower: 6.4, castle: 7.2, wall: 2.8, gate: 3.6, well: 2.3, torch: 2.2, flowers: 1, statue: 3.2 };
 let last = performance.now(), hudT = 0, buildT = 0;
 var paused = false, gameSpeed = 1, instantBuild = false;
 function setPaused(on) {
