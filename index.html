@@ -1174,7 +1174,6 @@ function makeHouse(tier, plinth) {
     g.add(pyramid(1.12, 1.15, .95, M.thatchOld, 1.9));
     g.add(box(DOOR_W, DOOR_H, .05, M.timber, 0, .08 + DOOR_H / 2, .54));
     g.add(box(.16, .14, .04, M.glow, .45, 1.0, .54));
-    for (let n = 0; n < 4; n++) { const p = box(.05, .35 + hash(n, 3) * .15, .05, M.rough, .9, .2, -.45 + n * .3); p.rotation.x = (hash(n, 9) - .5) * .4; g.add(p); }
   } else if (tier === 2) {     // cottage: plain daub walls, corner posts, a straw gable roof, one door and one window
     g.add(box(1.4, 1.3, 1.1, M.daub, 0, .75, 0));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.32, .1, M.timber, sx * .68, .75, sz * .53));
@@ -1253,7 +1252,7 @@ function makeCastle(tier, plinth) {
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(2.1, 1.45, .86, M.thatchOld, 3.42, 0, -.6));   // eaves stick out past the hall walls
     g.add(box(.68, 1.12, .01, M.dark, 0, .86, .405)); g.add(leaf(.72, 1.16, .06, M.timber, -.36, .88, .42, 1, -1.4));   // hall door swings out
-    for (const sx of [-1, 1]) g.add(box(.26, .36, .06, M.glow, sx * .5, 1.72, .42));   // two plain lit windows either side above the door, like the stone keep's
+    for (const sx of [-1, 1]) g.add(box(.26, .36, .06, M.glow, sx * .5, 1.98, .42));   // two plain lit windows either side above the door, like the stone keep's
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.09, 2.5, .09, M.rough, px + sx * .33, 1.25, pz + sz * .33));
@@ -1278,7 +1277,7 @@ function makeCastle(tier, plinth) {
     for (const sx of [-1, 1]) g.add(leaf(.425, 1.7, .08, M.timber, sx * .425, 1.15, W + .42, -sx, -sx * 1.4));   // gatehouse doors swing in
     g.add(box(2.4, 3.6, 2.4, M.stone2, 0, 2.0, -.4));
     g.add(box(.3, .42, .06, M.glow, -.45, 2.6, .82)); g.add(box(.3, .42, .06, M.glow, .45, 2.6, .82));
-    g.add(box(.5, .9, .06, M.timber, 0, .95, .82));
+    g.add(box(DOOR_W / k, DOOR_H, .06, M.timber, 0, .32 + DOOR_H / 2, .82));   // the standard door (the keep is drawn at k in x)
     g.add(pyramid(1.95, 1.5, 1, M.thatch, 4.55, 0, -.4));
     g.add(box(.07, 1.3, .07, M.timber, 0, 5.8, -.4)); g.add(flagBox(.8, .45, .04, M.flag, .43, 6.2, -.4));
   } else {                     // castle: round towers, gatehouse, tall keep, banners
