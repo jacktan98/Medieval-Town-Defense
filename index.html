@@ -3278,7 +3278,7 @@ function updateVolley(dt) {
     if (f) { f.g.rotation.y = Math.atan2(q.x - f.g.position.x, q.z - f.g.position.z); volleyPose(f, false); f.g.updateMatrixWorld(true); from = (f.pivot || f.arms[0]).getWorldPosition(new THREE.Vector3()); f.vLoose = .2; }
     else { const c = C ? center(C) : { x: KX, z: KZ }; from = new THREE.Vector3(c.x + (Math.random() - .5) * 3, (C ? C.group.position.y + DEF.castle.shootY[C.tier - 1] : 4), c.z + (Math.random() - .5) * 3); }
     const d = Math.hypot(tx - from.x, tz - from.z);
-    fireArrow(from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); let hit = false; for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) { hurtEnemy(e, q.per); hit = true; } if (hit) sfx('arrowHit', { x: tx, z: tz }); }, 3 + d * .25);
+    fireArrow(from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) hurtEnemy(e, q.per); }, 3 + d * .25);
   }
   if (VQ && C.volley) figs.forEach((f, i) => {           // after updateDefense, so this pose wins while the volley lasts
     f.vLoose = Math.max(0, (f.vLoose || 0) - dt);
@@ -3287,9 +3287,10 @@ function updateVolley(dt) {
     volleyPose(f, next && !(f.vLoose > .1));
   });
 }
+// a raider falling grunts at most every 3 s (SFX_GAP); otherwise the thud of the arrow hit plays
 function hurtEnemy(e, d) {
   if (e.dead) return; e.hp -= d; e.flashT = .14;
-  if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; sfx('grunt', e); const y = walkY(e.x, e.z); for (let i = 0; i < 5; i++) dustAt(e.x, y, e.z); }   // a puff of dust as they fall
+  if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; sfx('grunt', e) || sfx('arrowHit', e); const y = walkY(e.x, e.z); for (let i = 0; i < 5; i++) dustAt(e.x, y, e.z); }   // a puff of dust as they fall
 }
 // who goes for what: spearmen hit the nearest building, swordsmen hunt archer towers, the captain rides for the castle,
 // archers aim past walls and gates at what lies behind them
@@ -3530,7 +3531,7 @@ function updateDefense(dt) {
       const from = f ? bowPoint(f) : new THREE.Vector3(c.x, B.group.position.y + T.shootY[k], c.z);
       const lead = best.walking ? .5 : 0, to = new THREE.Vector3(best.x + Math.sin(best.g.rotation.y) * lead, best.g.position.y + .7, best.z + Math.cos(best.g.rotation.y) * lead);
       const tgt = best, dmg = T.dmg[k];
-      fireArrow(from, to, () => { if (!tgt.dead) sfx('arrowHit', tgt); hurtEnemy(tgt, dmg); });
+      fireArrow(from, to, () => hurtEnemy(tgt, dmg));
     }
   }
 }
@@ -4274,10 +4275,10 @@ var SND = {   // game event -> file in audio/sfx (or audio/music) and its trim a
   horn:      { file: 'sfx/Wave_horn.mp3',            trim: 1 },      // nightfall: the raiders' horn
   attack:    { files: ['sfx/Enemy_attack_1.mp3', 'sfx/Enemy_attack_2.mp3'], trim: .445 },   // a raider's strike on a building, one of the two at random
   clash:     { file: 'sfx/Attack_clash.mp3',         trim: .445 },   // soldier and raider trading blows
-  arrowHit:  { file: 'sfx/Arrow_hit.mp3',            trim: .6 },     // an arrow striking a raider
-  grunt:     { file: 'sfx/Enemy_grunt.mp3',          trim: .5 },     // a raider falls
+  arrowHit:  { file: 'sfx/Arrow_hit.mp3',            trim: .6 },     // a raider falls while the grunt is resting
+  grunt:     { file: 'sfx/Enemy_grunt.mp3',          trim: 1 },      // a raider falls (at most every 3 s; arrowHit otherwise)
   trade:     { file: 'sfx/Market_trade.mp3',         trim: .7 },
-  rooster:   { file: 'sfx/Morning_rooster.mp3',      trim: .8 },     // dawn: the night is won
+  rooster:   { file: 'sfx/Morning_rooster.mp3',      trim: 1.1 },     // dawn: the night is won
   yawn:      { file: 'sfx/Villager_yawn.mp3',        trim: .6 },     // a hungry villager goes to sleep
   nope:      { file: 'sfx/Not_allowed.mp3',          trim: .5 },     // a tap that can't be done (any red hint straight after a tap or key)
   // long recordings of repeated work: single strikes are cut out of them (see strikes()) and one plays per swing
@@ -4300,7 +4301,7 @@ var LOOPS = {
   birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
 };
 var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
-var SFX_GAP = { path: .12, clash: .12, arrowHit: .08, grunt: .15, yawn: 1, nope: .3, rooster: 2, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
+var SFX_GAP = { path: .12, clash: .12, arrowHit: .08, grunt: 3, yawn: 3, nope: .3, rooster: 2, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
 var muted = false; try { muted = localStorage.getItem('mtd-muted') === '1'; } catch (e) {}
 // var: sfx()/setMusic() can run during the startup reset, before this block executes

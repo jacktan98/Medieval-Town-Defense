@@ -10,11 +10,11 @@
 | `Arrow_shot.mp3` | Any archer shoots (yours or the raiders') |
 | `Enemy_attack_1.mp3`, `Enemy_attack_2.mp3` | A raider strikes a building; one of the two at random, never the same twice running |
 | `Attack_clash.mp3` | A soldier and a raider trade blows (either side striking) |
-| `Arrow_hit.mp3` | An arrow strikes a raider (towers, castle, volley) |
-| `Enemy_grunt.mp3` | A raider falls |
+| `Arrow_hit.mp3` | A raider falls, when the grunt has played in the last 3 s |
+| `Enemy_grunt.mp3` | A raider falls (at most once every 3 s) |
 | `Market_trade.mp3` | A trade at the market |
 | `Morning_rooster.mp3` | Dawn, when a night is won |
-| `Villager_yawn.mp3` | A hungry villager goes to sleep |
+| `Villager_yawn.mp3` | A hungry villager goes to sleep (at most once every 3 s) |
 | `Not_allowed.mp3` | A tap or key that can't be done (any red hint right after it: "Occupied", "Need 5 wood", "Night only"…) |
 | `Woodcutter_axe.mp3` | One chop per axe swing (single strikes are cut out of the recording automatically) |
 | `Mason_pick.mp3` | One hit per pick swing (cut the same way) |
