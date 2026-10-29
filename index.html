@@ -169,6 +169,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 #volleyBtn{position:relative}
 #volleyBtn .cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font:700 11px/1 system-ui,sans-serif;color:#e8e2cc}
 #volleyBtn.cool svg{opacity:.25}
+#volleyBtn.off svg{opacity:.4}
 #volleyBtn.cool .cd{display:flex}
 .cardIco{width:30px;height:30px;border-radius:7px;background:#24261f;border:1px solid #4a4838;display:inline-flex;align-items:center;justify-content:center;color:var(--gold);flex-shrink:0}
 .cardIco svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -2928,22 +2929,44 @@ const VOLLEY = { cd: 20, n: [12, 18, 26], r: [2.2, 3, 3.8], dmg: [45, 65, 90], s
 const volleyR = () => VOLLEY.r[(castleB() || { tier: 1 }).tier - 1];
 var volleyCd = 0, volleyAim = false, volleyQ = [], volleyRingT = 0;
 const volleyLine = makeLine('#8fc1db', 1);
+// the castle's manned archers loose the volley: each takes a share of the arrows, drawing high and shooting upward;
+// with nobody on the posts it comes from the castle top
+const volleyFigs = C => (C.figs || []).filter((f, a) => f && C.manned && C.manned[a]);
 function castVolley(pt) {
   const C = castleB(); if (!C) return;
-  const c = center(C), k = C.tier - 1, n = VOLLEY.n[k], R = VOLLEY.r[k], per = VOLLEY.dmg[k] / n, y = C.group.position.y + DEF.castle.shootY[k];
-  for (let i = 0; i < n; i++) volleyQ.push({ t: Math.random() * VOLLEY.spread, from: new THREE.Vector3(c.x + (Math.random() - .5) * 3, y, c.z + (Math.random() - .5) * 3), x: pt.x, z: pt.z, per, R });
-  volleyCd = VOLLEY.cd; drapeCircle(volleyLine, pt.x, pt.z, R); volleyRingT = VOLLEY.spread + 2;
+  const k = C.tier - 1, n = VOLLEY.n[k], R = VOLLEY.r[k], per = VOLLEY.dmg[k] / n, m = Math.max(1, volleyFigs(C).length), each = Math.ceil(n / m), gap = VOLLEY.spread / each;
+  for (let i = 0; i < n; i++) volleyQ.push({ t: .35 + Math.floor(i / m) * gap + (i % m) * .05 + Math.random() * .05, fig: i % m, x: pt.x, z: pt.z, per, R });
+  C.volley = { x: pt.x, z: pt.z, hold: .35 + VOLLEY.spread + .4 };
+  volleyCd = VOLLEY.cd; drapeCircle(volleyLine, pt.x, pt.z, R); volleyRingT = VOLLEY.spread + 2.4;
+}
+// arms raised high toward the target: draw just before each shot, loose after it
+function volleyPose(f, draw) {
+  const [l, r] = f.arms; l.rotation.set(-2.35, 0, .6);
+  if (draw) r.rotation.set(-2.2, 0, -.62); else r.rotation.set(-1.7, 0, .2);
 }
 function updateVolley(dt) {
   if (volleyCd > 0) volleyCd = Math.max(0, volleyCd - dt);
   if (volleyRingT > 0) volleyRingT -= dt;
+  if (volleyAim && PH.kind !== 'night') { volleyAim = false; refreshCard(); }
   if (!volleyAim && volleyRingT <= 0) volleyLine.visible = false;
+  const C = castleB(), VQ = C && C.volley, figs = C ? volleyFigs(C) : [];
+  if (VQ && (VQ.hold -= dt) <= 0) C.volley = null;
   for (let n = volleyQ.length - 1; n >= 0; n--) {
     const q = volleyQ[n]; if ((q.t -= dt) > 0) continue; volleyQ.splice(n, 1);
     const a = Math.random() * 6.283, r = q.R * Math.sqrt(Math.random()), tx = q.x + Math.cos(a) * r, tz = q.z + Math.sin(a) * r;
-    const d = Math.hypot(tx - q.from.x, tz - q.from.z);
-    fireArrow(q.from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) hurtEnemy(e, q.per); }, 3 + d * .25);
+    const f = figs[q.fig % Math.max(1, figs.length)];
+    let from;
+    if (f) { f.g.rotation.y = Math.atan2(q.x - f.g.position.x, q.z - f.g.position.z); volleyPose(f, false); f.g.updateMatrixWorld(true); from = (f.pivot || f.arms[0]).getWorldPosition(new THREE.Vector3()); f.vLoose = .2; }
+    else { const c = C ? center(C) : { x: KX, z: KZ }; from = new THREE.Vector3(c.x + (Math.random() - .5) * 3, (C ? C.group.position.y + DEF.castle.shootY[C.tier - 1] : 4), c.z + (Math.random() - .5) * 3); }
+    const d = Math.hypot(tx - from.x, tz - from.z);
+    fireArrow(from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) hurtEnemy(e, q.per); }, 3 + d * .25);
   }
+  if (VQ && C.volley) figs.forEach((f, i) => {           // after updateDefense, so this pose wins while the volley lasts
+    f.vLoose = Math.max(0, (f.vLoose || 0) - dt);
+    const next = volleyQ.some(q => q.fig === i && q.t < .3);
+    f.g.rotation.y = Math.atan2(VQ.x - f.g.position.x, VQ.z - f.g.position.z);
+    volleyPose(f, next && !(f.vLoose > .1));
+  });
 }
 function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; e.flashT = .14; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
 // who goes for what: spearmen hit the nearest building, swordsmen hunt archer towers, the captain rides for the castle,
@@ -3415,7 +3438,7 @@ function refreshCard() {
   $('#rallyBtn').hidden = $('#recallBtn').hidden = !T.soldiers || !B.built;
   $('#rallyBtn').setAttribute('aria-pressed', String(rallyFor === B)); $('#recallBtn').disabled = !B.rally;
   const vb = $('#volleyBtn'); vb.hidden = B.type !== 'castle';
-  if (!vb.hidden) { const cool = volleyCd > 0; vb.classList.toggle('cool', cool); vb.disabled = cool; vb.querySelector('.cd').textContent = cool ? Math.ceil(volleyCd) : ''; vb.setAttribute('aria-pressed', String(volleyAim)); }
+  if (!vb.hidden) { const cool = volleyCd > 0, day = PH.kind !== 'night'; vb.classList.toggle('cool', cool); vb.classList.toggle('off', day && !cool); vb.disabled = cool; vb.title = day ? 'Night only' : 'Arrow volley: tap, then a spot'; vb.querySelector('.cd').textContent = cool ? Math.ceil(volleyCd) : ''; vb.setAttribute('aria-pressed', String(volleyAim)); }
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
   else if (B.tier >= 3 || B.site) up.hidden = true;
@@ -3591,7 +3614,7 @@ function tap(e) {
   if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused', 'bad'); return; }
   if (volleyAim) {                                    // aiming the castle's arrow volley
     const pt = pick(e); if (!pt) { setHint('Pick a spot', 'bad'); return; }
-    volleyAim = false; castVolley(pt); setHint('Volley'); refreshCard(); return;
+    volleyAim = false; if (PH.kind !== 'night') return refreshCard(); castVolley(pt); setHint('Volley'); refreshCard(); return;
   }
   if (PAINT[tool]) { paintAt(e); return; }
   const building = tool && tool !== 'select';
@@ -3795,7 +3818,7 @@ function updateGallery(dt, now) {
 $('#adGallery').addEventListener('click', openGallery);
 $('#rallyBtn').addEventListener('click', () => { if (!selected) return; rallyFor = rallyFor === selected ? null : selected; setHint(rallyFor ? 'Tap a spot' : 'Select a building'); refreshCard(); });
 $('#volleyBtn').addEventListener('click', () => {
-  if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return;
+  if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return; if (PH.kind !== 'night') return setHint('Night only', 'bad');
   volleyAim = !volleyAim; if (!volleyAim) volleyLine.visible = false; setHint(volleyAim ? 'Tap a spot' : 'Select a building'); refreshCard();
 });
 $('#recallBtn').addEventListener('click', () => { if (selected) { setRally(selected, null); rallyFor = null; setHint('Recalled'); refreshCard(); } });
