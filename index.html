@@ -311,7 +311,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="hpbar"><i id="cardHp"></i></div>
       <div class="stats" id="cardStats"></div>
       <div class="trades" id="cardTrade" hidden></div>
-      <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="danger" id="demBtn" title="Demolish"></button></div>
+      <div class="row" id="cardActs"><button class="primary" id="upBtn"></button><button class="danger" id="demBtn" title="Demolish"></button><button class="ib" id="cancelBtn" title="Cancel" aria-label="Cancel" hidden><svg class="bIco" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6 L18 18"/></svg></button></div>
     </div>
     <div class="guideCard" id="guide" hidden><span class="gStep" id="gStep"></span><b id="gText"></b><button id="gSkip">Skip</button></div>
     <div class="pill" id="hint">Pick a building</div>
@@ -2177,7 +2177,7 @@ function upgrade(B) {
   log(`Upgrading · <b>${T.tiers[B.tier]}</b>`);
   refreshCard();
 }
-function removeBuilding(B, raid) {
+function removeBuilding(B, raid, cancel) {
   if (B.dead) return; B.dead = true;
   scene.remove(B.group); scene.remove(B.bar.grp); scene.remove(B.pbar.grp); removeScaffold(B);
   for (let n = 0; n < N * N; n++) if (occB[n] === B) occB[n] = null;
@@ -2191,8 +2191,9 @@ function removeBuilding(B, raid) {
   }
   hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
-  if (!raid) sfx('sold', c);
+  if (!raid) sfx(cancel ? 'click' : 'sold', c);
   if (raid) { stats.lost++; sfx('destroyed', c); shake(.35, c); debrisBurst(B, c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> lost`, 'warn'); }
+  else if (cancel) { RES_KEYS.forEach(k => res[k] += DEF[B.type].cost[k] || 0); log(`<b>${DEF[B.type].tiers[0]}</b> cancelled · +${costHTML(DEF[B.type].cost)}`); }
   else {
     const back = {}; RES_KEYS.forEach(k => { if (DEF[B.type].cost[k]) back[k] = Math.floor(DEF[B.type].cost[k] / 2); res[k] += back[k] || 0; });
     log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> demolished · +${costHTML(back)}`);
@@ -2472,14 +2473,23 @@ function syncResidents(B) {
   assignJobs();
 }
 // workplaces take villagers who have no job yet; they commute from home
+// food runs low below 3 meals a head: farms are filled first, and if nobody is free a lumberjack or mason is moved to the field
+const foodLow = () => res.food < villagers.length * 3;
+var foodLogT = -1e9;
 function assignJobs() {
-  for (const B of buildings) {
+  const low = foodLow(), order = buildings.slice().sort((a, b) => (b.type === 'farm') - (a.type === 'farm'));
+  for (const B of order) {
     const T = DEF[B.type]; if (!T.workers || !B.built) continue;
-    let have = villagers.filter(v => v.job === B).length;
+    let have = villagers.filter(v => v.job === B).length;   // (hungry farmers have already left their field)
     while (have < T.workers[B.tier - 1]) {
       const c = center(B); let best = null, bd = 1e9;
-      for (const v of villagers) if (!v.job && !v.soldier && !v.unkit) { const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; } }
+      for (const v of villagers) if (!v.job && !v.soldier && !v.unkit && !v.hungry) { const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; } }
+      if (!best && low && B.type === 'farm') for (const v of villagers) {
+        if (!v.job || v.job.type === 'farm' || v.hungry || v.soldier || v.unkit || v.post || v.build || v.carryLog.visible || v.carryStone.visible) continue;
+        const d = Math.hypot(v.x - c.x, v.z - c.z); if (d < bd) { bd = d; best = v; }
+      }
       if (!best) break;
+      if (best.job && best.job !== B && performance.now() - foodLogT > 20000) { foodLogT = performance.now(); log('<b>Food low</b> · worker to the farm', 'warn'); }
       best.job = B; release(best); best.path = null; best.visit = null;
       if (!best.build) best.state = 'commute';
       have++;
@@ -3336,6 +3346,7 @@ function feedVillager(v, dt) {
   if ((v.mealT = (v.mealT ?? 15 + Math.random() * 30) - dt) > 0) return;
   if (res.food >= 1) { res.food -= 1; stats.eaten = (stats.eaten || 0) + 1; v.mealT = MEAL * (.85 + Math.random() * .3); return; }
   v.hungry = true; newlyHungry++; release(v); v.visit = null; v.path = null;
+  if (v.job && v.job.type === 'farm') v.job = null;    // a hungry farmer leaves the field, so someone else takes it over at once
   if (v.build) v.build = null;
   floatText('Hungry', '#e2715b', v.x, hAt(v.x, v.z) + 1.6, v.z);
 }
@@ -3555,6 +3566,8 @@ function refreshCard() {
   $('#cardRotBtn').hidden = !canRotate(B);
   const dem = $('#demBtn');
   dem.hidden = B.type === 'castle'; dem.disabled = PH.kind === 'night'; dem.title = PH.kind === 'night' ? 'Not at night' : 'Demolish';
+  // a site nobody has started on yet is cancelled instead, for its full cost back
+  const canCancel = !!(B.site && B.site.kind === 'new' && B.site.progress <= 0); $('#cancelBtn').hidden = !canCancel; if (canCancel) dem.hidden = true;
   $('#cardActs').hidden = [...$('#cardActs').children].every(b => b.hidden);
   if (!dem.hidden) { const back = {}; RES_KEYS.forEach(r => { if (T.cost[r]) back[r] = Math.floor(T.cost[r] / 2); }); const armed = demArmed.B === B && performance.now() - demArmed.t < 3000; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? '<svg class="bIco" viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>' : `${DEM_ICO}${costHTML(back)}`; dem.title = 'Demolish and get half the build cost back'; }
 }
@@ -3600,6 +3613,11 @@ $('#demBtn').addEventListener('click', () => {
   if (PH.kind === 'night' && !selected.path) return setHint('Not at night', 'bad');   // no pulling buildings down mid-raid
   if (demArmed.B === selected && performance.now() - demArmed.t < 3000) { demArmed = { B: null, t: 0 }; if (selected.path) removePath(selected); else removeBuilding(selected, false); return; }
   demArmed = { B: selected, t: performance.now() }; refreshCard(); setTimeout(refreshCard, 3050);
+});
+$('#cancelBtn').addEventListener('click', () => {
+  if (paused) return setHint('Paused', 'bad'); const B = selected;
+  if (!B || B.path || !(B.site && B.site.kind === 'new' && B.site.progress <= 0)) return refreshCard();   // building has begun
+  removeBuilding(B, false, true);
 });
 $('#closeCard').addEventListener('click', deselect);
 $('#nightBtn').addEventListener('click', () => { if (PH.kind === 'day' && !gameOver) PH.t = 0; });
@@ -4288,7 +4306,7 @@ function frame(now) {
     if (cur && DEF[tool] && ghosts[tool] && ghosts[tool].visible) drape(footLine, cur.x0, cur.z0, cur.x1, cur.z1);
     if (selected) drape(selLine, selected.ev.x0 - .1, selected.ev.z0 - .1, selected.ev.x1 + .1, selected.ev.z1 + .1);
   }
-  if ((buildT -= dt) <= 0) { buildT = .5; if (!gameOver) assignBuilders(); }
+  if ((buildT -= dt) <= 0) { buildT = .5; if (!gameOver) { assignBuilders(); if (PH.kind === 'day') assignJobs(); } }
   for (const B of buildings.slice()) {
     if (B.site) {
       const p = clamp(B.site.progress, 0, 1);
