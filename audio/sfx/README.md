@@ -11,7 +11,7 @@
 | `Enemy_attack_1.mp3`, `Enemy_attack_2.mp3` | A raider strikes a building; one of the two at random, never the same twice running |
 | `Attack_clash.mp3` | A soldier and a raider trade blows (either side striking) |
 | `Arrow_hit.mp3` | A raider falls, when the grunt has played in the last 3 s |
-| `Enemy_grunt.mp3` | A raider falls (at most once every 3 s) |
+| `Enemy_grunt_1.mp3`, `Enemy_grunt_2.mp3` | A raider falls (at most once every 3 s); one of the two at random, never the same twice running |
 | `Market_trade.mp3` | A trade at the market |
 | `Morning_rooster.mp3` | Dawn, when a night is won |
 | `Villager_yawn.mp3` | A hungry villager goes to sleep (at most once every 3 s) |
