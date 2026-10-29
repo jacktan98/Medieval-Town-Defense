@@ -2924,14 +2924,15 @@ function updateArrows(dt) {
 }
 // Arrow volley (castle card): arrows from the castle rain on a small circle anywhere; each enemy inside it takes the volley's
 // damage, shared out over the arrows as they land; cooldown in game time
-const VOLLEY = { cd: 20, n: 16, r: 2.6, dmg: [45, 60, 80], spread: .7 };
+const VOLLEY = { cd: 20, n: [12, 18, 26], r: [2.2, 3, 3.8], dmg: [45, 65, 90], spread: .7 };   // per castle tier
+const volleyR = () => VOLLEY.r[(castleB() || { tier: 1 }).tier - 1];
 var volleyCd = 0, volleyAim = false, volleyQ = [], volleyRingT = 0;
 const volleyLine = makeLine('#8fc1db', 1);
 function castVolley(pt) {
   const C = castleB(); if (!C) return;
-  const c = center(C), k = C.tier - 1, per = VOLLEY.dmg[k] / VOLLEY.n, y = C.group.position.y + DEF.castle.shootY[k];
-  for (let i = 0; i < VOLLEY.n; i++) volleyQ.push({ t: Math.random() * VOLLEY.spread, from: new THREE.Vector3(c.x + (Math.random() - .5) * 3, y, c.z + (Math.random() - .5) * 3), x: pt.x, z: pt.z, per });
-  volleyCd = VOLLEY.cd; drapeCircle(volleyLine, pt.x, pt.z, VOLLEY.r); volleyRingT = VOLLEY.spread + 2;
+  const c = center(C), k = C.tier - 1, n = VOLLEY.n[k], R = VOLLEY.r[k], per = VOLLEY.dmg[k] / n, y = C.group.position.y + DEF.castle.shootY[k];
+  for (let i = 0; i < n; i++) volleyQ.push({ t: Math.random() * VOLLEY.spread, from: new THREE.Vector3(c.x + (Math.random() - .5) * 3, y, c.z + (Math.random() - .5) * 3), x: pt.x, z: pt.z, per, R });
+  volleyCd = VOLLEY.cd; drapeCircle(volleyLine, pt.x, pt.z, R); volleyRingT = VOLLEY.spread + 2;
 }
 function updateVolley(dt) {
   if (volleyCd > 0) volleyCd = Math.max(0, volleyCd - dt);
@@ -2939,9 +2940,9 @@ function updateVolley(dt) {
   if (!volleyAim && volleyRingT <= 0) volleyLine.visible = false;
   for (let n = volleyQ.length - 1; n >= 0; n--) {
     const q = volleyQ[n]; if ((q.t -= dt) > 0) continue; volleyQ.splice(n, 1);
-    const a = Math.random() * 6.283, r = VOLLEY.r * Math.sqrt(Math.random()), tx = q.x + Math.cos(a) * r, tz = q.z + Math.sin(a) * r;
+    const a = Math.random() * 6.283, r = q.R * Math.sqrt(Math.random()), tx = q.x + Math.cos(a) * r, tz = q.z + Math.sin(a) * r;
     const d = Math.hypot(tx - q.from.x, tz - q.from.z);
-    fireArrow(q.from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < VOLLEY.r) hurtEnemy(e, q.per); }, 3 + d * .25);
+    fireArrow(q.from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < q.R) hurtEnemy(e, q.per); }, 3 + d * .25);
   }
 }
 function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; e.flashT = .14; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
@@ -3560,7 +3561,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId);
-  if (!p) { if (e.pointerType === 'mouse') { const pt = pick(e); if (volleyAim) { if (pt) drapeCircle(volleyLine, pt.x, pt.z, VOLLEY.r); return; } pt ? showGhostAt(pt) : hideGhost(); } return; }
+  if (!p) { if (e.pointerType === 'mouse') { const pt = pick(e); if (volleyAim) { if (pt) drapeCircle(volleyLine, pt.x, pt.z, volleyR()); return; } pt ? showGhostAt(pt) : hideGhost(); } return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   if (ptrs.size === 1 && down) {
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) down.moved = true;
