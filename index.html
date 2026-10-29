@@ -80,7 +80,7 @@ details[open] summary::after{content:"Hide"} details:not([open]) summary::after{
 .card .row{display:flex;gap:8px;flex-wrap:wrap}
 .trades{display:grid;grid-template-columns:1fr 1fr;gap:4px}
 .trades button{min-height:28px;padding:0 6px;border-radius:7px;background:#24261f;font-size:12px;gap:3px;white-space:nowrap;justify-content:center}
-.trades button .cost .ico{width:13px;height:13px} .trades .to{opacity:.6;margin:0 1px}
+.trades button .cost .ico{width:13px;height:13px} .trades .to{opacity:.75;margin:0 3px;font-size:19px;line-height:1;font-weight:700;position:relative;top:-1px}
 .card button{flex-direction:row;gap:6px;min-height:38px}
 .hpbar{height:6px;border-radius:3px;background:#3a2622;overflow:hidden}
 .hpbar i{display:block;height:100%;background:var(--ok)}
@@ -434,9 +434,9 @@ const DEF = {
   statue:  { size: 1, name: 'Statue', decor: true, maxdh: 1.2, falloff: 1.2, hp: [150], cost: { stone: 12, gold: 10 }, tiers: ['Statue'], noRoad: true },
 };
 const MEAL = 20, LUMBER_LOAD = 2;
-// market trades: give 10 of one thing for n (by market tier) of another
-const TRADES = [{ give: 'wood', get: 'gold', n: [4, 5, 6] }, { give: 'stone', get: 'gold', n: [6, 8, 10] },
-  { give: 'gold', get: 'wood', n: [6, 8, 10] }, { give: 'gold', get: 'stone', n: [4, 5, 7] }, { give: 'gold', get: 'food', n: [6, 8, 10] }];
+// market trades: give 10 of one thing for n of another, n + 2 per market tier; rows of two: buy with gold (left), sell for gold (right)
+const TRADES = [['wood', 4, 4], ['stone', 2, 6], ['food', 6, 2]].flatMap(([r, buy, sell]) => [
+  { give: 'gold', get: r, n: [buy, buy + 2, buy + 4] }, { give: r, get: 'gold', n: [sell, sell + 2, sell + 4] }]);
 DEF.castle.food = [3, 4, 5];
 DEF.tower.shootY = DEF.tower.shootY.map((y, i) => y * TOWER_K[i]);
 const BUILD_T = { market: 12, house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, barracks: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
@@ -1382,8 +1382,8 @@ function makeMarket(tier, plinth) {
     g.add(s);
   };
   if (tier === 1) {
-    stall(0, -.2, 2.2, 1.3);
-    crate(-1.35, .9); crate(-1.3, 1.35, .26, .4); sack(1.25, .95); sack(1.5, 1.2, .12); barrel(1.45, -1.2); crate(-1.4, -1.1, .36, .2);
+    stall(0, -.15, 1.7, 1.05);
+    crate(-1.1, .75); crate(-1.05, 1.15, .26, .4); sack(1.0, .8); sack(1.25, 1.05, .12); barrel(1.15, -.9); crate(-1.15, -.85, .34, .2);
   } else if (tier === 2) {
     stall(-.9, -.6, 1.8, 1.2); stall(1.05, -.4, 1.6, 1.1, -.25);
     // a hand cart of goods at the front
@@ -1398,9 +1398,13 @@ function makeMarket(tier, plinth) {
     for (const x of [-1.5, 0, 1.5]) g.add(box(.16, .16, 2.8, M.timber, x, 2.22, 0));
     g.add(prism(3.9, 3.3, 1.3, M.roofBlue, 0, 2.3, 0));
     for (const x of [-.8, .8]) { g.add(box(1.1, .06, .6, M.wood, x, .78, 0)); for (const sx of [-1, 1]) g.add(box(.06, .76, .5, M.wood, x + sx * .5, .38, 0)); produce(x, -.05, 1.0); }
-    barrel(-1.75, 1.75); crate(1.7, 1.7, .32, .3); sack(1.35, 1.8); crate(-1.7, -1.75, .3); sack(1.8, -1.7, .14);
-    // hanging sign at the front
-    g.add(box(.05, .05, .4, M.iron, 0, 1.95, 1.48)); g.add(box(.5, .3, .04, M.awning, 0, 1.72, 1.66));
+    // goods under the roof, along the back and front between the pillars
+    for (const [x, z] of [[-1.12, -.82], [-.74, -.95], [-.95, -.55], [.78, -.88], [1.15, -.78], [1.12, .2]]) barrel(x, z);
+    crate(1.15, .8, .32, .3); crate(.8, .95, .26, .1); sack(-1.15, .82); sack(-.85, .95, .12); crate(-.3, -.95, .28, .5);
+    // a sign hung from an iron bracket on the middle front pillar, square to the front
+    g.add(box(.04, .04, .56, M.iron, 0, 1.86, 1.66)); const br = box(.03, .03, .42, M.iron, 0, 1.7, 1.6); br.rotation.x = -.75; g.add(br);
+    for (const z of [1.62, 1.86]) g.add(box(.015, .14, .015, M.iron, 0, 1.78, z));
+    g.add(box(.04, .3, .34, M.awning, 0, 1.56, 1.74));
   }
   return g;
 }
@@ -1793,12 +1797,12 @@ function textTex(s, color) {
 }
 const floats = [];
 const ICON_IMG = {};
-for (const k of ['gold', 'food']) { const im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICON[k].replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')); ICON_IMG[k] = im; }
+for (const k of ['gold', 'food', 'wood', 'stone']) { const im = new Image(); im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICON[k].replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')); ICON_IMG[k] = im; }
 function resTex(kind, n) {
   const key = 'res:' + kind + n; if (texCache[key]) return texCache[key];
   const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
   x.font = 'bold 40px "Alegreya Sans", system-ui, sans-serif'; x.textAlign = 'right'; x.textBaseline = 'middle';
-  const col = kind === 'gold' ? '#f2c95e' : '#e6cf74';
+  const col = { gold: '#f2c95e', food: '#e6cf74', wood: '#d9a46a', stone: '#c9c6bd' }[kind] || '#e6cf74';
   x.lineWidth = 7; x.strokeStyle = 'rgba(0,0,0,.75)'; x.strokeText('+' + n, 136, 33); x.fillStyle = col; x.fillText('+' + n, 136, 33);
   const im = ICON_IMG[kind];
   if (im.complete && im.naturalWidth) { x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 6; x.drawImage(im, 144, 8, 48, 48); }
@@ -3898,7 +3902,8 @@ $('#cardTrade').addEventListener('click', e => {
   if (paused) return setHint('Paused', 'bad');
   const t = TRADES[+b.dataset.i], give = { [t.give]: 10 }, n = t.n[B.tier - 1], c = center(B);
   if (!canAfford(give)) return setHint(`Need ${costHTML(give)}`, 'bad');
-  pay(give); res[t.get] += n; floatRes(t.get, n, c.x, B.group.position.y + 2.4, c.z); sfx('coins'); refreshCard();
+  pay(give); res[t.get] += n; const y = B.group.position.y + 2.4;
+  floatRes(t.get, n, c.x, y, c.z); coinFly(c.x, y, c.z, Math.min(4, Math.ceil(n / 2)), t.get); sfx('coins'); refreshCard();
 });
 $('#volleyBtn').addEventListener('click', () => {
   if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return; if (PH.kind !== 'night') return setHint('Night only', 'bad');
@@ -4181,13 +4186,14 @@ function updateDebris(dt) {
 }
 // coins rise from a building and fly to the gold counter, which pulses as they land
 let coinsInFlight = 0;
-function coinFly(x, y, z, n) {
-  const chip = $('#cGold'); if (!chip || document.hidden) return;
+const RES_CHIP = { gold: '#cGold', wood: '#cWood', stone: '#cStone', food: '#cFood' };
+function coinFly(x, y, z, n, kind = 'gold') {
+  const chip = $(RES_CHIP[kind]); if (!chip || document.hidden) return;
   const p = new THREE.Vector3(x, y, z).project(camera); if (p.z > 1 || Math.abs(p.x) > 1.1 || Math.abs(p.y) > 1.1) return;
   const r = canvas.getBoundingClientRect(), sx = r.left + (p.x + 1) / 2 * r.width, sy = r.top + (1 - p.y) / 2 * r.height;
   const t = chip.getBoundingClientRect(), tx = t.left + 10, ty = t.top + t.height / 2 - 8;
   for (let i = 0; i < n && coinsInFlight < 10; i++) {
-    const el = document.createElement('span'); el.className = 'flyCoin'; el.innerHTML = ICON.gold; document.body.appendChild(el); coinsInFlight++;
+    const el = document.createElement('span'); el.className = 'flyCoin'; el.innerHTML = ICON[kind]; document.body.appendChild(el); coinsInFlight++;
     const jx = (Math.random() - .5) * 30, mx = sx + jx + (tx - sx) * .3, my = Math.min(sy, ty) - 40 - Math.random() * 30;
     const a = el.animate([
       { transform: `translate(${sx + jx}px, ${sy}px) scale(.6)`, opacity: 0 },
