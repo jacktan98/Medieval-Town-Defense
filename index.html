@@ -1865,7 +1865,7 @@ function emitSmoke(dt) {
 }
 
 // ---------- state ----------
-let adapt = true, tool = 'house', cat = 'eco', cur = null, selected = null, gameOver = false;
+let adapt = true, tool = 'select', cat = 'eco', cur = null, selected = null, gameOver = false;
 const anims = [], buildings = [], villagers = [], enemies = [], arrows = [];
 const res = { gold: 0, wood: 0, stone: 0, food: 0 };
 let stats = { slain: 0, lost: 0, fallen: 0, gold: 0, wood: 0, stone: 0, food: 0, built: 0, upgrades: 0, t0: 0 };
@@ -3858,7 +3858,7 @@ function startGame() {
   log(`Survive <b>${NIGHTS} nights</b>`);
   log('<b>Day 1</b>', 'good');
   banner('Day 1', 'Build before dark');
-  cat = 'eco'; renderTools(); setTool('house');
+  cat = 'eco'; renderTools(); setTool('select');
 }
 
 // ---------- loop ----------
@@ -3870,7 +3870,7 @@ let last = performance.now(), hudT = 0, buildT = 0;
 var paused = false, gameSpeed = 1, instantBuild = false;
 function setPaused(on) {
   paused = on; $('#pauseBtn').setAttribute('aria-pressed', String(on)); $('#pausedTag').hidden = !on;
-  if (on) { hideGhost(); setHint('Paused', 'bad'); } else setHint(isTouch ? 'Tap to place' : 'Pick a spot');
+  if (on) { hideGhost(); setHint('Paused', 'bad'); } else setHint(tool === 'select' ? 'Select a building' : isTouch ? 'Tap to place' : 'Pick a spot');
   $('#pauseBtn').innerHTML = on ? '<svg viewBox="0 0 24 24"><path class="solid" d="M8 5 L19 12 L8 19 Z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5 V19 M16 5 V19" stroke-width="3.2"/></svg>';
   $('#pauseBtn').setAttribute('aria-label', on ? 'Resume' : 'Pause'); $('#pauseBtn').title = on ? 'Resume (P)' : 'Pause (P)';
 }

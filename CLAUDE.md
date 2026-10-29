@@ -131,6 +131,7 @@ Roof colours: tier 3 roofs use `M.roofBlue` (blue is the town's colour, red the 
 - **Pause** (top right): icon buttons (`PICO`): Resume = play, Full screen = corner brackets (inward brackets to exit; a crossed circle for 2 s when unavailable), Restart = circular arrow (tap twice within 3 s; armed it turns solid red with a tick, `.armed`). Confirm-by-second-tap buttons always show a tick when armed. No building while paused.
 - **Admin** (bottom right; under Pause on phone): resource inputs (+100/+1k, Fill all 9,999), Finish all building, Instant build, +5 villagers, Skip to night; speed 1×/2× (scales game-logic dt).
 - Landscape layout under `@media (max-height:520px)`. Two-finger twist rotates (`yaw += da`), drag pans, pinch zooms.
+- The game starts (and restarts) with the Select tool (`tool = 'select'`, "Select a building"), so a first tap never places anything; resuming from pause restores the hint for the current tool.
 - Tap selection is strict while a build tool is active (`pickBuilding(e, strict)`: hit must be 0.35 m inside the footprint, ignores AO planes) so you don't keep selecting the castle.
 
 ## App icon
