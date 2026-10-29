@@ -1140,7 +1140,7 @@ function rebuildRoads() {
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
-  lodge: [[-.65, .52], [-1.17, -.03], [-1.17, -.03]],
+  lodge: [[-.65, .52], [-.65, .66], [-.65, .66]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
   barracks: [[-1, .42], [-1, .42], [-1, .42]],
@@ -1314,7 +1314,7 @@ function makeCastle(tier, plinth) {
   }
   return root;
 }
-const LODGE_K = .7, LODGE_KY = .8, LODGE_AT = [-.75, -.85];   // T2/T3 cabin drawn at .7 in plan and .8 in height; its door keeps the standard size
+const LODGE_K = .7, LODGE_KY = .8, LODGE_AT = [-.55, -.15], LODGE_DOOR = -.65;   // cabin where the shack's hut stands, door on the shack's door line   // T2/T3 cabin drawn at .7 in plan and .8 in height; its door keeps the standard size
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
@@ -1347,15 +1347,18 @@ function makeLodge(tier, plinth) {
     }
     cab.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
     cab.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
-    g.add(box(DOOR_W, DOOR_H, .06, M.timber, CX - .6 * K, .2 + DOOR_H / 2, CZ + 1.08 * K));
-    g.add(box(.26, .22, .06, M.glow, CX + .6 * K, 1.0, CZ + 1.08 * K));
-    pile(.5, 1.15, 3, .14);   // in front, well inside the base
-    axeStump(1.55, .4);
-    if (tier === 2) { pile(1.05, -1.0, 2); g.add(cyl(.14, .14, .2, 7, M.logEnd, 1.55, .1, -.3)); g.add(cyl(.12, .12, .18, 7, M.logEnd, 1.3, .09, -.45)); }   // beside the cabin
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, LODGE_DOOR, .2 + DOOR_H / 2, CZ + 1.08 * K));
+    g.add(box(.26, .22, .06, M.glow, CX + .55 * K, 1.0, CZ + 1.08 * K));
+    if (tier === 2) {          // log pile at the front, a stack of chopped firewood beside the cabin, the chopping block behind
+      pile(1.05, 1.25, 3, .14);
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 6 - r; c++) { const w = cyl(.075, .075, .5, 6, M.logEnd, 1.15, .08 + r * .13, .2 + (c - (5 - r) / 2) * .15); w.rotation.z = Math.PI / 2; g.add(w); }
+      for (const z of [-.3, .7]) g.add(box(.05, .6, .05, M.timber, 1.15, .3, z));   // stakes holding the stack
+    } else pile(.95, 1.3, 4, .13);   // the yard piles its logs higher
+    axeStump(1.15, -1.35);
     if (tier === 3) {
       cab.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
       // sawbuck: two X trestles cradling a log, a frame saw standing in the cut, sawn rounds beside it
-      const SX = 1.05, SZ = -2.4;   // the sawbuck, beside the cabin on its right
+      const SX = 1.15, SZ = -1.37;  // the sawbuck, beside the cabin on its right
       for (const z of [1.35, 1.8]) for (const sx of [-1, 1]) { const l = box(.07, .8, .07, M.timber, SX, .38, z + SZ); l.rotation.z = sx * .55; g.add(l); }
       const lg = cyl(.13, .13, .75, 7, M.log, SX, .62, 1.57 + SZ); lg.rotation.x = Math.PI / 2; g.add(lg);
       g.add(box(.012, .09, .5, M.iron, SX, .78, 1.57 + SZ));
