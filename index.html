@@ -3939,13 +3939,17 @@ function syncMusic() {
   if (on && end && !stinger) stinger = sfx(musicWant) || 1;
   if (!end) stinger = null;
 }
-// browsers only allow sound after the player touches the page
+// browsers only allow sound after the player touches the page; phones count only a finger lifting (touchend / click), not
+// pointerdown, so every gesture retries until the context runs and the wanted loops play. iOS: 'playback' plays sound
+// even with the silent switch on (Web Audio is muted by it otherwise)
 function unlockAudio() {
-  if (audioUnlocked) return; audioUnlocked = true;
-  if (actx && actx.state === 'suspended') actx.resume();
+  if (audioUnlocked && (!actx || actx.state === 'running') && !Object.keys(loopEl).some(k => loopWanted[k] && loopEl[k].paused)) return;
+  audioUnlocked = true;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  if (actx && actx.state !== 'running') actx.resume().then(syncMusic, () => {});
   syncMusic();
 }
-addEventListener('pointerdown', unlockAudio, true); addEventListener('keydown', unlockAudio, true);
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, unlockAudio, true);
 document.addEventListener('visibilitychange', () => { if (actx) document.hidden ? actx.suspend() : audioUnlocked && actx.resume(); syncMusic(); });
 document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click'); }, true);
 function setMuted(on) {
