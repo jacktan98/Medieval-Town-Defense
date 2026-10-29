@@ -2473,8 +2473,10 @@ function syncResidents(B) {
   assignJobs();
 }
 // workplaces take villagers who have no job yet; they commute from home
-// food runs low below 3 meals a head: farms are filled first, and if nobody is free a lumberjack or mason is moved to the field
-const foodLow = () => res.food < villagers.length * 3;
+// food is low below 3 meals a head, or while the town eats more than it grows (each villager eats 1 per payout; farms and the
+// castle make food each payout): farms are filled first, and if nobody is free a lumberjack or mason is moved to the field
+const foodMade = () => buildings.reduce((s, B) => !B.built ? s : B.type === 'farm' ? s + DEF.farm.food[B.tier - 1] * farmersAt(B) / DEF.farm.workers[B.tier - 1] : B.type === 'castle' ? s + DEF.castle.food[B.tier - 1] : s, 0);
+const foodLow = () => res.food < villagers.length * 3 || foodMade() < villagers.length;
 var foodLogT = -1e9;
 function assignJobs() {
   const low = foodLow(), order = buildings.slice().sort((a, b) => (b.type === 'farm') - (a.type === 'farm'));
