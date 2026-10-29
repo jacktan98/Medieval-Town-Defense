@@ -392,6 +392,8 @@ const ICON = {
   bow: '<svg viewBox="0 0 16 16"><path d="M4.2 1.8 C11 3.2 13 9 11.6 14.2" fill="none" stroke="#8b5a2b" stroke-width="1.7" stroke-linecap="round"/><path d="M4.2 1.8 L11.6 14.2" stroke="#e8e0cc" stroke-width=".7"/><path d="M2 9.5 L12.5 5.2" stroke="#6b4423" stroke-width="1"/><path d="M12.5 5.2 L10.6 4.9 L11.4 6.6 Z" fill="#a9afb6" stroke="#4f555c" stroke-width=".5"/><path d="M2 9.5 L3.4 10.4 M2 9.5 L2.6 8.1" stroke="#d9503f" stroke-width="1"/></svg>',
   shield: '<svg viewBox="0 0 16 16"><path d="M2.8 2.4 H13.2 V7.6 C13.2 11 10.4 13.2 8 14.4 C5.6 13.2 2.8 11 2.8 7.6 Z" fill="#3f63b8" stroke="#cfd4da" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 3.2 V13.4 M3.6 7 H12.4" stroke="#9fb6e6" stroke-width=".8"/></svg>',
   charm: '<svg viewBox="0 0 16 16"><g fill="#e98aa6" stroke="#9c3d5c" stroke-width=".7"><circle cx="8" cy="4" r="2.4"/><circle cx="11.8" cy="6.8" r="2.4"/><circle cx="10.4" cy="11.3" r="2.4"/><circle cx="5.6" cy="11.3" r="2.4"/><circle cx="4.2" cy="6.8" r="2.4"/></g><circle cx="8" cy="7.9" r="2" fill="#f2c95e" stroke="#a07a2a" stroke-width=".7"/></svg>',
+  // a boot striding forward with speed lines behind it: paths make everyone walk faster
+  speed: '<svg viewBox="0 0 16 16"><path d="M1.2 5.2 H4.4 M.6 8 H3.8 M1.2 10.8 H4.2" stroke="#e8d9b0" stroke-width="1.1" stroke-linecap="round"/><path d="M7 2.4 H10.6 V8.6 L14 10.2 C14.9 10.6 15 11.4 15 12.4 V13.4 H6.4 Z" fill="#8b5a2b" stroke="#4e3015" stroke-width="1" stroke-linejoin="round"/><path d="M6.4 11.6 H15" stroke="#4e3015" stroke-width="1"/><path d="M7 4.2 H10.6" stroke="#c9a03e" stroke-width="1"/></svg>',
   bowl: '<svg viewBox="0 0 16 16"><path d="M1.8 7.2 H14.2 C14.2 10.8 11.6 13 8 13 C4.4 13 1.8 10.8 1.8 7.2 Z" fill="#8b5a2b" stroke="#4e3015" stroke-width="1" stroke-linejoin="round"/><ellipse cx="8" cy="7.2" rx="6.2" ry="1.3" fill="#3a2414" stroke="#4e3015" stroke-width=".8"/><path d="M5.6 14.2 H10.4" stroke="#4e3015" stroke-width="1.2" stroke-linecap="round"/></svg>',
 };
 document.querySelectorAll('[data-ico]').forEach(el => el.innerHTML = ICON[el.dataset.ico]);
@@ -443,7 +445,7 @@ DEF.tower.shootY = DEF.tower.shootY.map((y, i) => y * TOWER_K[i]);
 const BUILD_T = { market: 12, house: 10, farm: 10, lodge: 12, quarry: 14, tower: 14, barracks: 14, wall: 3, gate: 8, castle: 24, well: 5, torch: 3, flowers: 3, statue: 8 };
 for (const t in BUILD_T) DEF[t].build = BUILD_T[t];
 DEF.well.charm = .25; DEF.torch.charm = .1; DEF.flowers.charm = .15; DEF.statue.charm = .35;
-const PATH_COST = { gold: 1 }, PATH_CHARM = .02, CHARM_R = 8, WALK = { farm: 1, torch: 1, flowers: 1 };
+const PATH_COST = { gold: 1 }, PATH_SPEED = 1.6, PATH_CHARM = .02, CHARM_R = 8, WALK = { farm: 1, torch: 1, flowers: 1 };
 const CATS = { eco: ['house', 'farm', 'lodge', 'quarry', 'market'], def: ['tower', 'barracks', 'wall', 'gate'], decor: ['road', 'well', 'torch', 'flowers', 'statue'] };
 const WALLY = { wall: 1, gate: 1 };   // walls join only walls and gates
 // spearmen are the basic raider and come first; swordsmen join from wave 2, captains from wave 3
@@ -2618,7 +2620,7 @@ function turnTo(v, a, dt) { let d = a - v.g.rotation.y; d = Math.atan2(Math.sin(
 function steer(v, tx, tz, dt, mode, stop = .2, mult = 1) {
   const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz);
   if (d < stop) return true;
-  let sp = v.speed * mult * (road[cellAt(v.x, v.z)] ? 1.6 : 1);
+  let sp = v.speed * mult * (road[cellAt(v.x, v.z)] ? PATH_SPEED : 1);
   if (mode === 2 && walkY(v.x, v.z) < .4) sp *= .5;
   const step = Math.min(d - stop * .5, sp * dt), base = Math.atan2(dx, dz);
   if (step < .002) return false;
@@ -3694,7 +3696,7 @@ function updateHud() {
 }
 const DEM_ICO = '<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>';
 // card stats: icon + number; tapping one shows its name (statTip)
-const STAT_NAME = { hp: 'Health', gold: 'Gold', food: 'Food', pop: 'Villagers', hammer: 'Workers', guard: 'Archers', bow: 'Damage', sword: 'Damage', charm: 'Charm', bowl: 'Hungry' };
+const STAT_NAME = { hp: 'Health', gold: 'Gold', food: 'Food', pop: 'Villagers', hammer: 'Workers', guard: 'Archers', bow: 'Damage', sword: 'Damage', charm: 'Charm', bowl: 'Hungry', speed: 'Walk speed' };
 const STAT = (ico, txt, cls = '', name = STAT_NAME[ico]) => `<span class="stat ${cls}" data-name="${name || ''}" title="${name || ''}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
 function refreshCard() {
   const card = $('#card');
@@ -3703,7 +3705,7 @@ function refreshCard() {
   $('#cardHp').parentElement.hidden = !!selected.path;
   if (selected.path) {                                 // a path tile: just a name and Demolish (no refund)
     card.hidden = false; $('#cardIco').innerHTML = TOOL_ICON.road; $('#cardTitle').textContent = 'Path'; $('#cardSub').textContent = ''; $('#cardPips').innerHTML = '';
-    $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = $('#volleyBtn').hidden = true;
+    $('#cardStats').innerHTML = STAT('speed', `×${PATH_SPEED}`) + STAT('charm', `+${Math.round(PATH_CHARM * 100)}%`); $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = $('#volleyBtn').hidden = true;
     const dem = $('#demBtn'), armed = demArmed.B === selected && performance.now() - demArmed.t < 3000;
     dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick.replace('<svg ', '<svg class="bIco" ') : DEM_ICO; dem.title = 'Remove path'; return;
   }
