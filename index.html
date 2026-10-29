@@ -2274,7 +2274,7 @@ function removeBuilding(B, raid, cancel) {
   regionDirty = true; hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
   if (!raid) sfx(cancel ? 'click' : 'sold', c);
-  if (raid) { stats.lost++; sfx('destroyed', c); shake(.35, c); debrisBurst(B, c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> lost`, 'warn'); }
+  if (raid) { stats.lost++; sfx('destroyed', c); shake(.3, c, 'lost', .6); debrisBurst(B, c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> lost`, 'warn'); }
   else if (cancel) { RES_KEYS.forEach(k => res[k] += DEF[B.type].cost[k] || 0); log(`<b>${DEF[B.type].tiers[0]}</b> cancelled · +${costHTML(DEF[B.type].cost)}`); }
   else {
     const back = {}; RES_KEYS.forEach(k => { if (DEF[B.type].cost[k]) back[k] = Math.floor(DEF[B.type].cost[k] / 2); res[k] += back[k] || 0; });
@@ -2284,7 +2284,7 @@ function removeBuilding(B, raid, cancel) {
   refreshWalls(); rebuildRoads();
   if (B.type === 'castle') endGame(false);
 }
-function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; shake(.07, center(B)); if (B.hp <= 0) removeBuilding(B, true); }
+function hurtBuilding(B, d) { if (B.dead || gameOver) return; B.hp -= d; shake(.05, center(B)); if (B.hp <= 0) removeBuilding(B, true); }
 function paintRoad(a, b) {
   const ev = evaluateRoad(a, b);
   if (!ev.ok) { if (!ev.soft) setHint(ev.reason, 'bad'); return false; }
@@ -4396,11 +4396,16 @@ function separateUnits(dt) {
 // ---------- juice: camera shake, debris, coins to the counter ----------
 var shakeT = 0, shakeAmp = 0;
 const shakeV = new THREE.Vector3();
-// amp in metres at the camera's focus; fades with distance from it, so far-off hits barely register
-function shake(amp, at) {
+// amp in metres at the camera's focus; fades with distance from it, so far-off hits barely register.
+// gap: seconds before another shake of this kind may start (a big raid hits buildings many times a second,
+// which kept the screen shaking non-stop); a shake already running is never restarted by a smaller one
+var shakeNext = {};
+function shake(amp, at, kind = 'hit', gap = 1.5) {
+  const now = performance.now() / 1000; if (now < (shakeNext[kind] || 0)) return;
   const near = at ? clamp(1 - Math.hypot(at.x - target.x, at.z - target.z) / 30, 0, 1) : 1;
   const a = amp * near * clamp(dist / 40, .5, 1.5); if (a < .01) return;
-  shakeAmp = Math.max(shakeT > 0 ? shakeAmp : 0, a); shakeT = .3;
+  if (shakeT > 0 && a <= shakeAmp * shakeT / .3) return;
+  shakeNext[kind] = now + gap; shakeAmp = a; shakeT = .3;
 }
 function shakeOffset(dt) {
   if (shakeT <= 0) return shakeV.set(0, 0, 0);
