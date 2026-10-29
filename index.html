@@ -2536,6 +2536,8 @@ function stride(u, dt, rate) { u.amp = (u.amp || 0) + ((u.walking ? 1 : 0) - (u.
 function cellPass(n, mode) {
   if (bridgeCell[n]) return true;
   const o = occB[n]; if (o && !WALK[o.type] && !(o.type === 'gate' && mode !== 2)) return false;
+  // a farm cell whose middle is the hut, barn, hay or a scarecrow is routed round (people still walk the open ground by it)
+  if (o && o.type === 'farm' && farmBlocked(o, (n % N + .5) * CELL, (((n / N) | 0) + .5) * CELL)) return false;
   return cH[n] > (mode === 1 ? .2 : .45) && cS[n] < (mode === 1 ? 4 : 2.6);
 }
 const ND = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
@@ -2649,8 +2651,9 @@ function walkTo(v, tx, tz, dt, mode, stop = .2, mult = 1) {
 function enter(v, B, secs) { release(v); v.path = null; v.indoor = B; v.hideT = secs; goIn(v, B); v.stuck = 0; }
 // villagers vanish only at the model's door: from the path tile they walk straight in, and come out the same way
 function goIn(v, B) {
-  const p = innerDoor(B);
-  if (p && v.g.visible && Math.hypot(p.x - v.x, p.z - v.z) < 4) v.doorWalk = { x: p.x, z: p.z, hide: true };
+  const p = innerDoor(B), dp = doorPoint(B);
+  // walk in only from in front of the door; someone who gave up further off just goes inside, rather than through a wall
+  if (p && v.g.visible && Math.hypot(dp.x - v.x, dp.z - v.z) < 1.7) v.doorWalk = { x: p.x, z: p.z, hide: true };
   else { v.doorWalk = null; v.g.visible = false; }
 }
 function exitDoor(v) {
@@ -2670,7 +2673,8 @@ function doorStep(v, dt) {
   if (W.hide) { v.g.visible = false; dropLoad(v); }
   return false;
 }
-function nearDoor(v, B, dp) { return Math.hypot(dp.x - v.x, dp.z - v.z) < .6 || (v.noProg > 1 && distRect(B, v.x, v.z) < 1.6); }
+// at the door: on its tile, or held up close to it (never just near the building: from behind a wall they walked through it)
+function nearDoor(v, B, dp) { const d = Math.hypot(dp.x - v.x, dp.z - v.z); return d < .6 || (v.noProg > 1 && d < 1.6); }
 function claimResource(v, now) {
   const hb = center(v.job), R = DEF[v.job.type].reach;
   let best = null, bd = 1e9;
