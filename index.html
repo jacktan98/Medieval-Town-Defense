@@ -166,6 +166,10 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 .card{border-radius:10px;border-color:#6b5a2e;padding:7px 8px;gap:5px;box-shadow:0 2px 10px rgba(0,0,0,.35);width:fit-content;max-width:min(400px,100%);align-self:flex-end}   /* as narrow as its content (a path's is tiny), on the right */
 .cardHead{display:flex;align-items:center;gap:6px}
 .cardHead .iconBtn{width:30px;min-width:30px;height:30px;min-height:30px}
+#volleyBtn{position:relative}
+#volleyBtn .cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font:700 11px/1 system-ui,sans-serif;color:#e8e2cc}
+#volleyBtn.cool svg{opacity:.25}
+#volleyBtn.cool .cd{display:flex}
 .cardIco{width:30px;height:30px;border-radius:7px;background:#24261f;border:1px solid #4a4838;display:inline-flex;align-items:center;justify-content:center;color:var(--gold);flex-shrink:0}
 .cardIco svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .cardName{flex:1;min-width:0}
@@ -296,6 +300,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
         <span class="cardIco" id="cardIco"></span>
         <div class="cardName"><h4 id="cardTitle"></h4><div class="cardSub"><span id="cardSub"></span><span class="pips" id="cardPips"></span></div></div>
         <button class="iconBtn" id="rallyBtn" title="Rally: tap, then a spot" aria-label="Rally"><svg viewBox="0 0 24 24"><path d="M6 21 V3.5"/><path d="M6 4 H17.5 L15 8 L17.5 12 H6"/></svg></button><button class="iconBtn" id="recallBtn" title="Recall to the barracks" aria-label="Recall"><svg viewBox="0 0 24 24"><path d="M9 14 L4 9 L9 4"/><path d="M4 9 H14 A5.5 5.5 0 0 1 14 20 H9"/></svg></button>
+        <button class="iconBtn" id="volleyBtn" hidden title="Arrow volley: tap, then a spot" aria-label="Arrow volley"><svg viewBox="0 0 24 24"><path d="M4 4 L13 13 M9 2.5 L18 11.5 M2.5 9 L11.5 18"/><path class="solid" d="M15 15 L11.2 14.2 L14.2 11.2 Z M20 13.5 L16.2 12.7 L19.2 9.7 Z M13.5 20 L12.7 16.2 L9.7 19.2 Z"/></svg><b class="cd"></b></button>
         <button class="iconBtn" id="cardRotBtn" hidden aria-label="Rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M19 12 a7 7 0 1 1-2.05-4.95"/><path d="M19.2 3.8 V7.5 H15.5"/></svg></button>
         <button class="iconBtn" id="closeCard" aria-label="Close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg></button>
       </div>
@@ -2903,10 +2908,10 @@ function bowPoint(p) {
   p.arms[0].rotation.x = -1.5; p.arms[0].rotation.z = .6; p.g.updateMatrixWorld(true);
   return (p.pivot || p.arms[0]).getWorldPosition(new THREE.Vector3());
 }
-function fireArrow(from, to, onHit) {
+function fireArrow(from, to, onHit, arc) {
   const m = new THREE.Mesh(arrowGeo, arrowMat); m.castShadow = true; m.position.copy(from); scene.add(m);
   const d = from.distanceTo(to);
-  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: Math.min(3, d * .15), onHit }); sfx('arrow', from);
+  arrows.push({ m, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(.25, d / 22), arc: arc || Math.min(3, d * .15), onHit }); sfx('arrow', from);
 }
 const tv = new THREE.Vector3();
 function arrowPos(a, t, out) { out.lerpVectors(a.from, a.to, t); out.y += a.arc * 4 * t * (1 - t); return out; }
@@ -2915,6 +2920,28 @@ function updateArrows(dt) {
     const a = arrows[n]; a.t += dt / a.dur;
     const t = Math.min(a.t, 1); arrowPos(a, t, a.m.position); a.m.lookAt(arrowPos(a, Math.min(t + .03, 1.03), tv));
     if (a.t >= 1) { scene.remove(a.m); arrows.splice(n, 1); a.onHit(); }
+  }
+}
+// Arrow volley (castle card): arrows from the castle rain on a small circle anywhere; each enemy inside it takes the volley's
+// damage, shared out over the arrows as they land; cooldown in game time
+const VOLLEY = { cd: 20, n: 16, r: 2.6, dmg: [45, 60, 80], spread: .7 };
+var volleyCd = 0, volleyAim = false, volleyQ = [], volleyRingT = 0;
+const volleyLine = makeLine('#8fc1db', 1);
+function castVolley(pt) {
+  const C = castleB(); if (!C) return;
+  const c = center(C), k = C.tier - 1, per = VOLLEY.dmg[k] / VOLLEY.n, y = C.group.position.y + DEF.castle.shootY[k];
+  for (let i = 0; i < VOLLEY.n; i++) volleyQ.push({ t: Math.random() * VOLLEY.spread, from: new THREE.Vector3(c.x + (Math.random() - .5) * 3, y, c.z + (Math.random() - .5) * 3), x: pt.x, z: pt.z, per });
+  volleyCd = VOLLEY.cd; drapeCircle(volleyLine, pt.x, pt.z, VOLLEY.r); volleyRingT = VOLLEY.spread + 2;
+}
+function updateVolley(dt) {
+  if (volleyCd > 0) volleyCd = Math.max(0, volleyCd - dt);
+  if (volleyRingT > 0) volleyRingT -= dt;
+  if (!volleyAim && volleyRingT <= 0) volleyLine.visible = false;
+  for (let n = volleyQ.length - 1; n >= 0; n--) {
+    const q = volleyQ[n]; if ((q.t -= dt) > 0) continue; volleyQ.splice(n, 1);
+    const a = Math.random() * 6.283, r = VOLLEY.r * Math.sqrt(Math.random()), tx = q.x + Math.cos(a) * r, tz = q.z + Math.sin(a) * r;
+    const d = Math.hypot(tx - q.from.x, tz - q.from.z);
+    fireArrow(q.from, new THREE.Vector3(tx, walkY(tx, tz) + .05, tz), () => { dustAt(tx, walkY(tx, tz), tz); for (const e of enemies) if (!e.dead && Math.hypot(e.x - q.x, e.z - q.z) < VOLLEY.r) hurtEnemy(e, q.per); }, 3 + d * .25);
   }
 }
 function hurtEnemy(e, d) { if (e.dead) return; e.hp -= d; e.flashT = .14; if (e.hp <= 0) { e.dead = true; e.bar.grp.visible = false; stats.slain++; } }
@@ -3343,7 +3370,7 @@ function refreshCard() {
   $('#cardHp').parentElement.hidden = !!selected.path;
   if (selected.path) {                                 // a path tile: just a name and Demolish (no refund)
     card.hidden = false; $('#cardIco').innerHTML = TOOL_ICON.road; $('#cardTitle').textContent = 'Path'; $('#cardSub').textContent = ''; $('#cardPips').innerHTML = '';
-    $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = true;
+    $('#cardStats').innerHTML = ''; $('#cardRotBtn').hidden = $('#upBtn').hidden = $('#rallyBtn').hidden = $('#recallBtn').hidden = $('#volleyBtn').hidden = true;
     const dem = $('#demBtn'), armed = demArmed.B === selected && performance.now() - demArmed.t < 3000;
     dem.hidden = false; $('#cardActs').hidden = false; dem.classList.toggle('armed', armed); dem.innerHTML = armed ? PICO.tick.replace('<svg ', '<svg class="bIco" ') : DEM_ICO; dem.title = 'Remove path'; return;
   }
@@ -3386,6 +3413,8 @@ function refreshCard() {
   $('#cardStats').innerHTML = st.join('');
   $('#rallyBtn').hidden = $('#recallBtn').hidden = !T.soldiers || !B.built;
   $('#rallyBtn').setAttribute('aria-pressed', String(rallyFor === B)); $('#recallBtn').disabled = !B.rally;
+  const vb = $('#volleyBtn'); vb.hidden = B.type !== 'castle';
+  if (!vb.hidden) { const cool = volleyCd > 0; vb.classList.toggle('cool', cool); vb.disabled = cool; vb.querySelector('.cd').textContent = cool ? Math.ceil(volleyCd) : ''; vb.setAttribute('aria-pressed', String(volleyAim)); }
   const up = $('#upBtn');
   if (!T.up) up.hidden = true;
   else if (B.tier >= 3 || B.site) up.hidden = true;
@@ -3426,7 +3455,7 @@ function syncRange() {
   if (!k) { rangeLine.visible = false; return; }
   const c = center(B); drapeCircle(rangeLine, c.x, c.z, T.range[B.tier - 1]);
 }
-function deselect() { selected = null; selLine.visible = false; $('#statTip').hidden = true; refreshCard(); }
+function deselect() { selected = null; volleyAim = false; selLine.visible = false; $('#statTip').hidden = true; refreshCard(); }
 $('#upBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); selected && upgrade(selected); });
 $('#rotBtn').addEventListener('click', rotatePlacement);
 $('#cardRotBtn').addEventListener('click', () => { if (paused) return setHint('Paused', 'bad'); rotateBuilding(selected); });
@@ -3531,7 +3560,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId);
-  if (!p) { if (e.pointerType === 'mouse') { const pt = pick(e); pt ? showGhostAt(pt) : hideGhost(); } return; }
+  if (!p) { if (e.pointerType === 'mouse') { const pt = pick(e); if (volleyAim) { if (pt) drapeCircle(volleyLine, pt.x, pt.z, VOLLEY.r); return; } pt ? showGhostAt(pt) : hideGhost(); } return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   if (ptrs.size === 1 && down) {
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) down.moved = true;
@@ -3559,6 +3588,10 @@ function tap(e) {
   }
   if (gameOver) return;
   if (paused) { const hb = pickBuilding(e); if (hb) select(hb); setHint('Paused', 'bad'); return; }
+  if (volleyAim) {                                    // aiming the castle's arrow volley
+    const pt = pick(e); if (!pt) { setHint('Pick a spot', 'bad'); return; }
+    volleyAim = false; castVolley(pt); setHint('Volley'); refreshCard(); return;
+  }
   if (PAINT[tool]) { paintAt(e); return; }
   const building = tool && tool !== 'select';
   const hb = pickBuilding(e, building);
@@ -3760,6 +3793,10 @@ function updateGallery(dt, now) {
 }
 $('#adGallery').addEventListener('click', openGallery);
 $('#rallyBtn').addEventListener('click', () => { if (!selected) return; rallyFor = rallyFor === selected ? null : selected; setHint(rallyFor ? 'Tap a spot' : 'Select a building'); refreshCard(); });
+$('#volleyBtn').addEventListener('click', () => {
+  if (paused) return setHint('Paused', 'bad'); if (volleyCd > 0) return;
+  volleyAim = !volleyAim; if (!volleyAim) volleyLine.visible = false; setHint(volleyAim ? 'Tap a spot' : 'Select a building'); refreshCard();
+});
 $('#recallBtn').addEventListener('click', () => { if (selected) { setRally(selected, null); rallyFor = null; setHint('Recalled'); refreshCard(); } });
 $('#galBack').addEventListener('click', closeGallery);
 $('#galTurn').addEventListener('click', () => { for (const it of gItems) if (it.turns) it.g.userData.turn++; });
@@ -3781,7 +3818,7 @@ function startGame() {
   for (const v of villagers) { scene.remove(v.g); if (v.sbar) scene.remove(v.sbar.grp); } villagers.length = 0;
   for (const f of fallen) scene.remove(f.v.g); fallen.length = 0; for (const c of chips) scene.remove(c.m); chips.length = 0; respawns.length = 0; rallyFor = null;
   for (const e of enemies) { scene.remove(e.g); scene.remove(e.bar.grp); } enemies.length = 0;
-  for (const a of arrows) scene.remove(a.m); arrows.length = 0;
+  for (const a of arrows) scene.remove(a.m); arrows.length = 0; volleyQ = []; volleyCd = 0; volleyAim = false; volleyLine.visible = false;
   for (const f of floats) scene.remove(f.sp); floats.length = 0;
   for (const p of puffs) scene.remove(p.sp); puffs.length = 0;
   PH = { kind: 'day', wave: 1, t: DAYLEN[0] }; econT = TICK; gameOver = false; light = 1; if (paused) setPaused(false); setMusic('day');
@@ -4102,7 +4139,7 @@ function frame(now) {
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); if ((hudT -= dt) <= 0) { hudT = .2; updateHud(); } return; }
   const gdt = dt * gameSpeed;            // game time runs faster at 2×; the camera does not
   if (!gameOver) { updatePhase(gdt); updateVillagers(gdt, now); updateEnemies(gdt); updateDefense(gdt); separateUnits(gdt); updateDoors(gdt); updateFallen(gdt); updateChips(gdt); updateSplashes(gdt); }
-  updateArrows(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
+  updateArrows(gdt); updateVolley(gdt); updateTrees(now); emitSmoke(gdt); updateBirds(gdt);
   if (anims.length) {
     for (let n = anims.length - 1; n >= 0; n--) { const a = anims[n], t = clamp((now - a.t0) / a.dur, 0, 1); applyPlan(a.plan, easeOut(t)); if (t >= 1) anims.splice(n, 1); }
     syncTerrain();
