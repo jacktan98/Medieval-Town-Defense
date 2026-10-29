@@ -1137,7 +1137,7 @@ function rebuildRoads() {
 // each model's door, in its own frame (front = +z): x across the front, z just outside the door leaf, per tier
 const DOOR = {
   house: [[0, .6], [0, .62], [0, .66]],
-  lodge: [[-.65, .52], [-.6, 1.14], [-.6, 1.14]],
+  lodge: [[-.65, .52], [-.48, .92], [-.48, .92]],
   quarry: [[-1, -.22], [-1, .03], [-1, .03]],
   castle: [[0, .5], [0, 2.75], [0, 2.51]],      // T1 the hall door; T2/T3 the gatehouse
   barracks: [[-1, .42], [-1, .42], [-1, .42]],
@@ -1311,6 +1311,7 @@ function makeCastle(tier, plinth) {
   }
   return root;
 }
+const LODGE_K = .8;
 function makeLodge(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
@@ -1332,22 +1333,23 @@ function makeLodge(tier, plinth) {
     g.add(box(DOOR_W, DOOR_H, .06, M.timber, D, .08 + DOOR_H / 2, .46));
     pile(1.05, 1.25, 2);
     axeStump(1.1, -.85);       // chopping block round the back, beside the hut
-  } else {                     // log cabin, then timber yard
+  } else {                     // log cabin, then timber yard; the cabin is drawn at LODGE_K in x and z (the door keeps its size)
+    const cab = new THREE.Group(), K = LODGE_K; cab.scale.set(K, 1, K); g.add(cab);
     for (let n = 0; n < 5; n++) {
       const y = .35 + n * .32;
-      const l1 = cyl(.17, .17, 2.9, 6, M.log, 0, y, .9); l1.rotation.z = Math.PI / 2; g.add(l1);
-      const l2 = cyl(.17, .17, 2.9, 6, M.log, 0, y, -.9); l2.rotation.z = Math.PI / 2; g.add(l2);
-      const l3 = cyl(.17, .17, 2.0, 6, M.log, 1.3, y + .16, 0); l3.rotation.x = Math.PI / 2; g.add(l3);
-      const l4 = cyl(.17, .17, 2.0, 6, M.log, -1.3, y + .16, 0); l4.rotation.x = Math.PI / 2; g.add(l4);
+      const l1 = cyl(.17, .17, 2.9, 6, M.log, 0, y, .9); l1.rotation.z = Math.PI / 2; cab.add(l1);
+      const l2 = cyl(.17, .17, 2.9, 6, M.log, 0, y, -.9); l2.rotation.z = Math.PI / 2; cab.add(l2);
+      const l3 = cyl(.17, .17, 2.0, 6, M.log, 1.3, y + .16, 0); l3.rotation.x = Math.PI / 2; cab.add(l3);
+      const l4 = cyl(.17, .17, 2.0, 6, M.log, -1.3, y + .16, 0); l4.rotation.x = Math.PI / 2; cab.add(l4);
     }
-    g.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
-    g.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
-    g.add(box(.55, 1.0, .06, M.timber, -.6, .7, 1.08));
-    g.add(box(.3, .24, .06, M.glow, .6, 1.2, 1.08));
-    pile(.7, 1.56, 3, .14);   // between the cabin front and the edge of the base
-    axeStump(1.45, -1.45);
+    cab.add(box(2.5, 1.5, 1.7, M.wood, 0, .95, 0));
+    cab.add(pyramid(2.2, 1.4, .82, tier === 3 ? M.roofBlue : M.thatch, 2.55));
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, -.6 * K, .2 + DOOR_H / 2, 1.08 * K));
+    g.add(box(.3, .24, .06, M.glow, .6 * K, 1.2, 1.08 * K));
+    pile(.6, 1.3, 3, .14);    // in front of the cabin, well inside the base
+    axeStump(1.3, -1.3);
     if (tier === 3) {
-      g.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
+      cab.add(box(.45, 2.6, .45, M.stone, 1.05, 1.7, -.45));
       // sawbuck: two X trestles cradling a log, a frame saw standing in the cut, sawn rounds beside it
       for (const z of [1.35, 1.8]) for (const sx of [-1, 1]) { const l = box(.07, .8, .07, M.timber, -1.5, .38, z); l.rotation.z = sx * .55; g.add(l); }
       const lg = cyl(.13, .13, .75, 7, M.log, -1.5, .62, 1.57); lg.rotation.x = Math.PI / 2; g.add(lg);
