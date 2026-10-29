@@ -4,7 +4,7 @@ const path = require('path'), fs = require('fs');
 const { openGame } = require('./serve');
 const ROOT = path.resolve(__dirname, '../..');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const VIEW = { meadow: [28, 0, 28, 0, 1.56, 75], isle: [28, 0, 28, 0, 1.56, 75], pass: [28, 4, 28, 0, 1.56, 80] };    // straight down over the whole map    // target x, y, z, yaw, pitch, dist
+const VIEW = { meadow: [28, 0, 28, 0, 1.56, 64], isle: [28, 0, 28, 0, 1.56, 64], pass: [28, 4, 28, 0, 1.56, 64] };    // straight down over the whole map    // target x, y, z, yaw, pitch, dist
 (async () => {
   const { page, close, errors } = await openGame('index.html?debug&map=meadow', { three: arg('--three'), viewport: { width: 400, height: 400 } });
   for (const m of ['meadow', 'isle', 'pass']) {
