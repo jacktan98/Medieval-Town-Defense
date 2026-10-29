@@ -1162,37 +1162,37 @@ function syncTerrain() {
 }
 
 // ---------- building models (3 tiers each) ----------
+// every tier-1 door (and every house and barracks door) is the size of the lumber camp's: 0.55 x 1.0 m
+const DOOR_W = .55, DOOR_H = 1.0;
 function makeHouse(tier, plinth) {
   const g = new THREE.Group();
   if (plinth) g.add(box(2.0, 1.6, 2.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
   if (tier === 1) {            // hovel: crooked wattle-and-daub, sagging thatch
-    const w = box(1.25, .85, 1.05, M.mud, 0, .5, 0); w.rotation.z = .035; g.add(w);
-    for (const sx of [-1, 1]) g.add(box(.09, .9, .09, M.rough, sx * .62, .5, .52));
-    g.add(box(1.3, .08, .08, M.rough, 0, .92, .53));
-    g.add(pyramid(1.12, 1.15, .95, M.thatchOld, 1.47));
-    g.add(box(.34, .58, .05, M.timber, 0, .38, .54));
-    g.add(box(.18, .14, .04, M.glow, .38, .62, .54));
+    const w = box(1.25, 1.25, 1.05, M.mud, 0, .7, 0); w.rotation.z = .035; g.add(w);
+    for (const sx of [-1, 1]) g.add(box(.09, 1.3, .09, M.rough, sx * .62, .7, .52));
+    g.add(box(1.3, .08, .08, M.rough, 0, 1.32, .53));
+    g.add(pyramid(1.12, 1.15, .95, M.thatchOld, 1.9));
+    g.add(box(DOOR_W, DOOR_H, .05, M.timber, 0, .08 + DOOR_H / 2, .54));
+    g.add(box(.16, .14, .04, M.glow, .45, 1.0, .54));
     for (let n = 0; n < 4; n++) { const p = box(.05, .35 + hash(n, 3) * .15, .05, M.rough, .9, .2, -.45 + n * .3); p.rotation.x = (hash(n, 9) - .5) * .4; g.add(p); }
   } else if (tier === 2) {     // cottage: plain daub walls, corner posts, a straw gable roof, one door and one window
-    g.add(box(1.4, .78, 1.1, M.daub, 0, .45, 0));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, .8, .1, M.timber, sx * .68, .45, sz * .53));
-    g.add(box(.34, .56, .05, M.wood, 0, .36, .56));
-    g.add(box(.2, .18, .04, M.glow, .35, .52, .56));
-    g.add(prism(1.4, 1.1, .7, M.daub, 0, .84, 0));
+    g.add(box(1.4, 1.3, 1.1, M.daub, 0, .75, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.32, .1, M.timber, sx * .68, .75, sz * .53));
+    g.add(box(DOOR_W, DOOR_H, .05, M.wood, 0, .1 + DOOR_H / 2, .56));
+    g.add(box(.18, .18, .04, M.glow, .45, .95, .56));
+    g.add(prism(1.4, 1.1, .7, M.daub, 0, 1.4, 0));
     const sl = Math.atan2(.7, .55), len = Math.hypot(.7, .55) + .2;
-    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.logGable, 0, .84 + .35, sz * .35); r.rotation.x = sz * sl; g.add(r); }
-    g.add(box(.18, .45, .18, M.stone, .45, 1.45, -.25));
-  } else {                     // town house: stone ground floor, plaster upper floor, blue gable roof
-    g.add(box(1.4, .75, 1.2, M.stone2, 0, .375, 0));
-    g.add(box(.34, .58, .05, M.wood, 0, .3, .61));
-    g.add(box(.18, .16, .04, M.glow, .35, .45, .61));
-    g.add(box(1.46, .07, 1.26, M.timber, 0, .78, 0));
-    g.add(box(1.4, .7, 1.2, M.plaster, 0, 1.16, 0));
-    for (const sx of [-1, 1]) g.add(box(.2, .22, .04, M.glow, sx * .38, 1.2, .61));
-    g.add(prism(1.4, 1.2, .8, M.plaster, 0, 1.51, 0));
+    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.logGable, 0, 1.4 + .35, sz * .35); r.rotation.x = sz * sl; g.add(r); }
+    g.add(box(.18, .45, .18, M.stone, .45, 2.01, -.25));
+  } else {                     // town house: one tall stone storey, a timber band and a plaster gable, blue gable roof
+    g.add(box(1.4, 1.45, 1.2, M.stone2, 0, .8, 0));
+    g.add(box(DOOR_W, DOOR_H, .05, M.wood, 0, .1 + DOOR_H / 2, .61));
+    for (const sx of [-1, 1]) g.add(box(.18, .26, .04, M.glow, sx * .47, 1.1, .61));
+    g.add(box(1.46, .07, 1.26, M.timber, 0, 1.53, 0));
+    g.add(prism(1.4, 1.2, .8, M.plaster, 0, 1.56, 0));
     const sl = Math.atan2(.8, .6), len = Math.hypot(.8, .6) + .2;
-    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.roofBlue, 0, 1.51 + .4 + .03, sz * .32); r.rotation.x = sz * sl; g.add(r); }
-    g.add(box(.2, .6, .2, M.stone2, .45, 2.1, -.3));
+    for (const sz of [-1, 1]) { const r = box(1.6, .1, len, M.roofBlue, 0, 1.56 + .4 + .03, sz * .32); r.rotation.x = sz * sl; g.add(r); }
+    g.add(box(.2, .6, .2, M.stone2, .45, 2.15, -.3));
   }
   return g;
 }
@@ -1252,7 +1252,7 @@ function makeCastle(tier, plinth) {
     }
     g.add(box(2.4, 2.4, 2.0, M.wood, 0, 1.5, -.6));
     g.add(pyramid(2.1, 1.45, .86, M.thatchOld, 3.42, 0, -.6));   // eaves stick out past the hall walls
-    g.add(box(.46, .76, .01, M.dark, 0, .7, .405)); g.add(leaf(.5, .8, .06, M.timber, -.25, .7, .42, 1, -1.4));   // hall door swings out
+    g.add(box(.68, 1.12, .01, M.dark, 0, .86, .405)); g.add(leaf(.72, 1.16, .06, M.timber, -.36, .88, .42, 1, -1.4));   // hall door swings out
     for (const sx of [-1, 1]) g.add(box(.26, .36, .06, M.glow, sx * .5, 1.72, .42));   // two plain lit windows either side above the door, like the stone keep's
     for (const [px, pz] of [[1.9, 1.9], [-1.9, 1.9], [1.9, -1.9], [-1.9, -1.9]]) {   // a small lookout platform in each corner of the stockade
       g.add(box(.8, .1, .8, M.rough, px, 2.5, pz));
@@ -1318,17 +1318,17 @@ function makeLodge(tier, plinth) {
   const axeStump = (x, z) => { g.add(cyl(.28, .3, .45, 8, M.logEnd, x, .25, z)); const h = box(.05, .6, .05, M.timber, x + .08, .7, z); h.rotation.z = -.4; g.add(h); g.add(box(.05, .16, .22, M.iron, x - .02, .5, z)); };
   if (tier === 1) {            // woodcutter's hut: short log walls, thatched roof, chopping stump
     const X = -.9;              // the door (x -1) lines up with the left column's path tile
-    for (let n = 0; n < 3; n++) {
+    for (let n = 0; n < 4; n++) {
       const y = .3 + n * .3;
-      if (n < 2) for (const [x0, x1] of [[X - 1, -1.27], [-.73, X + 1]]) { const l1 = cyl(.15, .15, x1 - x0, 6, M.log, (x0 + x1) / 2, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
+      if (n < 3) for (const [x0, x1] of [[X - 1, -1.27], [-.73, X + 1]]) { const l1 = cyl(.15, .15, x1 - x0, 6, M.log, (x0 + x1) / 2, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
       else { const l1 = cyl(.15, .15, 2.0, 6, M.log, X, y, .45); l1.rotation.z = Math.PI / 2; g.add(l1); }
       const l2 = cyl(.15, .15, 2.0, 6, M.log, X, y, -.75); l2.rotation.z = Math.PI / 2; g.add(l2);
       const l3 = cyl(.15, .15, 1.4, 6, M.log, X + .9, y + .15, -.15); l3.rotation.x = Math.PI / 2; g.add(l3);
       const l4 = cyl(.15, .15, 1.4, 6, M.log, X - .9, y + .15, -.15); l4.rotation.x = Math.PI / 2; g.add(l4);
     }
-    g.add(box(1.7, .9, 1.1, M.rough, X, .6, -.15));
-    g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.6, X, -.15));
-    g.add(box(.46, .66, .06, M.timber, -1, .42, .46));
+    g.add(box(1.7, 1.2, 1.1, M.rough, X, .75, -.15));
+    g.add(pyramid(1.5, 1.1, .78, M.thatchOld, 1.9, X, -.15));
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, -1, .08 + DOOR_H / 2, .46));
     pile(1.05, 1.25, 2);
     axeStump(1.1, -.85);       // chopping block round the back, beside the hut
   } else {                     // log cabin, then timber yard
@@ -1360,9 +1360,10 @@ function makeLodge(tier, plinth) {
 }
 // market: tier 1 one stall under a striped awning, tier 2 two stalls and a cart, tier 3 an open hall on stone pillars
 // with a blue roof; goods everywhere (crates, sacks, barrels, produce, cloth)
+const MARKET_K = .8;
 function makeMarket(tier, plinth) {
-  const g = new THREE.Group();
-  if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
+  const root = new THREE.Group(), g = new THREE.Group(); g.scale.setScalar(MARKET_K); root.add(g);   // drawn smaller than its tile, like other 2x2s
+  if (plinth) root.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
   const crate = (x, z, s = .32, r = 0) => { const c = box(s, s, s, M.wood, x, s / 2, z); c.rotation.y = r; g.add(c); };
   const sack = (x, z, r = .15) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 7, 5), M.canvas); o.scale.y = 1.25; o.position.set(x, r * 1.1, z); o.castShadow = true; g.add(o); };
   const barrel = (x, z) => { g.add(cyl(.17, .15, .44, 9, M.log, x, .22, z)); g.add(cyl(.175, .175, .04, 9, M.iron, x, .32, z)); };
@@ -1402,11 +1403,10 @@ function makeMarket(tier, plinth) {
     for (const [x, z] of [[-1.12, -.82], [-.74, -.95], [-.95, -.55], [.78, -.88], [1.15, -.78], [1.12, .2]]) barrel(x, z);
     crate(1.15, .8, .32, .3); crate(.8, .95, .26, .1); sack(-1.15, .82); sack(-.85, .95, .12); crate(-.3, -.95, .28, .5);
     // a sign hung from an iron bracket on the middle front pillar, square to the front
-    g.add(box(.04, .04, .56, M.iron, 0, 1.86, 1.66)); const br = box(.03, .03, .42, M.iron, 0, 1.7, 1.6); br.rotation.x = -.75; g.add(br);
-    for (const z of [1.62, 1.86]) g.add(box(.015, .14, .015, M.iron, 0, 1.78, z));
+    g.add(box(.04, .04, .56, M.iron, 0, 1.86, 1.66));     for (const z of [1.62, 1.86]) g.add(box(.015, .14, .015, M.iron, 0, 1.78, z));
     g.add(box(.04, .3, .34, M.awning, 0, 1.56, 1.74));
   }
-  return g;
+  return root;
 }
 // barracks: a hall on the left (door at x -1) and a drill yard on the right with a weapon rack and a practice dummy
 function makeBarracks(tier, plinth) {
@@ -1432,26 +1432,26 @@ function makeBarracks(tier, plinth) {
     if (shield) { const sh = cyl(.17, .17, .035, 12, M.wood, 1.3, .8, -.52); sh.rotation.x = Math.PI / 2; g.add(sh); }
   };
   if (tier === 1) {            // muster hut: plank hall with a thatched roof, a spear rack, a straw dummy
-    g.add(box(2.3, 1.0, 1.9, M.wood, X, .55, -.65));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.05, .1, M.rough, X + sx * 1.13, .53, -.65 + sz * .93));
-    g.add(pyramid(1.9, 1.0, .86, M.thatchOld, 1.55, X, -.65));
-    g.add(box(.46, .7, .05, M.timber, -1, .4, F + .02)); g.add(box(.22, .18, .04, M.glow, -.1, .72, F + .02));
+    g.add(box(2.3, 1.3, 1.9, M.wood, X, .7, -.65));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.35, .1, M.rough, X + sx * 1.13, .68, -.65 + sz * .93));
+    g.add(pyramid(1.9, 1.0, .86, M.thatchOld, 1.85, X, -.65));
+    g.add(box(DOOR_W, DOOR_H, .05, M.timber, -1, .08 + DOOR_H / 2, F + .02)); g.add(box(.22, .18, .04, M.glow, -.1, 1.0, F + .02));
     rack('spear'); dummy(false);
   } else if (tier === 2) {     // barracks: daub hall in a timber frame, log roof, spears and round shields, a blue banner
-    g.add(box(2.3, 1.1, 1.9, M.daub, X, .6, -.65));
-    for (const x of [-1.78, -.55, .48]) g.add(box(.1, 1.12, .1, M.timber, x, .6, F + .01));
-    for (const sx of [-1, 1]) g.add(box(.1, 1.12, .1, M.timber, X + sx * 1.13, .6, -1.6));
-    g.add(box(2.34, .08, .08, M.timber, X, 1.13, F + .01));
-    g.add(pyramid(1.95, 1.05, .86, M.thatch, 1.68, X, -.65));
-    g.add(box(.5, .8, .05, M.wood, -1, .45, F + .03)); for (const x of [-.25, .2]) g.add(box(.2, .2, .04, M.glow, x, .78, F + .03));
-    g.add(box(.05, 1.0, .05, M.timber, X, 2.6, -.65)); g.add(flagBox(.45, .3, .03, M.flag, X + .25, 2.95, -.65));   // flag on the roof peak
+    g.add(box(2.3, 1.4, 1.9, M.daub, X, .85, -.65));
+    for (const x of [-1.78, -.55, .48]) g.add(box(.1, 1.42, .1, M.timber, x, .85, F + .01));
+    for (const sx of [-1, 1]) g.add(box(.1, 1.42, .1, M.timber, X + sx * 1.13, .85, -1.6));
+    g.add(box(2.34, .08, .08, M.timber, X, 1.55, F + .01));
+    g.add(pyramid(1.95, 1.05, .86, M.thatch, 2.08, X, -.65));
+    g.add(box(DOOR_W, DOOR_H, .05, M.wood, -1, .2 + DOOR_H / 2, F + .03)); for (const x of [-.25, .2]) g.add(box(.2, .2, .04, M.glow, x, 1.1, F + .03));
+    g.add(box(.05, 1.0, .05, M.timber, X, 3.0, -.65)); g.add(flagBox(.45, .3, .03, M.flag, X + .25, 3.35, -.65));   // flag on the roof peak
     rack('spear', 'round'); dummy(true);
   } else {                     // garrison: stone hall, blue tiled roof, swords and blue shields, a hanging banner
     g.add(box(2.3, 1.3, 1.9, M.stone2, X, .7, -.65));
     g.add(box(2.42, .12, 2.02, M.stone2, X, 1.38, -.65));
     g.add(pyramid(1.95, 1.15, .86, M.roofBlue, 2.0, X, -.65));
-    g.add(box(.55, .9, .06, M.timber, -1, .5, F + .02));
-    for (const y of [.25, .7]) g.add(box(.56, .04, .07, M.iron, -1, y, F + .04));
+    g.add(box(DOOR_W, DOOR_H, .06, M.timber, -1, .2 + DOOR_H / 2, F + .02));
+    for (const y of [.45, .95]) g.add(box(.56, .04, .07, M.iron, -1, y, F + .04));
     for (const x of [-.4, .2]) g.add(box(.18, .26, .04, M.glow, x, .95, F + .02));
     g.add(box(.05, 1.0, .05, M.timber, X, 2.95, -.65)); g.add(flagBox(.45, .3, .03, M.flag, X + .25, 3.3, -.65));
     rack('sword', 'kite'); dummy(true);
@@ -1463,10 +1463,10 @@ function makeQuarry(tier, plinth) {
   if (plinth) g.add(box(4.0, 1.8, 4.0, tier === 2 ? M.plainStone : M.stone, 0, -.7, 0));
   const blocks = list => list.forEach(([x, y, z]) => g.add(box(.5, .45, .5, M.stone2, x, y, z)));
   if (tier === 1) {            // stone pit: masons' shed, cut blocks, timber hoist
-    g.add(box(1.3, .9, 1.1, M.rough, -1, .55, -.85));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, .95, .1, M.timber, -1 + sx * .62, .55, -.85 + sz * .52));
-    g.add(pyramid(1.1, .95, .9, M.thatchOld, 1.45, -1, -.85));
-    g.add(box(.36, .6, .05, M.timber, -1, .4, -.28));
+    g.add(box(1.3, 1.3, 1.1, M.rough, -1, .75, -.85));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(.1, 1.35, .1, M.timber, -1 + sx * .62, .75, -.85 + sz * .52));
+    g.add(pyramid(1.1, .95, .9, M.thatchOld, 1.875, -1, -.85));
+    g.add(box(DOOR_W, DOOR_H, .05, M.timber, -1, .08 + DOOR_H / 2, -.28));
     blocks([[.55, .32, .55], [1.1, .32, .55], [.82, .76, .55]]);
     for (let n = 0; n < 5; n++) { const r = new THREE.Mesh(rockGeo, rockMat); r.scale.setScalar(.25 + hash(n, 2) * .15); r.position.set(.4 + hash(n, 5) * 1.1, .15, 1.1 + hash(n, 8) * .4); r.castShadow = true; g.add(r); }
     // A-frame hoist with a block on the rope
@@ -1531,7 +1531,7 @@ function makeFarm(tier) {
   }
   if (tier > 1) for (const [x, z, w, d] of [[0, -1.75, 3.5, .05], [0, 1.75, 3.5, .05], [-1.75, 0, .05, 3.5], [1.75, 0, .05, 3.5]]) g.add(box(w, .05, d, M.timber, x, .38, z));
   if (tier === 1) { // thatched field hut
-    g.add(box(1.1, .75, .8, M.mud, -1.0, .45, -1.2)); g.add(pyramid(.95, .85, .8, M.thatchOld, 1.25, -1.0, -1.2)); g.add(box(.3, .5, .05, M.timber, -1.0, .33, -.79));
+    g.add(box(1.1, 1.25, .8, M.mud, -1.0, .7, -1.2)); g.add(pyramid(.95, .85, .8, M.thatchOld, 1.75, -1.0, -1.2)); g.add(box(DOOR_W, DOOR_H, .05, M.timber, -1.0, .08 + DOOR_H / 2, -.79));
     g.add(cyl(.28, .3, .4, 8, M.hay, .9, .25, -1.2));
   }
   if (tier >= 2) { // scarecrow
@@ -1540,7 +1540,7 @@ function makeFarm(tier) {
     const hd = new THREE.Mesh(new THREE.SphereGeometry(.12, 6, 5), M.hay); hd.position.set(1.1, 1.25, -.9); g.add(hd);
   }
   if (tier === 3) { // barn + hay
-    g.add(box(1.1, .9, .9, M.wood, -1.15, .5, -1.15)); g.add(pyramid(.85, .7, .85, M.roofBlue, 1.3, -1.15, -1.15));
+    g.add(box(1.1, 1.3, .9, M.wood, -1.15, .7, -1.15)); g.add(pyramid(.85, .7, .85, M.roofBlue, 1.7, -1.15, -1.15)); g.add(box(DOOR_W, DOOR_H, .05, M.timber, -1.15, .08 + DOOR_H / 2, -.69));
     for (const [sx, sz] of [[1.35, 1.35], [.75, 1.42]]) {     // stooks: sheaves leaned together
       for (let n = 0; n < 4; n++) { const a = n / 4 * Math.PI * 2, sh = cyl(.06, .09, .55, 6, M.hay, sx + Math.cos(a) * .08, .32, sz + Math.sin(a) * .08); sh.rotation.z = Math.cos(a) * .25; sh.rotation.x = -Math.sin(a) * .25; g.add(sh); }
     }
