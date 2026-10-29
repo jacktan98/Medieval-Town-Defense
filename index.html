@@ -457,7 +457,7 @@ const WAVES_STD = [
 // Mountain pass: one long day to prepare, then two huge nights
 const MAP_RULES = {
   pass: { waves: [{ spear: 36, sword: 18, archer: 14, hp: 1.2, dmg: 1.1, captain: 2 }, { spear: 46, sword: 28, archer: 22, hp: 1.45, dmg: 1.3, captain: 4 }],
-          day: [600, 150], spawnGap: .5 },
+          day: [900, 150], spawnGap: .5 },
 };
 var WAVES = WAVES_STD, NIGHTS = WAVES.length, DAYLEN = [300, 150, 150, 150, 150], SPAWN_GAP = 1.1;
 function mapRules() { const R = MAP_RULES[MAP]; WAVES = R ? R.waves : WAVES_STD; NIGHTS = WAVES.length; DAYLEN = R ? R.day : [300, 150, 150, 150, 150]; SPAWN_GAP = R ? R.spawnGap : 1.1; }
@@ -968,7 +968,7 @@ trunks.material.onBeforeCompile = sh => cutaway(sh);
 addGrit(trunks.material, 'wood');
 let trees = [];
 function genTrees() {
-  trees = [];
+  trees = []; if (MAP === 'pass') pickPassRocks();
   for (let cj = 0; cj < N; cj++) for (let ci = 0; ci < N; ci++) for (let a = 0; a < 3; a++) {
     const x = ci * CELL + hash(ci * 3 + a, cj) * CELL, z = cj * CELL + hash(cj + a * 7, ci * 5) * CELL;
     const dk = Math.hypot(x - KX, z - KZ);
@@ -987,7 +987,7 @@ function genTrees() {
       // pines on the gentler mountain slopes
       const ang = Math.atan2(z - KZ, x - KX) * 180 / Math.PI, p = passAt(x, z), open = p.depth > .3;
       if (open) {
-        const ring = dk > 7.2 && dk < PASS.plate + 1 && !(ang > 55 && ang < 125) && hash(x * 1.3, z * .7) < .62;   // open toward the pass, below
+        const ring = dk > 6.8 && dk < PASS.plate + 3.5 && !(ang > 62 && ang < 118) && hash(x * 1.3, z * .7) < .85;   // a thick forest round the castle, open toward the pass
         const edge = dk > PASS.plate && p.depth < 2.6 && hash(x * 1.7, z * .9) < .4;          // along the foot of the mountains
         const clump = dk > PASS.plate + 2 && fbm(x * .12 + 31, z * .12 + 17) > .6 && hash(x * .9, z * 1.9) < .5;
         if ((ring || edge || clump) && !passRockSite(x, z, 1.8)) trees.push({ x, z, s: .75 + hash(z, x) * .5, k: 1 });
@@ -1022,21 +1022,30 @@ const rockGeo = new THREE.DodecahedronGeometry(.75, 0), rockMat = mat('#958f84')
 // River isle: three outcrops just beyond the far bank, between the bridges
 const isleRockSite = (x, z, d) => MAP === 'isle' && ISLE_ROCKS.some(g => { const a = g * Math.PI / 180, R = isleR(a) + 6.5; return Math.hypot(x - KX - Math.cos(a) * R, z - KZ - Math.sin(a) * R) < d; });
 // Mountain pass: plenty of stone, in outcrops on the plateau east and south of the castle, north-west of it, and along the pass
-const PASS_ROCKS = [[19.5, 13.5], [36, 12.5], [39, 27], [15.5, 27], [23.5, 39], [34, 44.5], [19, 50]];
+// outcrops sit at the foot of the mountains (2–4 m inside the line), spread round it, so the middle stays open to build on
+let PASS_ROCK_C = [];
+function pickPassRocks() {
+  PASS_ROCK_C = [];
+  for (let n = 0; n < 4000 && PASS_ROCK_C.length < 8; n++) {
+    const x = 2 + Math.random() * (SIZE - 4), z = 2 + Math.random() * (SIZE - 6), p = passAt(x, z);
+    if (p.depth < 2.2 || p.depth > 3.8 || p.plate < 8.5 || PASS_ROCK_C.some(([a, b]) => Math.hypot(a - x, b - z) < 9)) continue;
+    PASS_ROCK_C.push([x, z]);
+  }
+}
 const passRockSite = (x, z, d) => MAP === 'pass' && passRockCentres().some(([cx, cz]) => Math.hypot(x - cx, z - cz) < d + 2.2);
-const passRockCentres = () => PASS_ROCKS;
+const passRockCentres = () => PASS_ROCK_C;
 function genRocks() {
   rocks.forEach(r => scene.remove(r.mesh)); rocks = [];
   const addRock = (x, z, s0, rot) => { const mesh = new THREE.Mesh(rockGeo, rockMat); mesh.castShadow = mesh.receiveShadow = true; mesh.rotation.set(...rot); rocks.push({ x, z, amount: ROCK_STONE, s0, mesh }); scene.add(mesh); };
   if (MAP === 'pass') {
     for (const [cx, cz] of passRockCentres()) for (let n = 0, k = 0; n < 300 && k < 8; n++) {
       const x = cx + (Math.random() - .5) * 5, z = cz + (Math.random() - .5) * 5;
-      if (!passOpen(x, z) || Math.hypot(x - KX, z - KZ) < 6.5 || rocks.some(r => Math.hypot(r.x - x, r.z - z) < 1.7)) continue;
+      if (!passOpen(x, z) || passAt(x, z).depth > 5 || Math.hypot(x - KX, z - KZ) < 6.5 || rocks.some(r => Math.hypot(r.x - x, r.z - z) < 1.7)) continue;
       addRock(x, z, .95 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
     }
     for (let n = 0, k = 0; n < 4000 && k < 14; n++) {
       const x = 1 + Math.random() * (SIZE - 2), z = 1 + Math.random() * (SIZE - 2);
-      if (!passOpen(x, z) || Math.hypot(x - KX, z - KZ) < 7 || rocks.some(q => Math.hypot(q.x - x, q.z - z) < 3)) continue;
+      if (!passOpen(x, z) || passAt(x, z).depth > 4.5 || Math.hypot(x - KX, z - KZ) < 7 || rocks.some(q => Math.hypot(q.x - x, q.z - z) < 3)) continue;   // scattered along the mountains' foot too
       addRock(x, z, .85 + Math.random() * .5, [Math.random() * 3, Math.random() * 3, Math.random() * 3]); k++;
     }
     return;
@@ -3062,11 +3071,13 @@ function nearestBuilding(x, z, maxD = 1e9, ok = null) { let best = null, bd = ma
 function edgePoint() {
   const C = castleB(), dp = C && doorPoint(C);   // a spawn must have a walkable route to the castle's door
   if (MAP === 'pass') {                          // always the foot of the pass, on the bottom edge
-    for (let n = 0; n < 160; n++) {
+    // with a route to the castle if there is one; walled off, anywhere open down there (they come up and break the walls),
+    // never the old fallback in the mountains, where they stood stuck
+    for (const needRoute of [true, false]) for (let n = 0; n < 120; n++) {
       const x = 13 + Math.random() * 28, z = SIZE - 1.2;
-      if (passOpen(x, z) && cellPass(cellAt(x, z), 2) && (!dp || findPath(x, z, dp.x, dp.z, 2))) return { x, z };
+      if (passOpen(x, z) && passOpen(x, z - 1) && (!needRoute || !dp || findPath(x, z, dp.x, dp.z, 2))) return { x, z };
     }
-    return { x: 4, z: SIZE - 1.5 };
+    return { x: 27, z: SIZE - 1.5 };
   }
   for (let n = 0; n < 80; n++) {
     const side = Math.floor(Math.random() * 4), t = 2 + Math.random() * (SIZE - 4);
