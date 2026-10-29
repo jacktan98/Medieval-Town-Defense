@@ -4300,6 +4300,8 @@ var LOOPS = {
   night: { file: 'music/Night_theme_music.mp3', vol: .27 },
   birds: { file: 'sfx/Bird_chirping.mp3',          vol: .09 },
 };
+// bump when a sound file is replaced, so phones fetch the new file instead of a cached copy
+var AUDIO_V = 2;
 var TARGET_LOUD = .09, LOUD_WINDOW = .3, GAIN_MIN = .1, GAIN_MAX = 6, MASTER = .9, PEAK_CEILING = .95 / MASTER;
 var SFX_GAP = { path: .12, clash: .12, arrowHit: .08, grunt: 3, yawn: 3, nope: .3, rooster: 2, chop: .15, pick: .15, hoe: .2, hammer: .12, arrow: .08, attack: .1, coins: .3, click: .05 };   // min seconds between repeats
 var STROKE_SFX = { axe: 'chop', pick: 'pick', hoe: 'hoe', hammer: 'hammer' };
@@ -4327,7 +4329,7 @@ function strikes(b) {
 }
 if (actx) for (const k in SND) {
   const S = SND[k]; clips[k] = [];
-  for (const f of S.files || [S.file]) fetch('audio/' + f).then(r => r.ok ? r.arrayBuffer() : null).then(ab => ab && actx.decodeAudioData(ab, b => {
+  for (const f of S.files || [S.file]) fetch('audio/' + f + '?v=' + AUDIO_V).then(r => r.ok ? r.arrayBuffer() : null).then(ab => ab && actx.decodeAudioData(ab, b => {
     if (S.strikes) {
       const cuts = strikes(b), sr = b.sampleRate;
       for (const [from, len] of cuts) clips[k].push({ buf: b, from, len, gain: gainFor(levelOf(b, Math.floor(from * sr), Math.floor((from + len) * sr)), S.trim) });
