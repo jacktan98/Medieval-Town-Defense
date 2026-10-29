@@ -601,7 +601,10 @@ function cellStats(a, b) {
 }
 
 const cH = new Float32Array(N * N), cS = new Float32Array(N * N);
+// which cells can reach which (see regions); rebuilt lazily after any build, removal or terrain change
+var reg = new Int32Array(N * N), regPass = new Uint8Array(N * N), regTry = new Int32Array(N * N), regionDirty = true;
 function cacheCells() {
+  regionDirty = true;
   for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) { const n = b * N + a; cH[n] = hAt((a + .5) * CELL, (b + .5) * CELL); cS[n] = cellStats(a, b).spread; }
   for (let n = 0; n < N * N; n++) if (bridgeCell[n]) { const p = bridgeWaypoint(n); cH[n] = walkY(p.x, p.z); cS[n] = 0; }
 }
@@ -2068,11 +2071,12 @@ function evaluate(type, ci, cj, free) {
   }
   // smart rotate: keep the player's facing if its door tile is open, else the nearest turn whose door is
   r.face = FACING[type] ? placeFace : 0;
-  if (!T.noRoad) {
-    const f = [0, 3, 1, 2].map(k => (placeFace + k) % 4).find(f => doorOk(doorCell(r, type, f)));
-    if (f === undefined) return { ...r, ok: false, reason: 'Door blocked' };
-    r.face = f;
-  }
+  const faces = T.noRoad ? [r.face] : [0, 3, 1, 2].map(k => (placeFace + k) % 4).filter(f => doorOk(doorCell(r, type, f)));
+  if (!faces.length) return { ...r, ok: false, reason: 'Door blocked' };
+  // and nobody may end up sealed in: the first of those turns that keeps every door, site and tower joined to the castle
+  let cut = '';
+  for (const f of faces) { cut = cutsOff(r, type, f); if (!cut) { r.face = f; break; } }
+  if (cut) return { ...r, ok: false, reason: type === 'wall' && cut === 'Blocks the way' ? 'Blocks the way · use a gate' : cut };
   if (!free && !canAfford(T.cost)) return { ...r, ok: false, reason: `Need ${shortfall(T.cost)}` };
   if (adapt) snapToNeighbours(type, r);
   return r;
@@ -2169,7 +2173,7 @@ function place(type, ci, cj, opts = {}) {
   else { B.built = false; B.site = { kind: 'new', progress: 0, time: T.build }; g.scale.y = .08; addScaffold(B); if (instantBuild) { B.site.progress = 1; } }
   if (WALLY[type]) refreshWalls();
   if (opts.instant) syncTerrain(); else rebuildRoads();
-  villagers.forEach(v => v.path = null);
+  villagers.forEach(v => v.path = null); regionDirty = true;
   if (!opts.quiet) log(`<b>${T.tiers[0]}</b> placed`);
   return B;
 }
@@ -2226,7 +2230,7 @@ function startRepairs() {
   return n;
 }
 function completeSite(B) {
-  const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false;
+  const T = DEF[B.type], S = B.site; B.site = null; removeScaffold(B); B.pbar.grp.visible = false; regionDirty = true;   // an upgraded farm moves its hut
   const c = center(B);
   if (S.kind === 'repair') {
     B.hp = B.max; floatText('Repaired', '#8cc46e', c.x, B.group.position.y + 3, c.z); sfx('build', c, .6);
@@ -2267,7 +2271,7 @@ function removeBuilding(B, raid, cancel) {
     if (v.job === B) { v.job = null; v.state = 'find'; release(v); }
     if (v.build === B) { v.build = null; v.state = v.job ? 'commute' : 'find'; }
   }
-  hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
+  regionDirty = true; hideDefenders(B); assignJobs(); villagers.forEach(v => v.path = null);
   const c = center(B), name = DEF[B.type].tiers[B.tier - 1].toLowerCase();
   if (!raid) sfx(cancel ? 'click' : 'sold', c);
   if (raid) { stats.lost++; sfx('destroyed', c); shake(.35, c); debrisBurst(B, c); floatText('Destroyed', '#e2715b', c.x, B.group.position.y + 3, c.z); log(`<b>${DEF[B.type].tiers[B.tier - 1]}</b> lost`, 'warn'); }
@@ -2581,14 +2585,17 @@ const popStats = () => ({ total: villagers.length, idle: villagers.filter(v => !
 // each construction site gets up to two builders: idle villagers first, a worker only if nobody else is building
 function assignBuilders() {
   if (PH.kind === 'night') return;
+  const R = regions(), now = performance.now();
   for (const S of buildings) {
     if (!S.site) continue;
     const crew = villagers.filter(v => v.build === S).length;
     if (crew >= 2) continue;
     const anyBuilding = villagers.some(v => v.build), c = center(S), repair = S.site.kind === 'repair';
+    const reach = new Set(ringCells(S.ev).map(n => R[n]).filter(Boolean));   // only someone who can walk there
     let best = null, bd = 1e9;
     for (const v of villagers) {
       if (v.build || v.post || v.hungry || v.unkit) continue;
+      if (!reach.has(villagerRegion(v, R)) || (v.noBuild && v.noBuild.S === S && v.noBuild.t > now)) continue;
       const own = repair && v.job === S;
       if (v.job && !own && (anyBuilding || crew > 0)) continue;
       if (v.carryLog.visible || v.carryStone.visible) continue;
@@ -2679,6 +2686,87 @@ function findPath(sx, sz, tx, tz, mode) {
   return null;
 }
 const deckAt = (n, x, z) => { const i = bridgeCell[n]; return i && onDeck(bridges[i - 1], x, z) ? i : 0; };
+// ---------- connectivity: numbered regions of cells workers can walk between (4 neighbours is enough: A* only goes
+// diagonally when both side cells are open; bridges only through their ends, as in findPath). Used to refuse placements
+// that would seal anyone or anything off, to send builders and workers only where they can get, and to get anyone
+// trapped anyway (e.g. by terrain the flattening changed) out again
+function floodRegions(out, pass) {
+  out.fill(0); const q = new Int32Array(N * N); let id = 0;
+  for (let s = 0; s < N * N; s++) {
+    if (out[s] || !pass[s]) continue;
+    out[s] = ++id; let h = 0, t = 0; q[t++] = s;
+    while (h < t) {
+      const c = q[h++], a = c % N, b = (c / N) | 0, bc = bridgeCell[c];
+      for (let k = 0; k < 4; k++) {
+        const na = a + ND[k][0], nb = b + ND[k][1]; if (na < 0 || nb < 0 || na >= N || nb >= N) continue;
+        const nn = nb * N + na; if (out[nn] || !pass[nn]) continue;
+        const bn = bridgeCell[nn];
+        if (bc !== bn && ((bc && !bridges[bc - 1].ends.has(c)) || (bn && !bridges[bn - 1].ends.has(nn)))) continue;
+        out[nn] = id; q[t++] = nn;
+      }
+    }
+  }
+  return out;
+}
+function regions() {
+  if (regionDirty) { regionDirty = false; for (let n = 0; n < N * N; n++) regPass[n] = cellPass(n, 1) ? 1 : 0; floodRegions(reg, regPass); }
+  return reg;
+}
+// a spot's region: its cell's, or a neighbour's when the cell itself is steep or built on (a rock, someone in a doorway)
+function regionAt(x, z, R = regions()) {
+  const n = cellAt(x, z); if (R[n]) return R[n];
+  const a = n % N, b = (n / N) | 0;
+  for (const [da, db] of ND) { const na = a + da, nb = b + db; if (na >= 0 && nb >= 0 && na < N && nb < N && R[nb * N + na]) return R[nb * N + na]; }
+  return 0;
+}
+const doorRegion = (B, R = regions()) => B && B.door ? R[B.door.b * N + B.door.a] : 0;
+const mainRegion = (R = regions()) => doorRegion(castleB(), R);          // the castle's door: where everyone has to get to
+// the cells round a footprint, where builders stand
+function ringCells(ev) {
+  const o = [], add = (a, b) => { if (a >= 0 && b >= 0 && a < N && b < N) o.push(b * N + a); };
+  for (let k = 0; k < ev.s; k++) { add(ev.ci + k, ev.cj - 1); add(ev.ci + k, ev.cj + ev.s); add(ev.ci - 1, ev.cj + k); add(ev.ci + ev.s, ev.cj + k); }
+  return o;
+}
+const ringIn = (ev, R, id) => !!id && ringCells(ev).some(n => R[n] === id);
+// where a villager is, as a region; someone indoors counts as at that building's door
+function villagerRegion(v, R = regions()) {
+  if (v.g.visible && !(v.hideT > 0) && !v.inside) return regionAt(v.x, v.z, R);
+  const B = v.indoor && !v.indoor.dead ? v.indoor : v.home && !v.home.dead ? v.home : castleB();
+  return doorRegion(B, R) || regionAt(v.x, v.z, R);
+}
+// would building this here (facing f) seal off a door, a site or a tower from the castle, or is the spot itself sealed off?
+// (pockets with no way out left villagers stuck for good, e.g. coming out of a door boxed in by later buildings)
+function cutsOff(r, type, f) {
+  const R = regions(), id = mainRegion(R); if (!id) return '';
+  const pass = regPass.slice();
+  for (let b = r.cj; b < r.cj + r.s; b++) for (let a = r.ci; a < r.ci + r.s; a++) {
+    const n = b * N + a, x = (a + .5) * CELL, z = (b + .5) * CELL;
+    if (type === 'farm' ? farmBlocked({ ev: r, face: f, tier: 1 }, x, z) : !WALK[type] && type !== 'gate') pass[n] = 0;
+  }
+  const T = floodRegions(regTry, pass), K = castleB(), nid = doorRegion(K, T);
+  if (!nid) return 'Blocks the way';
+  for (const B of buildings) {
+    if (B.dead) continue;
+    if (B.door) { const n = B.door.b * N + B.door.a; if (R[n] === id && T[n] !== nid) return 'Blocks the way'; }
+    if ((B.site || B.type === 'tower') && ringIn(B.ev, R, id) && !ringIn(B.ev, T, nid)) return 'Blocks the way';
+  }
+  if (!DEF[type].noRoad) { const d = doorCell(r, type, f); if (T[d.b * N + d.a] !== nid) return ringIn(r, T, nid) ? 'Door cut off' : 'No way there'; }
+  return ringIn(r, T, nid) ? '' : 'No way there';
+}
+// someone shut in a pocket with nowhere to go (it shouldn't happen any more, but terrain and old towns can do it):
+// hop them to the nearest open ground that joins up with the castle, with a puff of dust
+function freeTrapped(v) {
+  const R = regions(), id = mainRegion(R); if (!id) return false;
+  const a0 = Math.floor(v.x / CELL), b0 = Math.floor(v.z / CELL);
+  for (let r = 1; r < N; r++) for (let db = -r; db <= r; db++) for (let da = -r; da <= r; da++) {
+    if (Math.max(Math.abs(da), Math.abs(db)) !== r) continue;
+    const a = a0 + da, b = b0 + db; if (a < 0 || b < 0 || a >= N || b >= N || R[b * N + a] !== id) continue;
+    const x = (a + .5) * CELL, z = (b + .5) * CELL; if (!canStand(x, z, 1)) continue;
+    dustAt(v.x, walkY(v.x, v.z), v.z); v.x = v.rx = x; v.z = v.rz = z; dustAt(x, walkY(x, z), z);
+    v.path = null; v.prog = null; v.noProg = 0; v.stuck = 0; return true;
+  }
+  return false;
+}
 // waypoints for a path of cells: cell centres, and over a bridge a point on the ground in front of its end, the deck's end,
 // its far end and the ground beyond, so units line up with the bridge and walk on and off along it
 function routePoints(cells, sx, sz, sOn, tx, tz, tOn, mode) {
@@ -2787,10 +2875,10 @@ function doorStep(v, dt) {
 // at the door: on its tile, or held up close to it (never just near the building: from behind a wall they walked through it)
 function nearDoor(v, B, dp) { const d = Math.hypot(dp.x - v.x, dp.z - v.z); return d < .6 || (v.noProg > 1 && d < 1.6); }
 function claimResource(v, now) {
-  const hb = center(v.job), R = DEF[v.job.type].reach;
+  const hb = center(v.job), R = DEF[v.job.type].reach, G = regions(), id = doorRegion(v.job, G), reach = q => !id || regionAt(q.x, q.z, G) === id;
   let best = null, bd = 1e9;
-  if (v.job.type === 'lodge') { for (const t of trees) if (treeFree(t, now)) { const d = Math.hypot(t.x - hb.x, t.z - hb.z); if (d < R && d < bd) { bd = d; best = t; } } }
-  else for (const r of rocks) if (r.amount > 0 && !((r.blocked || 0) > now)) { const d = Math.hypot(r.x - hb.x, r.z - hb.z) + (r.claim ? 4 : 0); if (d < R + 4 && d < bd) { bd = d; best = r; } }
+  if (v.job.type === 'lodge') { for (const t of trees) if (treeFree(t, now) && reach(t)) { const d = Math.hypot(t.x - hb.x, t.z - hb.z); if (d < R && d < bd) { bd = d; best = t; } } }
+  else for (const r of rocks) if (r.amount > 0 && !((r.blocked || 0) > now) && reach(r)) { const d = Math.hypot(r.x - hb.x, r.z - hb.z) + (r.claim ? 4 : 0); if (d < R + 4 && d < bd) { bd = d; best = r; } }
   if (best) best.claim = v;
   return best;
 }
@@ -2805,25 +2893,35 @@ function deliver(v) {
 function dropLoad(v) { if (v.dropLoad) { v.carryLog.visible = v.carryStone.visible = false; v.dropLoad = false; } }
 // each builder gets a spot of their own just outside the site, nearest to them, clear of the other builders' spots
 function workSpot(S, v, avoid) {
-  const e = S.ev, o = .6, pts = [];
+  const e = S.ev, o = .6, pts = [], R = regions(), id = villagerRegion(v, R);
   for (let t = e.x0 + .4; t <= e.x1 - .4 + 1e-6; t += .7) pts.push({ x: t, z: e.z0 - o }, { x: t, z: e.z1 + o });
   for (let t = e.z0 + .4; t <= e.z1 - .4 + 1e-6; t += .7) pts.push({ x: e.x0 - o, z: t }, { x: e.x1 + o, z: t });
-  let best = null, bd = 1e9;
-  for (const p of pts) {
-    if (!canStand(p.x, p.z, 1) || (avoid && Math.hypot(p.x - avoid.x, p.z - avoid.z) < .5)) continue;
-    if (villagers.some(w => w !== v && w.build === S && w.spot && Math.hypot(w.spot.x - p.x, w.spot.z - p.z) < .8)) continue;
-    const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; }
+  // spots this villager can actually walk to; another builder's spot is left alone unless there's nowhere else
+  for (const spaced of [true, false]) {
+    let best = null, bd = 1e9;
+    for (const p of pts) {
+      if (R[cellAt(p.x, p.z)] !== id || !canStand(p.x, p.z, 1) || (avoid && Math.hypot(p.x - avoid.x, p.z - avoid.z) < .5)) continue;
+      if (spaced && villagers.some(w => w !== v && w.build === S && w.spot && Math.hypot(w.spot.x - p.x, w.spot.z - p.z) < .8)) continue;
+      const d = Math.hypot(p.x - v.x, p.z - v.z); if (d < bd) { bd = d; best = p; }
+    }
+    if (best) return best;
   }
-  return best;
+  return null;
 }
+// a site this builder can't get to: leave it to someone else for a while
+function dropBuild(v, S) { v.noBuild = { S, t: performance.now() + 15000 }; v.build = null; v.spot = null; v.spotN = 0; v.prog = null; v.state = v.job ? 'commute' : 'find'; }
 function updateBuilder(v, dt) {
   const S = v.build;
   if (S.dead || !S.site) { v.build = null; v.state = v.job ? 'commute' : 'find'; return; }
-  if (v.spotS !== S || !v.spot) { v.spot = workSpot(S, v); v.spotS = S; }
+  if (v.spotS !== S || !v.spot) { v.spot = workSpot(S, v); v.spotS = S; v.spotN = 0; if (!v.spot && distRect(S, v.x, v.z) > 1.3) { dropBuild(v, S); return; } }
   if (v.state !== 'building') {
     const sp = v.spot || center(S), near = distRect(S, v.x, v.z);
     if (walkTo(v, sp.x, sp.z, dt, 1, .3) || (near < 1.3 && v.noProg > 1)) v.state = 'building';
-    else if (v.noProg > 5) { if (near < 2.5) v.state = 'building'; else { v.spot = workSpot(S, v, sp); v.prog = null; } }   // that spot can't be reached: try another
+    else if (v.noProg > 5) {
+      if (near < 2.5) v.state = 'building';
+      else if (++v.spotN > 3) dropBuild(v, S);                    // tried four spots and got nowhere
+      else { v.spot = workSpot(S, v, sp) || sp; v.prog = null; }
+    }   // that spot can't be reached: try another
   } else {
     v.working = true; const c = center(S); turnTo(v, Math.atan2(c.x - v.x, c.z - v.z), dt);
     S.site.progress += dt / S.site.time;
@@ -2935,6 +3033,8 @@ function updateVillagers(dt, now) {
         else {
           if (!(v.hideT > 0) && !canStand(v.x, v.z, 1)) exitDoor(v);
           if (v.build) updateBuilder(v, dt); else if (v.job) updateWorker(v, dt, now); else updateWander(v, dt);
+          // out in a pocket that doesn't join up with the castle for 3 s (wandering or pushing at a way out): get them out
+          if (v.g.visible && !(v.hideT > 0) && !v.doorWalk && mainRegion() && regionAt(v.x, v.z) !== mainRegion()) { if ((v.trapT = (v.trapT || 0) + dt) > 3) { freeTrapped(v); v.trapT = 0; } } else v.trapT = 0;
         }
       }
       }
@@ -3860,9 +3960,10 @@ function rotateBuilding(B) {
   for (let k = 1; k < 4; k++) {
     const f = ((B.face || 0) + 4 - k) % 4, d = T.noRoad ? null : doorCell(B.ev, B.type, f);
     if (d && !doorOk(d)) continue;
+    if (d && B.type !== 'castle' && mainRegion() && regions()[d.b * N + d.a] !== mainRegion()) continue;   // a door turned into a sealed-off corner
     if (d && buildings.some(o => o !== B && !o.dead && !WALK[o.type] && o.type !== 'gate' && occB[d.b * N + d.a] === o)) continue;
     B.face = f; B.door = d; B.group.rotation.y = f * Math.PI / 2; if (B.scaffold) B.scaffold.rotation.y = B.group.rotation.y;
-    rebuildRoads(); villagers.forEach(v => v.path = null); select(B); return;
+    rebuildRoads(); villagers.forEach(v => v.path = null); regionDirty = true; select(B); return;
   }
   setHint('Door blocked', 'bad');
 }
