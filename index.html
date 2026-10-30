@@ -58,11 +58,12 @@ input{-webkit-user-select:text;user-select:text}
 .tick span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--parch)}
 #phaseText.night{color:var(--night)}
 #phaseSub{font-size:12px;line-height:1.2;color:var(--muted);font-variant-numeric:tabular-nums}
-.res{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.res{display:flex;gap:3px}
+.res .chip{flex:1 1 auto}
 .chip .badge{font-style:normal;font-size:10px;font-weight:700;line-height:1;padding:2px 4px;border-radius:999px;background:#3c5a2c;color:#d8f0c4;margin-left:-1px}
-.chip{border:1px solid #4a4838;background:#24261f;border-radius:6px;padding:3px 5px;display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.chip{border:1px solid #4a4838;background:#24261f;border-radius:6px;padding:3px 3px;display:flex;align-items:center;justify-content:center;gap:3px;min-width:0;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
 .chip .ico{width:14px;height:14px}
-.chip b{font-size:14px;font-variant-numeric:tabular-nums} .chip .homeless{color:#ff6b5b;font-style:normal}
+.chip b{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap} .chip.short b{color:#ff6b5b}
 .chip.low{border-color:var(--bad)} .chip.low b{color:var(--bad)}
 details summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 details summary::-webkit-details-marker{display:none}
@@ -136,7 +137,7 @@ button.danger{border-color:#6b3a33;color:var(--bad)}
 @media (max-width:640px){
   .panel{max-height:44%}
   #phaseText{font-size:16px}
-  .chip{padding:2px 3px;gap:2px} .chip b{font-size:13px} .chip .ico{width:13px;height:13px}
+  .chip{padding:2px 2px;gap:2px} .chip b{font-size:12px;letter-spacing:-.2px} .chip .ico{width:12px;height:12px}
   .tools button{min-height:34px;padding:2px 6px}
   .panel{width:calc(100% - 104px)}
 }
@@ -231,7 +232,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
 }
 /* short landscape screens (phones turned sideways) */
 @media (max-height:520px){
-  .panel{width:min(300px,calc(45% - 16px))}
+  .panel{width:min(326px,calc(45% - 16px))}
   .dock{gap:4px;bottom:6px}
   .bar{padding:4px 5px;gap:4px}
   .barTop{padding-bottom:4px}
@@ -253,6 +254,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
 .galBar{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(24,26,20,.88);border:1px solid #4a4838;color:#efe6cf;z-index:20}
 .galBar b{padding:0 6px;font-family:inherit}
 .galBar button{min-height:32px;padding:2px 10px}
+@media (max-width:370px){ .res{gap:2px} .chip{padding:2px 1px;gap:1px} .chip b{font-size:11.5px} }
 </style>
 
 <div id="app">
@@ -272,7 +274,8 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="chip" id="cWood" title="Wood"><span class="ico" data-ico="wood"></span><b>0</b></div>
       <div class="chip" id="cStone" title="Stone"><span class="ico" data-ico="stone"></span><b>0</b></div>
       <div class="chip" id="cFood" title="Food"><span class="ico" data-ico="food"></span><b>0</b></div>
-      <div class="chip" id="cPop" title="Idle / villagers"><span class="ico" data-ico="pop"></span><b>0</b></div>
+      <div class="chip" id="cHouse" title="Housed / villagers"><span class="ico" data-ico="home"></span><b>0</b></div>
+      <div class="chip" id="cPop" title="Working / villagers"><span class="ico" data-ico="hammer"></span><b>0</b></div>
     </div>
     <details id="ledger">
       <summary>Town log</summary>
@@ -3723,14 +3726,17 @@ function updateHud() {
   else { const left = spawnQueue.length + enemies.filter(e => !e.dead).length; pt.textContent = `Night ${PH.wave} of ${NIGHTS}`; pt.className = 'night'; sub.textContent = `${left} raider${left === 1 ? '' : 's'} left`; $('#nightBtn').hidden = true; }
   const kind = PH.kind === 'day' ? 'sun' : 'moon'; if (phIcoKind !== kind) { phIcoKind = kind; $('#phIco').innerHTML = PH_ICON[kind]; }
   $('#tickRing').style.strokeDashoffset = (94.25 * (1 - econT / TICK)).toFixed(1); $('#tickN').textContent = Math.ceil(econT);
-  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; const night = PH.kind === 'night', chipIco = night ? 'guard' : 'pop';
-  if ($('#cPop').dataset.ico !== chipIco) { $('#cPop').dataset.ico = chipIco; $('#cPop .ico').innerHTML = ICON[chipIco]; $('#cPop').title = night ? 'Soldiers / villagers' : 'Idle / villagers'; }
-  const homeless = villagers.filter(v => v.homeless).length + respawns.filter(r => r.homeless).length;
-  const popTxt = (night ? `${villagers.filter(v => v.post).length}/${pop.total}` : `${pop.idle}/${pop.total}`) + (homeless ? ` <i class="homeless">${homeless}</i>` : '');   // by night: how many man the castle, towers and barracks; red: homeless
-  if ($('#cPop b').innerHTML !== popTxt) $('#cPop b').innerHTML = popTxt;
-  $('#cPop').title = `${pop.total} villagers · ${pop.idle} idle${hungry ? ` · ${hungry} hungry` : ''}`;
+  const pop = popStats(), hungry = villagers.filter(v => v.hungry).length; const night = PH.kind === 'night', chipIco = night ? 'guard' : 'hammer';
+  // housed / villagers alive (the fallen waiting to come back don't count yet): red while anyone is homeless
+  const housed = villagers.filter(v => !v.homeless).length, hTxt = `${housed}/${pop.total}`;
+  if ($('#cHouse b').textContent !== hTxt) $('#cHouse b').textContent = hTxt;
+  $('#cHouse').classList.toggle('short', housed < pop.total);
+  // by day: working (a job or a site) / villagers; by night: manning the castle, towers and barracks / villagers
+  if ($('#cPop').dataset.ico !== chipIco) { $('#cPop').dataset.ico = chipIco; $('#cPop .ico').innerHTML = ICON[chipIco]; $('#cPop').title = night ? 'Soldiers / villagers' : 'Working / villagers'; }
+  const popTxt = `${night ? villagers.filter(v => v.post).length : pop.total - pop.idle}/${pop.total}`;
+  if ($('#cPop b').textContent !== popTxt) $('#cPop b').textContent = popTxt;
   const eaters = hungry ? 1e9 : 1;
-  for (const k of RES_KEYS) { const el = $('#c' + k[0].toUpperCase() + k.slice(1)); el.querySelector('b').textContent = Math.floor(res[k]); el.classList.toggle('low', k === 'food' && res.food < eaters); }
+  for (const k of RES_KEYS) { const el = $('#c' + k[0].toUpperCase() + k.slice(1)); el.querySelector('b').textContent = shortN(Math.floor(res[k])); el.classList.toggle('low', k === 'food' && res.food < eaters); }
   markTools(); refreshCard();
   if (!$('#admin').hidden) syncAdmin(false);
 }
@@ -3828,11 +3834,13 @@ function showTip(el, name, below) {
 $('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the stats are redrawn every .2 s, which can swallow a click
   const st = e.target.closest('.stat'); if (st && st.dataset.name) showTip(st, st.dataset.name);
 });
-const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cPop: 'Idle' };
+// 1000 and up as 1.2k / 12k, so six chips fit across a phone's top panel
+const shortN = n => n < 1000 ? String(n) : n < 10000 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'k' : Math.floor(n / 1000) + 'k';
+const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cHouse: 'Housed', cPop: 'Workers' };
 const chipName = id => {
-  if (id !== 'cPop') return CHIP_NAME[id];
-  const h = villagers.filter(v => v.homeless).length + respawns.filter(r => r.homeless).length;
-  return (PH.kind === 'night' ? 'Soldiers' : 'Idle') + (h ? ` · ${h} homeless` : '');
+  if (id === 'cPop') return PH.kind === 'night' ? 'Soldiers' : 'Workers';
+  if (id === 'cHouse') { const h = villagers.filter(v => v.homeless).length; return h ? `Housed · ${h} homeless` : 'Housed'; }
+  return CHIP_NAME[id];
 };
 for (const id in CHIP_NAME) $('#' + id).addEventListener('pointerdown', e => showTip(e.currentTarget, chipName(id), true));
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
