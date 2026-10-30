@@ -274,7 +274,7 @@ button.armed .bIco{width:18px;height:18px;fill:none;stroke:currentColor;stroke-w
       <div class="chip" id="cWood" title="Wood"><span class="ico" data-ico="wood"></span><b>0</b></div>
       <div class="chip" id="cStone" title="Stone"><span class="ico" data-ico="stone"></span><b>0</b></div>
       <div class="chip" id="cFood" title="Food"><span class="ico" data-ico="food"></span><b>0</b></div>
-      <div class="chip" id="cHouse" title="Villagers / beds"><span class="ico" data-ico="home"></span><b>0</b></div>
+      <div class="chip" id="cHouse" title="Housing"><span class="ico" data-ico="home"></span><b>0</b></div>
       <div class="chip" id="cPop" title="Idle"><span class="ico" data-ico="pop"></span><b>0</b></div>
     </div>
     <details id="ledger">
@@ -3743,7 +3743,7 @@ function updateHud() {
 }
 const DEM_ICO = '<svg class="bIco" viewBox="0 0 24 24"><path d="M3.5 11 L12 4 L20.5 11"/><path d="M5.5 9.5 V20 H18.5 V9.5"/><path d="M12 2 L10 8 L14 12.5 L10.5 17 L12 22"/></svg>';
 // card stats: icon + number; tapping one shows its name (statTip)
-const STAT_NAME = { hp: 'Health', gold: 'Gold', food: 'Food', pop: 'Villagers', hammer: 'Workers', guard: 'Archers', bow: 'Damage', sword: 'Damage', charm: 'Charm', bowl: 'Hungry', speed: 'Walk speed' };
+const STAT_NAME = { home: 'Housing', hp: 'Health', gold: 'Gold', food: 'Food', pop: 'Villagers', hammer: 'Workers', guard: 'Archers', bow: 'Damage', sword: 'Damage', charm: 'Charm', bowl: 'Hungry', speed: 'Walk speed' };
 const STAT = (ico, txt, cls = '', name = STAT_NAME[ico]) => `<span class="stat ${cls}" data-name="${name || ''}" title="${name || ''}">${ico ? `<span class="ico">${ICON[ico]}</span>` : ''}${txt}</span>`;
 function refreshCard() {
   const card = $('#card');
@@ -3779,7 +3779,7 @@ function refreshCard() {
     const hg = villagers.filter(v => v.home === B && v.hungry).length; if (hg) st.push(STAT('bowl', `${hg}`, 'bad'));
   }
   if (B.type === 'farm') { const f = +(T.food[k] * farmersAt(B) / T.workers[k]).toFixed(1); st.push(STAT('food', `+${f}`, f < T.food[k] ? 'warn' : '')); }
-  if (T.residents) st.push(STAT('pop', `${villagers.filter(v => v.home === B).length}`));
+  if (T.residents) st.push(STAT('home', `${villagers.filter(v => v.home === B && !v.homeless).length}/${B.built ? T.residents[B.tier - 1] : 0}`));   // housing: residents / room
   if (T.workers && B.built) { const w = villagers.filter(v => v.job === B).length; st.push(STAT('hammer', `${w}/${T.workers[k]}`, w < T.workers[k] ? 'warn' : '')); }
   if (T.range) {
     const m = (B.manned || []).filter(Boolean).length;
@@ -3837,7 +3837,7 @@ $('#cardStats').addEventListener('pointerdown', e => {   // pointerdown: the sta
 });
 // 1000 and up as 1.2k / 12k, so six chips fit across a phone's top panel
 const shortN = n => n < 1000 ? String(n) : n < 10000 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'k' : Math.floor(n / 1000) + 'k';
-const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cHouse: 'House', cPop: 'Idle' };
+const CHIP_NAME = { cGold: 'Gold', cWood: 'Wood', cStone: 'Stone', cFood: 'Food', cHouse: 'Housing', cPop: 'Idle' };
 const chipName = id => id === 'cPop' && PH.kind === 'night' ? 'Soldiers' : CHIP_NAME[id];
 for (const id in CHIP_NAME) $('#' + id).addEventListener('pointerdown', e => showTip(e.currentTarget, chipName(id), true));
 function select(B) { selected = B; drape(selLine, B.ev.x0 - .1, B.ev.z0 - .1, B.ev.x1 + .1, B.ev.z1 + .1); refreshCard(); }
